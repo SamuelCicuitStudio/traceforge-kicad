@@ -1,0 +1,23 @@
+{
+  "$schema": "https://go.kicad.org/api/schemas/v1",
+  "identifier": "kicad-signal-path-analyzer",
+  "name": "Signal Path Analyzer",
+  "description": "Analyze routed signal lengths and prepare end-to-end delay reports",
+  "runtime": {
+    "type": "python",
+    "min_version": "3.9"
+  },
+  "actions": [
+    {
+      "identifier": "analyze-signal-paths",
+      "name": "Analyze Signal Paths",
+      "description": "Export routed net lengths and estimated delays to CSV",
+      "show-button": false,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "signal_path_analyzer_action.py"
+    }
+  ]
+}
+
