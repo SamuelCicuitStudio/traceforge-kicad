@@ -1,8 +1,8 @@
 {
   "$schema": "https://go.kicad.org/api/schemas/v1",
-  "identifier": "kicad-signal-path-analyzer",
-  "name": "Signal Path Analyzer",
-  "description": "Analyze routed signal lengths and prepare end-to-end delay reports",
+  "identifier": "kicad-pcb-automation-toolkit",
+  "name": "KiCad PCB Automation Toolkit",
+  "description": "Signal-path analysis, copper-zone via stitching, and interactive parallel routing",
   "runtime": {
     "type": "python",
     "min_version": "3.9"
