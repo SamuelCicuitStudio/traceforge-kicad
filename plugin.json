@@ -1,6 +1,6 @@
 {
   "$schema": "https://go.kicad.org/api/schemas/v1",
-  "identifier": "traceforge",
+  "identifier": "com.samuelcircuitstudio.traceforge",
   "name": "TraceForge",
   "description": "PCB signal-integrity and layout toolkit: live signal-chain timing through series parts, chain highlighting, signal-path export; via stitching and parallel routing planned",
   "runtime": {
