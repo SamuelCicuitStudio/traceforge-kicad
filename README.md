@@ -41,8 +41,10 @@ Version 0.4.0 puts everything behind **one toolbar button, TraceForge**, which o
 - **Stable refresh and click selection.** Manual refreshes keep the table scroll position,
   collapsed groups and selected row. Click a chain to select its full path in KiCad;
   differential chains select both P and N paths, including series parts.
-  Zoom is a separate **Zoom selection** button because KiCad exposes it through an unstable
-  tool-action API. One worker runs one operation at a time; extra clicks are ignored while
+  Selecting a chain automatically zooms to its full extent, including its differential partner.
+  The native helper uses editor zoom presets and focus controls; no IPC zoom request is needed.
+  Clicking or typing in PCB Editor clears Forge-owned highlights before normal interaction.
+  The **Zoom selection** button can repeat the zoom manually. One worker runs one operation at a time; extra clicks are ignored while
   working, and a busy response stops the operation without automatic retries. Finish any
   active tool or dialog (Esc in PCB Editor), then manually retry. IPC stages and failures
   are recorded in the log. Closing the panel stops accepting work and cancels queued tasks.
@@ -164,8 +166,8 @@ KiCad manages the plug-in Python environment and installs `requirements.txt`.
 If the IPC server remains busy after routing or tuning, run `tools/install_native_bridge.ps1`
 from this checkout and restart PCB Editor once. TraceForge then reads the live, unsaved board
 through an in-process helper and uses it for chain highlighting as well. The status line shows
-`native board access`. There is no polling or disk snapshot fallback. The separate Zoom selection
-button still uses IPC. See [native board access](docs/NATIVE-BOARD-ACCESS.md) for scope and tests.
+`native board access`. There is no polling or disk snapshot fallback. Native highlighting
+automatically zooms and clears its visual flags when you interact with PCB Editor. See [native board access](docs/NATIVE-BOARD-ACCESS.md) for scope and tests.
 
 ## Development installation on Windows
 

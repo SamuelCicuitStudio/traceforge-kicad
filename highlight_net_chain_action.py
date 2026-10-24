@@ -42,7 +42,7 @@ def main() -> int:
     if chain is not None:
         nets, refs = selection_paths(session.config.group(chain.group), chain.name)
     if native:
-        count = native.call('highlight', nets=list(nets), refs=list(refs))
+        count = native.call('highlight', nets=list(nets), refs=list(refs), zoom=True)
     else:
         items = access.call(lambda: chain_items(board, nets, refs))
         count = highlight(board, items)

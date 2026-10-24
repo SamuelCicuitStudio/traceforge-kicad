@@ -5,6 +5,7 @@ import atexit
 import hmac
 import json
 import os
+import re
 import secrets
 import socket
 import threading
@@ -21,6 +22,120 @@ def board_path(board):
     return os.path.normcase(os.path.abspath(board.GetFileName()))
 
 
+class TransientHighlight:
+    """Keep UUIDs and previous flags, never pointers to potentially deleted board items."""
+    def __init__(self):
+        self.board = None
+        self.previous = {}
+
+    def clear(self, board, items):
+        if self.board == board_path(board):
+            for item in items:
+                old = self.previous.get(item.m_Uuid.AsString())
+                if old is not None:
+                    if old[0]:
+                        item.SetSelected()
+                    else:
+                        item.ClearSelected()
+                    if old[1]:
+                        item.SetBrightened()
+                    else:
+                        item.ClearBrightened()
+        self.board, self.previous = None, {}
+
+    def apply(self, board, items, nets, refs):
+        self.clear(board, items)
+        self.board = board_path(board)
+        chosen = []
+        for item in items:
+            match = (item.GetReference() in refs if isinstance(item, pcbnew.FOOTPRINT) else
+                     item.GetNetname().replace('{slash}', '/') in nets)
+            if match:
+                self.previous[item.m_Uuid.AsString()] = (item.IsSelected(), item.IsBrightened())
+                item.SetSelected()
+                item.SetBrightened()
+                chosen.append(item)
+        return chosen
+
+
+_highlights = TransientHighlight()
+
+
+def board_items(board):
+    result = list(board.GetTracks())
+    for fp in board.GetFootprints():
+        result.extend(fp.Pads())
+        result.append(fp)
+    return result
+
+
+class CanvasInteractionFilter(wx.EventFilter):
+    def FilterEvent(self, event):
+        kinds = (wx.EVT_LEFT_DOWN.typeId, wx.EVT_RIGHT_DOWN.typeId, wx.EVT_MIDDLE_DOWN.typeId,
+                 wx.EVT_KEY_DOWN.typeId)
+        if _highlights.previous and event.GetEventType() in kinds:
+            window = event.GetEventObject()
+            if isinstance(window, wx.Window):
+                frame = wx.GetTopLevelParent(window)
+                if isinstance(frame, wx.Frame) and frame.GetTitle().endswith('PCB Editor'):
+                    board = pcbnew.GetBoard()
+                    if board is not None:
+                        _highlights.clear(board, board_items(board))
+                        pcbnew.Refresh()
+        return wx.EventFilter.Event_Skip
+
+
+def zoom_to_items(board, chosen):
+    """Use the editor's native zoom presets and focus helper, without the IPC server."""
+    if not chosen:
+        return False
+    frame = next((w for w in wx.GetTopLevelWindows() if isinstance(w, wx.Frame)
+                  and w.GetTitle().endswith('PCB Editor')), None)
+    if frame is None:
+        return False
+    control = frame.FindWindowById(pcbnew.ID_ON_ZOOM_SELECT)
+    if control is None or not hasattr(control, 'SetSelection'):
+        return False
+
+    def preset(index):
+        control.SetSelection(index)
+        event = wx.CommandEvent(wx.EVT_CHOICE.typeId, control.GetId())
+        event.SetEventObject(control)
+        control.GetEventHandler().ProcessEvent(event)
+
+    # Calibrate to the same board-edge extents that KiCad uses for Zoom Auto.
+    preset(0)
+    match = re.search(r'[0-9]+(?:[.,][0-9]+)?', frame.GetStatusBar().GetStatusText(1))
+    if not match:
+        return False
+    scale = float(match.group().replace(',', '.'))
+    box = chosen[0].GetBoundingBox()
+    for item in chosen[1:]:
+        box.Merge(item.GetBoundingBox())
+    extents = board.ComputeBoundingBox(True)
+    if not extents.GetWidth() or not extents.GetHeight():
+        extents = board.ComputeBoundingBox()
+    size = frame.GetClientSize()
+    width, height = max(size.width, 1), max(size.height, 1)
+    before = max(extents.GetWidth() / width, extents.GetHeight() / height)
+    after = max(box.GetWidth() / width, box.GetHeight() / height, 1e6 / min(width, height))
+    desired = scale * before / (after * 1.5)
+    options = []
+    for index in range(1, control.GetCount()):
+        value = re.search(r'[0-9]+(?:[.,][0-9]+)?', control.GetString(index))
+        if value:
+            value = float(value.group().replace(',', '.'))
+            if value <= desired:
+                options.append((value, index))
+    if options:
+        preset(max(options)[1])
+    # An unregistered pad provides a focus point; it is never added to the board.
+    point = pcbnew.PAD(None)
+    point.SetPosition(box.GetCenter())
+    pcbnew.FocusOnItem(point)
+    return True
+
+
 def dispatch(board, operation, payload):
     """Called only on the editor thread; no IPC API or file reload is involved."""
     def footprints():
@@ -34,7 +149,8 @@ def dispatch(board, operation, payload):
         return result
 
     if operation == 'info':
-        return {'board': board.GetFileName()}
+        return {'board': board.GetFileName(), 'protocol': 2,
+                'features': ['transient_highlight', 'native_zoom']}
     if operation == 'snapshot':
         wanted = set(payload['nets'])
         geometry = {}
@@ -66,20 +182,23 @@ def dispatch(board, operation, payload):
                 dict(net=it.GetNetname().replace('{slash}', '/'))
                 for it in selected.values() if hasattr(it, 'GetNetname') or
                 isinstance(it, pcbnew.FOOTPRINT)]
-    if operation in ('clear', 'highlight'):
-        nets, refs = set(payload.get('nets', [])), set(payload.get('refs', []))
-        count = 0
-        for it in items():
-            it.ClearSelected()
-            it.ClearBrightened()
-            match = (it.GetReference() in refs if isinstance(it, pcbnew.FOOTPRINT) else
-                     it.GetNetname().replace('{slash}', '/') in nets)
-            if operation == 'highlight' and match:
-                it.SetSelected()
-                it.SetBrightened()
-                count += 1
+    if operation in ('clear', 'highlight', 'zoom'):
+        live = items()
+        if operation == 'clear':
+            _highlights.clear(board, live)
+            pcbnew.Refresh()
+            return 0
+        if operation == 'zoom':
+            chosen = [it for it in live if it.m_Uuid.AsString() in _highlights.previous]
+            if not chosen:
+                chosen = [it for it in live if it.IsSelected()]
+            return zoom_to_items(board, chosen)
+        chosen = _highlights.apply(board, live, set(payload.get('nets', [])),
+                                   set(payload.get('refs', [])))
         pcbnew.Refresh()
-        return count
+        if payload.get('zoom', False):
+            zoom_to_items(board, chosen)
+        return len(chosen)
     if operation == 'parts':
         return [(fp.GetReference(), fp.GetValue(),
                  {p.GetNumber(): p.GetNetname().replace('{slash}', '/') for p in fp.Pads()})
@@ -104,6 +223,8 @@ def dispatch(board, operation, payload):
 
 class Server:
     def __init__(self):
+        self.filter = CanvasInteractionFilter()
+        wx.EvtHandler.AddFilter(self.filter)
         self.token = secrets.token_hex(32)
         self.socket = socket.socket()
         if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
@@ -169,6 +290,9 @@ class Server:
 
     def stop(self):
         self.stop_event.set()
+        if wx.IsMainThread() and self.filter is not None:
+            wx.EvtHandler.RemoveFilter(self.filter)
+            self.filter = None
         self.socket.close()
         self.file.unlink(missing_ok=True)
 

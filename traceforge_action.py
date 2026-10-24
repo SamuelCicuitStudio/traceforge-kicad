@@ -37,8 +37,14 @@ def build_tools(board, session: Session, kicad=None):
 
     def select_paths(nets, refs):
         if native:
-            return native.call('highlight', nets=list(nets), refs=list(refs))
-        return select_items(chain_items(board, nets, refs))
+            return native.call('highlight', nets=list(nets), refs=list(refs), zoom=True)
+        count = select_items(chain_items(board, nets, refs))
+        if count and kicad is not None:
+            try:
+                zoom()
+            except Exception:
+                logging.exception("Selection succeeded; automatic IPC zoom failed")
+        return count
 
     def select_items(items):
         return highlight(board, items)
@@ -46,6 +52,8 @@ def build_tools(board, session: Session, kicad=None):
     def zoom():
         from signal_path_analyzer.kicad_adapter import zoom_selection
 
+        if native:
+            return "zoomed to selection" if native.call('zoom') else "nothing to zoom"
         if kicad is None:
             return "zoom unavailable"
         return ("zoomed to selection" if zoom_selection(kicad) else
