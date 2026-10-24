@@ -14,7 +14,7 @@ LIMIT = 32 * 1024 * 1024
 
 class NativeBridge:
     def __init__(self, board_file, endpoint):
-        self.board_file = str(board_file)
+        self.board_file = str(board_file) if board_file is not None else None
         self.endpoint = endpoint
 
     def call(self, operation, **payload):
@@ -40,12 +40,28 @@ class NativeBridge:
                 for n, g in self.call('snapshot', nets=nets).items()}
 
 
-def connect(board_file):
-    for path in REGISTRY.glob('*.json'):
+def connect(board_file=None, endpoint_file=None):
+    paths = [Path(endpoint_file)] if endpoint_file else list(REGISTRY.glob('*.json'))
+    matches = []
+    for path in paths:
         try:
             link = NativeBridge(board_file, json.loads(path.read_text(encoding='utf-8')))
-            link.call('info')
-            return link
+            info = link.call('info')
+            link.board_file = info['board']
+            matches.append(link)
         except (OSError, ValueError, KeyError, RuntimeError):
             continue
-    return None
+    if len(matches) > 1:
+        raise RuntimeError('Multiple PCB Editors are open. Launch TraceForge from the intended '
+                           "board's native toolbar button.")
+    return matches[0] if matches else None
+
+
+def require_native():
+    link = connect(os.environ.get('TRACEFORGE_BOARD_FILE'),
+                   os.environ.get('TRACEFORGE_NATIVE_ENDPOINT'))
+    if link is None:
+        raise RuntimeError('TraceForge native helper is not available. Install it with '
+                           'tools/install_native_bridge.ps1, restart PCB Editor, then use '
+                           'the TraceForge native toolbar button. No IPC fallback is used.')
+    return link

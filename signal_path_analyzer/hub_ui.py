@@ -1,8 +1,7 @@
 """TraceForge panel: one floating window over the KiCad PCB editor with every TraceForge tool.
 
-wxPython is available in KiCad's plugin environments (created with --system-site-packages), so
-the panel uses the same toolkit as KiCad. On Windows the panel is owned by the PCB editor window:
-it stays above KiCad, minimises with it, and does not float over other applications.
+The native launcher uses KiCad's bundled Python and wxPython. On Windows the panel stays
+above KiCad while either application has focus, without owning the editor window.
 Shortcuts are registered by the panel itself and work while KiCad (or the panel) has focus.
 """
 

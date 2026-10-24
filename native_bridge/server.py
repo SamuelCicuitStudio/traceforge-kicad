@@ -59,6 +59,7 @@ class TransientHighlight:
 
 
 _highlights = TransientHighlight()
+_zoom_calibration = None
 
 
 def board_items(board):
@@ -85,8 +86,13 @@ class CanvasInteractionFilter(wx.EventFilter):
         return wx.EventFilter.Event_Skip
 
 
-def zoom_to_items(board, chosen):
-    """Use the editor's native zoom presets and focus helper, without the IPC server."""
+def zoom_to_items(board, chosen, force=False):
+    """Fit once, then preserve magnification unless a larger selection needs more room.
+
+    FocusOnItem already keeps the view still for visible points and pans only when
+    necessary. Explicit Zoom selection can always request a fresh fit with force=True.
+    """
+    global _zoom_calibration
     if not chosen:
         return False
     frame = next((w for w in wx.GetTopLevelWindows() if isinstance(w, wx.Frame)
@@ -103,12 +109,6 @@ def zoom_to_items(board, chosen):
         event.SetEventObject(control)
         control.GetEventHandler().ProcessEvent(event)
 
-    # Calibrate to the same board-edge extents that KiCad uses for Zoom Auto.
-    preset(0)
-    match = re.search(r'[0-9]+(?:[.,][0-9]+)?', frame.GetStatusBar().GetStatusText(1))
-    if not match:
-        return False
-    scale = float(match.group().replace(',', '.'))
     box = chosen[0].GetBoundingBox()
     for item in chosen[1:]:
         box.Merge(item.GetBoundingBox())
@@ -119,7 +119,20 @@ def zoom_to_items(board, chosen):
     width, height = max(size.width, 1), max(size.height, 1)
     before = max(extents.GetWidth() / width, extents.GetHeight() / height)
     after = max(box.GetWidth() / width, box.GetHeight() / height, 1e6 / min(width, height))
-    desired = scale * before / (after * 1.5)
+    key = (board_path(board), frame.GetHandle(), width, height,
+           extents.GetWidth(), extents.GetHeight())
+    fresh = _zoom_calibration is None or _zoom_calibration[0] != key
+    # Zoom Auto changes both scale and camera position. Calibrate only once per
+    # board/window size, rather than jumping to the whole board on every row click.
+    if fresh:
+        preset(0)
+    match = re.search(r'[0-9]+(?:[.,][0-9]+)?', frame.GetStatusBar().GetStatusText(1))
+    if not match:
+        return False
+    scale = float(match.group().replace(',', '.'))
+    if fresh:
+        _zoom_calibration = (key, scale * before)
+    desired = _zoom_calibration[1] / (after * 1.5)
     options = []
     for index in range(1, control.GetCount()):
         value = re.search(r'[0-9]+(?:[.,][0-9]+)?', control.GetString(index))
@@ -128,7 +141,11 @@ def zoom_to_items(board, chosen):
             if value <= desired:
                 options.append((value, index))
     if options:
-        preset(max(options)[1])
+        fit, index = max(options)
+        # Automatic selection never zooms in again just because another chain is
+        # shorter. Keep nearby traces steady; zoom out only when more room is needed.
+        if (force or fresh or scale > desired * 1.1) and abs(fit - scale) > 0.005:
+            preset(index)
     # An unregistered pad provides a focus point; it is never added to the board.
     point = pcbnew.PAD(None)
     point.SetPosition(box.GetCenter())
@@ -192,7 +209,7 @@ def dispatch(board, operation, payload):
             chosen = [it for it in live if it.m_Uuid.AsString() in _highlights.previous]
             if not chosen:
                 chosen = [it for it in live if it.IsSelected()]
-            return zoom_to_items(board, chosen)
+            return zoom_to_items(board, chosen, force=True)
         chosen = _highlights.apply(board, live, set(payload.get('nets', [])),
                                    set(payload.get('refs', [])))
         pcbnew.Refresh()

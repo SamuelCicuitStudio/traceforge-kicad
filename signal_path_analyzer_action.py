@@ -1,33 +1,23 @@
-"""KiCad IPC action entry point."""
-
+"""Native pcbnew action: export signal-path track summaries."""
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
-from kipy import KiCad
-
 from signal_path_analyzer import analyze_tracks
-from signal_path_analyzer.kicad_adapter import collect_track_samples
+from signal_path_analyzer.model import TrackSample
 from signal_path_analyzer.report import write_csv
+from signal_path_analyzer.session import Session
 
 
 def main() -> int:
-    kicad = KiCad()
-    board = kicad.get_board()
-    board_name = Path(board.document.board_filename)
-    project_directory = Path(board.document.project.path)
-    output = project_directory / f"{board_name.stem}.signal-paths.csv"
-
-    summaries = analyze_tracks(collect_track_samples(board))
+    session = Session.open()
+    geometry = session.native.snapshot(list(session.native.call('netclasses')))
+    samples = [TrackSample(n, seg.layer, seg.length_mm)
+               for n, geo in geometry.items() for seg in geo.tracks]
+    output = session.board_file.with_suffix('.signal-paths.csv')
+    summaries = analyze_tracks(samples)
     write_csv(output, summaries)
-    print(
-        f"TraceForge Export Signal Paths: wrote {len(summaries)} nets to {os.fspath(output)}. "
-        "Delay is blank until a KiCad tuning profile is imported."
-    )
+    print(f'TraceForge: exported {len(summaries)} nets to {output}.')
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())
-

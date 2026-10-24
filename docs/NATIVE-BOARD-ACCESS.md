@@ -1,27 +1,57 @@
-# Native board access for KiCad 10
+# pcbnew-only mode (0.6)
 
-KiCad may continue returning AS_BUSY after rerouting or tuning even when the editor remains usable. Retrying or reconnecting the IPC client cannot safely reset the editor's internal tool state. TraceForge therefore supports a KiCad 10 in-process helper for its board operations. This avoids the blocked IPC server; it does not patch or reset KiCad's busy flag.
+All TraceForge actions, including startup, use the native helper. No kicad-python SDK, official
+API command, or API-enabled preference is needed. The panel remains a separate wxPython process;
+its colors, table, chain editor, shortcuts, automatic zoom and exports remain available.
 
-## Installation
+Run `tools/install_native_bridge.ps1`, restart PCB Editor and launch from the native TraceForge
+button. The helper's distinct ActionPlugin classes register the panel, highlight, export and
+optional older monitor commands. The native launcher selects KiCad's bundled Python, passes the
+editor endpoint and board filename, and removes official IPC environment variables from its child.
+The retired IPC manifest is archived under `docs/legacy/` rather than registered at the repo root.
 
-From the toolkit checkout, run `tools/install_native_bridge.ps1` on Windows. It installs a directory junction under `%APPDATA%/kicad/10.0/scripting/plugins/traceforge_native_bridge`. No KiCad binaries or board files are replaced. Restart PCB Editor once so its legacy Python plugin loader can import the helper. Launch TraceForge as usual and click Refresh. The status line must include `native board access`; startup logging also records `Board access backend: native`. If it says IPC API, the helper was not loaded and the blocked-server issue can still occur.
+The helper is installed under `%APPDATA%/kicad/10.0/scripting/plugins/traceforge_native_bridge`.
+Its source lives in `native_bridge/` in this checkout. Refresh reports `pcbnew native board access`.
+If the helper cannot be found, startup reports how to install it and does not fall back to IPC.
+Multiple-editor launches require an explicit endpoint or board identity, preventing accidental
+access to a different board. Native toolbar launch supplies both.
 
-The helper also has a Tools > External Plugins > TraceForge: Native board access command. It starts automatically after plugin discovery; the menu command can confirm that it is enabled. To uninstall, remove only the directory junction created above, leaving its source directory intact, and restart PCB Editor.
+The helper binds only to localhost and authenticates requests with a random per-editor token.
+Only predefined operations are accepted; arbitrary code and board-saving commands are not exposed.
+Requests verify the board path and have size/time limits. Board reads and highlight changes run
+on the editor's wx main thread. The socket worker never accesses pcbnew objects.
 
-## Behavior
+Snapshots read the live in-memory board, including unsaved routing/tuning changes. Existing
+propagation profiles and stackup information are loaded from project files. No board reload or
+file snapshot is substituted silently. Native zoom uses the editor's zoom control and a temporary
+unregistered focus point. No board object is added. Transient highlight cleanup stores UUIDs and
+previous flags so deleted items cannot leave dangling Python pointers. A mouse/key event filter
+clears Forge-owned flags before normal PCB interaction without consuming the event.
 
-Refresh reads the current in-memory board, including unsaved reroutes and tuning changes. Highlighting, clearing, chain detection, selection lookup, CSV export and DRC name lookup also use the helper. Board geometry is never loaded from disk during a refresh. Existing timing/stackup profiles still come from the project files, as before.
+Automatic zoom calibrates to board extents once per board/window size, rather than fitting
+the entire board on each row click. Subsequent selections preserve magnification, except
+when a larger chain needs a zoom-out. Native focus pans only if its focus point needs to
+be brought into view. The explicit Zoom selection button requests a fresh selection fit.
+Five camera regression checks cover adjacent chains, shorter/larger chains, explicit
+refitting and manual magnification changes.
 
-Selecting a chain automatically zooms with the native helper. It calibrates from the editor's Zoom Auto view, chooses a conservative zoom preset for the combined chain bounds, and centers that area with an unregistered focus point. This changes the view without adding a board object or requesting IPC zoom. Differential partners are included in the same bounds. The Zoom selection button repeats this explicitly. There is no automatic polling.
+These remain visual highlight flags, not a promise that KiCad's internal selection manager will
+treat the highlighted chain as a multi-object edit selection. The helper does not route, delete,
+move or save copper. Failure does not trigger automatic retries or an IPC fallback.
 
-A localhost socket accepts requests authenticated by a random per-process token stored in the user's local application-data folder. Every request validates the intended board path. Socket handling runs in a background thread; all model access is scheduled on the editor's wx main thread. Only specific read/highlight operations are exposed, not arbitrary code execution. Requests and responses have size/time limits. The helper does not save, route, tune, delete, or rewrite board copper. Highlighting uses transient item selection/brightening flags; the normal KiCad selection tool maintains additional state beyond these visual flags. The helper stores UUIDs and previous flags, not pointers to items that routing could delete. A wx event filter restores only Forge-owned flags before the next click or key action in PCB Editor. It does not consume the input or clear unrelated selections. Do not treat highlighting as an automatic move/edit selection operation.
+For tests, run KiCad's Python with `tools/check_native_bridge.py BOARD.kicad_pcb`.
+The test uses an isolated in-memory board, changes geometry twice without saving, verifies
+new lengths, transient highlight cleanup and board-path validation, and checks the source file
+hash is unchanged. Unit tests also cover startup without the official SDK, missing helpers,
+ambiguous editors, and all panel board callbacks.
 
-This helper uses the legacy pcbnew Python interface included in KiCad 10. It is not a KiCad 11 solution, where that interface is being removed. The IPC backend remains available when the helper is not installed.
+Migration validation: 48 unit tests and Ruff passed. KiCad's bundled Python, without the
+official SDK installed, evaluated the management board's 29 groups and 123 chains. A
+disposable PCB Editor instance launched the panel through its native menu, refreshed the
+saved chain configuration, displayed the colored status counters, repeated native
+highlight/zoom/clear three times, and exported 386 net summaries. The in-memory helper
+check verified unsaved geometry changes; real interactive rerouting/tuning remains a
+manual acceptance check.
 
-## Verification
-
-Run KiCad's Python with `tools/check_native_bridge.py BOARD.kicad_pcb`. It tests a separate in-memory board copy, alters track geometry twice without saving, and verifies fresh lengths, highlight/clear, board-path validation and unchanged source-file hash. It makes no KiCad IPC requests. Tests also verify that Session.evaluate and chain selection use the native transport when the IPC board object is unusable.
-
-A real PCB Editor test with a temporary management-board copy verified plugin auto-loading, native discovery, live geometry reads and selection/clear through the installed helper. That temporary editor was closed afterward. Re-test your actual rerouting/tuning sequence after restarting with the helper loaded; the source-level KiCad busy flag itself has not been repaired or reproduced in a debugger.
-
-After updating this helper, restart PCB Editor once to reload its in-process Python module. Protocol 2 advertises transient_highlight and native_zoom features. The source-file hash check and the runtime test also cover interaction-triggered highlight cleanup and preservation of unrelated selection flags.
+This backend targets KiCad 10. The legacy Python interface is planned for removal in KiCad 11;
+this migration does not restore or patch the official API's native busy flag.

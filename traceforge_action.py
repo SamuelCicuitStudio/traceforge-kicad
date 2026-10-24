@@ -1,4 +1,4 @@
-"""KiCad IPC action: open the TraceForge panel (one toolbar button for every TraceForge tool).
+"""Native pcbnew action: open the TraceForge panel (one toolbar button for every TraceForge tool).
 
 If the panel is already open it is brought to the front instead of opening a second one.
 """
@@ -13,51 +13,24 @@ import time
 import traceback
 from pathlib import Path
 
-from kipy import KiCad
-from kipy.board_types import FootprintInstance
-
 from signal_path_analyzer import analyze_tracks
 from signal_path_analyzer.chains import selection_paths
-from signal_path_analyzer.kicad_adapter import (
-    chain_items,
-    collect_track_samples,
-    highlight,
-    selected_refs,
-)
 from signal_path_analyzer.model import TrackSample
 from signal_path_analyzer.report import write_csv
 from signal_path_analyzer.session import Session
 from signal_path_analyzer.single_instance import PORT, try_activate_existing
 
 
-def build_tools(board, session: Session, kicad=None):
+def build_tools(session: Session):
     from signal_path_analyzer.hub_ui import Tools
 
-    native = getattr(session, 'native', None)
+    native = session.native
 
     def select_paths(nets, refs):
-        if native:
-            return native.call('highlight', nets=list(nets), refs=list(refs), zoom=True)
-        count = select_items(chain_items(board, nets, refs))
-        if count and kicad is not None:
-            try:
-                zoom()
-            except Exception:
-                logging.exception("Selection succeeded; automatic IPC zoom failed")
-        return count
-
-    def select_items(items):
-        return highlight(board, items)
+        return native.call('highlight', nets=list(nets), refs=list(refs), zoom=True)
 
     def zoom():
-        from signal_path_analyzer.kicad_adapter import zoom_selection
-
-        if native:
-            return "zoomed to selection" if native.call('zoom') else "nothing to zoom"
-        if kicad is None:
-            return "zoom unavailable"
-        return ("zoomed to selection" if zoom_selection(kicad) else
-                "KiCad did not accept Zoom to Selection")
+        return "zoomed to selection" if native.call('zoom') else "nothing to zoom"
 
     # always read session.config: the Chain Editor replaces it while the panel is open
     def hl_chain(group: str, name: str) -> int:
@@ -70,16 +43,11 @@ def build_tools(board, session: Session, kicad=None):
                             [r for c in g.chains for r in c.series])
 
     def hl_selection(whole_group: bool) -> str:
-        selection = native.call('selection') if native else list(board.get_selection())
+        selection = native.call('selection')
         if not selection:
             return "select a track, via, pad or series part in KiCad first"
         item = selection[0]
-        if native:
-            nets, refs, chain = session.resolve_chain(net=item.get('net'), ref=item.get('ref'))
-        elif isinstance(item, FootprintInstance):
-            nets, refs, chain = session.resolve_chain(ref=item.reference_field.text.value)
-        else:
-            nets, refs, chain = session.resolve_chain(net=getattr(item.net, "name", None))
+        nets, refs, chain = session.resolve_chain(net=item.get('net'), ref=item.get('ref'))
         if not nets:
             return "the selected item is not part of a signal chain"
         if whole_group and chain is not None:
@@ -99,12 +67,9 @@ def build_tools(board, session: Session, kicad=None):
 
     def export() -> str:
         out = session.project_dir / f"{Path(session.board_file).stem}.signal-paths.csv"
-        if native:
-            geometry = native.snapshot(list(native.call('netclasses')))
-            samples = [TrackSample(n, seg.layer, seg.length_mm)
-                       for n, geo in geometry.items() for seg in geo.tracks]
-        else:
-            samples = collect_track_samples(board)
+        geometry = native.snapshot(list(native.call('netclasses')))
+        samples = [TrackSample(n, seg.layer, seg.length_mm)
+                   for n, geo in geometry.items() for seg in geo.tracks]
         summaries = analyze_tracks(samples)
         write_csv(out, summaries)
         return f"exported {len(summaries)} nets to {out.name}"
@@ -117,7 +82,7 @@ def build_tools(board, session: Session, kicad=None):
     def source() -> str:
         if session.config is None:
             return "nothing"
-        backend = 'native board access' if native else 'IPC API'
+        backend = 'pcbnew native board access'
         label = "auto-detected chains (open Chain editor to review)" if session.config.auto else (
             session.config_file.name if session.config_file else "config")
         return f'{label} - {backend}'
@@ -130,12 +95,11 @@ def build_tools(board, session: Session, kicad=None):
             return f"saved {len(cfg.groups)} groups to {path.name}"
 
         def refs():
-            return ([i['ref'] for i in native.call('selection') if 'ref' in i] if native else
-                    selected_refs(board))
+            return [i['ref'] for i in native.call('selection') if 'ref' in i]
 
         return edit_chains(parent, session.config, session.find_between, refs, apply)
 
-    clear = (lambda: native.call('clear')) if native else board.clear_selection
+    clear = lambda: native.call('clear')  # noqa: E731
     return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,
                  export, save, source, edit, zoom)
 
@@ -160,10 +124,8 @@ def main() -> int:
     try:
         from signal_path_analyzer import hub_ui
 
-        kicad = KiCad()
-        board = kicad.get_board()
-        session = Session.open(board)
-        hub_ui.run(build_tools(board, session, kicad), single_instance_port=PORT)
+        session = Session.open()
+        hub_ui.run(build_tools(session), single_instance_port=PORT)
         print("panel closed normally")
     except Exception:
         traceback.print_exc()
