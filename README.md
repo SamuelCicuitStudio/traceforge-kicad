@@ -41,6 +41,8 @@ registered. The native toolbar has the same light/dark TraceForge icons.
 All board operations run through the native helper on KiCad's GUI thread. The panel accepts
 one operation at a time and does not poll or automatically retry failed operations.
 Zone stitching and parallel routing remain planned features, not implemented routing tools.
+The [tabs and via stitching plan](docs/VIA-STITCHING-PLAN.md) defines a Signals / xSignals
+tab and a separate Via Stitching tab, including regions, via defaults and managed sets.
 
 ## Chains and timing
 

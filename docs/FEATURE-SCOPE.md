@@ -3,6 +3,16 @@
 This document defines the intended behavior of the KiCad PCB Automation Toolkit. It
 prevents similarly named PCB features from being implemented with the wrong model.
 
+## TraceForge feature tabs
+
+The agreed layout is one window with **Signals / xSignals** as the first tab and
+**Via Stitching** as the second. Keep net/chain analysis, timing, highlighting,
+chain editing, DRC targets and exports together in Signals. The stitching tab owns
+regions, via settings, preview and management of generated stitching sets. Tab changes
+preserve state and do not trigger board refreshes. See the implementation sequence,
+native capability proof points and acceptance checks in
+[VIA-STITCHING-PLAN.md](VIA-STITCHING-PLAN.md). Tabs and stitching are planned, not yet implemented.
+
 ## Signal Path Analyzer
 
 The analyzer treats a signal as an electrical path, not merely a KiCad net name. It
@@ -18,15 +28,18 @@ This feature is not a generic via-array command.
 
 ### User workflow
 
-1. Select a filled copper zone, or invoke the tool and draw a bounded region.
+1. Select a filled copper zone, draw a rectangle/closed polygon, or choose whole-board mode.
 2. In zone mode, inherit the zone net by default. Allow an explicit net only when it
    is electrically compatible with the selected copper.
-3. Set via pad diameter, drill diameter, horizontal and vertical pitch, grid offsets,
-   zone-boundary setback, and board-edge setback.
+3. Inherit via diameter/drill from the active board preset or chosen net's netclass,
+   or use custom values. Set horizontal/vertical pitch, grid offsets, zone-boundary
+   setback and board-edge setback.
 4. Choose whether a candidate must touch same-net copper on at least two traversed
    layers or on every traversed copper layer.
 5. Preview accepted and rejected candidates, with a rejection count by reason.
 6. Confirm all vias as one undoable KiCad commit, then refill affected zones.
+7. Keep generated vias in identifiable, persistent stitching sets. Select, remove
+   or regenerate one set or all managed sets while preserving ordinary routing vias.
 
 ### Placement rules
 
