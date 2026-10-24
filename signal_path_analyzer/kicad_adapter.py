@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, Optional
 
 from .chains import NetGeometry, TrackSeg, ViaHop
 from .model import TrackSample
@@ -110,3 +110,13 @@ def highlight(board: Any, items: Sequence[Any]) -> int:
     if items:
         board.add_to_selection(items)
     return len(items)
+
+
+def netclass_of(board: Any, net_names: Sequence[str]) -> dict[str, Optional[str]]:
+    """Plain net name -> effective netclass name."""
+
+    nets = _nets_by_name(board, net_names)
+    if not nets:
+        return {}
+    classes = board.get_netclass_for_nets(nets)
+    return {plain_name(n.name): getattr(classes.get(n.name), "name", None) for n in nets}

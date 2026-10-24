@@ -53,6 +53,8 @@ class Tools:
     clear: Callable[[], None]
     write_targets: Callable[[list[GroupResult]], str]
     export_paths: Callable[[], str]
+    save_config: Callable[[], str] = lambda: "nothing to save"
+    source: Callable[[], str] = lambda: ""  # e.g. "xsignals.json" or "auto-detected"
 
 
 def load_shortcuts() -> dict[str, str]:
@@ -95,8 +97,23 @@ def parse_shortcut(text: str) -> Optional[tuple[int, int]]:
     return None
 
 
-def _owner_hwnd() -> Optional[int]:
-    """Top-level window of the KiCad PCB editor (Windows only)."""
+def kicad_dark_theme() -> bool:
+    """KiCad 10 appearance.app_theme: 0 = follow system, 1 = light, 2 = dark."""
+
+    path = Path(os.environ.get("APPDATA", Path.home())) / "kicad" / "10.0" / "kicad_common.json"
+    try:
+        theme = json.loads(path.read_text(encoding="utf-8"))["appearance"]["app_theme"]
+    except (OSError, ValueError, KeyError):
+        theme = 0
+    if theme == 2:
+        return True
+    if theme == 1:
+        return False
+    return wx.SystemSettings.GetAppearance().IsDark()
+
+
+def _kicad_pid() -> Optional[int]:
+    """Process id of the KiCad PCB editor window (Windows only)."""
 
     if sys.platform != "win32":
         return None
@@ -113,23 +130,25 @@ def _owner_hwnd() -> Optional[int]:
             buf = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buf, length + 1)
             if buf.value.endswith("PCB Editor"):
-                found.append(hwnd)
+                pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                found.append(pid.value)
         return True
 
     user32.EnumWindows(visit, 0)
     return found[0] if found else None
 
 
-def _attach_to_owner(frame: wx.Frame) -> bool:
-    owner = _owner_hwnd()
-    if owner is None:
-        return False
+def _foreground_pid() -> Optional[int]:
+    if sys.platform != "win32":
+        return None
     import ctypes
+    from ctypes import wintypes
 
-    gwlp_hwndparent = -8
-    setter = getattr(ctypes.windll.user32, "SetWindowLongPtrW", ctypes.windll.user32.SetWindowLongW)
-    setter(frame.GetHandle(), gwlp_hwndparent, owner)
-    return True
+    hwnd = ctypes.windll.user32.GetForegroundWindow()
+    pid = wintypes.DWORD()
+    ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value
 
 
 class ShortcutDialog(wx.Dialog):
@@ -163,14 +182,19 @@ class TraceForgePanel(wx.Frame):
         self.paused, self.busy, self.open_groups = False, False, set()
         self.hotkey_ids: dict[int, str] = {}
         self.SetMinSize((520, 260))
-        if not _attach_to_owner(self):  # no KiCad window found: keep it on top instead
-            self.SetWindowStyle(self.GetWindowStyle() | wx.STAY_ON_TOP)
+        # Overlay: on top only while KiCad (or this panel) is the active application. A
+        # cross-process window owner is avoided on purpose; Windows can hang or misbehave with it.
+        self.kicad_pid, self.on_top = _kicad_pid(), False
+        self.overlay = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.on_overlay, self.overlay)
+        self.overlay.Start(400)
 
         root = wx.Panel(self)
         bar = wx.BoxSizer(wx.HORIZONTAL)
         buttons = (("Highlight chain", self.on_chain), ("Highlight group", self.on_group),
                    ("Clear", self.on_clear), ("Write DRC targets", self.on_write),
-                   ("Export paths", self.on_export), ("Shortcuts…", self.on_shortcuts))
+                   ("Export paths", self.on_export), ("Save config", self.on_save),
+                   ("Shortcuts…", self.on_shortcuts))
         for label, handler in buttons:
             btn = wx.Button(root, label=label, style=wx.BU_EXACTFIT)
             btn.Bind(wx.EVT_BUTTON, handler)
@@ -225,7 +249,13 @@ class TraceForgePanel(wx.Frame):
             return
         self.results = results
         self.render()
-        self.status.SetLabel(f"updated {wx.DateTime.Now().FormatTime()}")
+        source = self.tools.source()
+        when = wx.DateTime.Now().FormatTime()
+        if not results:
+            self.status.SetLabel(f"{when} · no signal chains found (no xsignals.json and no series "
+                                 "parts between tuning-profile netclasses)")
+        else:
+            self.status.SetLabel(f"{when} · groups from {source}")
 
     def render(self) -> None:
         item = self.tree.GetFirstChild(self.tree.GetRootItem())
@@ -300,6 +330,21 @@ class TraceForgePanel(wx.Frame):
     def on_export(self, _=None) -> None:
         self._run(self.tools.export_paths)
 
+    def on_save(self, _=None) -> None:
+        self._run(self.tools.save_config)
+
+    def on_overlay(self, _event) -> None:
+        """Stay on top while KiCad or this panel is the active application."""
+
+        if self.kicad_pid is None:
+            self.kicad_pid = _kicad_pid()
+        fg = _foreground_pid()
+        want = fg is not None and fg in (self.kicad_pid, os.getpid())
+        if want != self.on_top:
+            style = self.GetWindowStyle()
+            self.SetWindowStyle(style | wx.STAY_ON_TOP if want else style & ~wx.STAY_ON_TOP)
+            self.on_top = want
+
     def on_shortcuts(self, _=None) -> None:
         dlg = ShortcutDialog(self, load_shortcuts())
         if dlg.ShowModal() == wx.ID_OK:
@@ -346,6 +391,7 @@ class TraceForgePanel(wx.Frame):
 
     def on_close(self, event) -> None:
         self.timer.Stop()
+        self.overlay.Stop()
         for hid in list(self.hotkey_ids):
             self.UnregisterHotKey(hid)
         event.Skip()
@@ -353,13 +399,20 @@ class TraceForgePanel(wx.Frame):
 
 def run(tools: Tools, single_instance_port: Optional[int] = None) -> None:
     app = wx.App(False)
+    if kicad_dark_theme() and hasattr(app, "MSWEnableDarkMode"):
+        app.MSWEnableDarkMode(1)  # wxWidgets 3.3 DarkMode_Always, matching KiCad's dark theme
     panel = TraceForgePanel(tools)
     panel.Show()
+    listener = None
     if single_instance_port is not None:
         from .single_instance import listen
 
-        listen(single_instance_port, lambda: wx.CallAfter(_bring_front, panel))
-    app.MainLoop()
+        listener = listen(single_instance_port, lambda: wx.CallAfter(_bring_front, panel))
+    try:
+        app.MainLoop()
+    finally:
+        if listener is not None:
+            listener.stop()
 
 
 def _bring_front(panel: wx.Frame) -> None:

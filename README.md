@@ -41,6 +41,22 @@ Version 0.4.0 puts everything behind **one toolbar button, TraceForge**, which o
   | Ctrl+Alt+E | export signal paths |
   | Ctrl+Alt+T | show or hide the panel |
 
+**Any project works.** With no `xsignals.json`, TraceForge finds the chains on the board
+automatically. Every resistor of 100 Ω or less between nets of a netclass that has a KiCad tuning
+profile becomes a chain, and multi-resistor paths are joined. Chains are grouped by netclass, and
+`_P`/`_N` chains become pairs. The status line says "auto-detected". **Save config** writes them to
+`xsignals.json` so you can set the driver side, stub limits and skew. DRC targets are written only
+from a saved, reviewed config.
+
+**Theme.** The panel follows KiCad's light or dark setting (`kicad_common.json` →
+`appearance.app_theme`), using wxWidgets 3.3 dark mode.
+
+**Overlay.** The panel is always on top only while KiCad or the panel is the active application.
+It is a separate window, because KiCad does not let plugins dock panels. An earlier build tied the
+panel to KiCad's window across processes, which crashed on exit; that is no longer used.
+
+**Log.** `%APPDATA%\TraceForge	raceforge.log` (KiCad runs plugins without a console).
+
 The individual actions also remain in **Tools → External Plugins**, without toolbar buttons. The
 browser dashboard of 0.3.x is still available from the **TraceForge: Signal Timing Monitor** menu
 action.

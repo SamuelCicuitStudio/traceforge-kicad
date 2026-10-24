@@ -45,6 +45,7 @@ class GroupDef:
 class Config:
     groups: list[GroupDef]
     pad_to_die_ps_per_mm: float = 6.952
+    auto: bool = False  # detected from the board, not loaded from xsignals.json
 
     def chain_for_net(self, net: str) -> Optional[ChainDef]:
         for group in self.groups:
@@ -313,3 +314,67 @@ def chain_nets(start: str, links: Iterable[Link]) -> tuple[set[str], set[str]]:
                     nets.add(other)
                     frontier.append(other)
     return nets, refs
+
+
+_PAIR = re.compile(r"^(.*?)(_P|_N|\+|-)$")
+
+
+def _leaf(net: str) -> str:
+    return net.rstrip("/").split("/")[-1]
+
+
+def auto_config(links: Iterable[Link], netclass_of: Mapping[str, Optional[str]],
+                timed_classes: Iterable[str], die_ps_per_mm: float = 6.952) -> Config:
+    """Chains found on the board: series links between nets of timing-controlled netclasses.
+
+    Nets joined through any number of 2-terminal series parts form one chain; chains are grouped
+    by netclass, and _P/_N (or +/-) chains become pairs. Driver side, stub limits and skew targets
+    are unknown, so auto groups report timing and highlight but write no DRC targets until the
+    config is saved and reviewed.
+    """
+
+    timed = set(timed_classes)
+    two = [(r, n) for r, n in links if len(n) == 2]
+    seen: set[str] = set()
+    by_class: dict[str, list[ChainDef]] = {}
+    for _, pair in two:
+        for start in pair:
+            if start in seen:
+                continue
+            nets, refs = chain_nets(start, two)
+            seen |= nets
+            classes = {netclass_of.get(n) for n in nets} & timed
+            if not classes:
+                continue
+            group = sorted(classes)[0]
+            name = min((_leaf(n) for n in nets), key=len)
+            by_class.setdefault(group, []).append(
+                ChainDef(group, name, tuple(sorted(nets)), tuple(sorted(refs))))
+    groups = []
+    for group, chains in sorted(by_class.items()):
+        names = {c.name for c in chains}
+        paired = []
+        for c in sorted(chains, key=lambda c: c.name):
+            m = _PAIR.match(c.name)
+            mate = None
+            if m:
+                other = {"_P": "_N", "_N": "_P", "+": "-", "-": "+"}[m.group(2)]
+                mate = m.group(1) + other if m.group(1) + other in names else None
+            paired.append(ChainDef(c.group, c.name, c.nets, c.series, mate))
+        any_pair = any(c.pair for c in paired)
+        groups.append(GroupDef(group, tuple(paired), pair_skew_ps=1.0 if any_pair else None))
+    return Config(groups, die_ps_per_mm, auto=True)
+
+
+def config_to_json(config: Config) -> str:
+    """Serialise a config (e.g. an auto-detected one) as an editable xsignals.json."""
+
+    data = {"pad_to_die_ps_per_mm": config.pad_to_die_ps_per_mm, "groups": {}}
+    for g in config.groups:
+        gd = {k: v for k, v in (("skew_ps", g.skew_ps), ("pair_skew_ps", g.pair_skew_ps),
+                                ("stub_max_ps", g.stub_max_ps)) if v is not None}
+        gd["chains"] = {c.name: {k: v for k, v in (("nets", list(c.nets)),
+                                                   ("series", list(c.series)),
+                                                   ("pair", c.pair)) if v} for c in g.chains}
+        data["groups"][g.name] = gd
+    return json.dumps(data, indent=1) + "\n"

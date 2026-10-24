@@ -10,7 +10,9 @@ from .chains import (
     ChainDef,
     Config,
     GroupResult,
+    auto_config,
     chain_nets,
+    config_to_json,
     detect_chains,
     drc_rules,
     evaluate,
@@ -19,7 +21,7 @@ from .chains import (
     merge_drc,
     net_delay,
 )
-from .kicad_adapter import board_names, series_parts, snapshot
+from .kicad_adapter import board_names, netclass_of, series_parts, snapshot
 from .profiles import ProjectTiming, load_project_timing, load_stackup_z
 
 
@@ -41,8 +43,28 @@ class Session:
         timing = load_project_timing(pro) if pro.exists() else ProjectTiming()
         cfg_file = find_config(project_dir)
         config = load_config(cfg_file) if cfg_file else None
-        return cls(board, project_dir, board_file, timing, load_stackup_z(board_file), config,
-                   cfg_file)
+        session = cls(board, project_dir, board_file, timing, load_stackup_z(board_file), config,
+                      cfg_file)
+        if config is None:
+            session.config = session.detect()
+        return session
+
+    def detect(self) -> Optional[Config]:
+        """Auto-detected chains for a project without xsignals.json (None when nothing found)."""
+
+        links = detect_chains(series_parts(self.board))
+        nets = sorted({n for _, pair in links for n in pair})
+        config = auto_config(links, netclass_of(self.board, nets),
+                             self.timing.netclass_profile.keys())
+        return config if config.groups else None
+
+    def save_config(self) -> Path:
+        """Write the current (e.g. auto-detected) config as an editable project xsignals.json."""
+
+        path = self.config_file or self.project_dir / "xsignals.json"
+        path.write_text(config_to_json(self.config), encoding="utf-8")
+        self.config_file, self.config.auto = path, False
+        return path
 
     @property
     def die_ps_per_mm(self) -> float:

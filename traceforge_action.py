@@ -5,6 +5,11 @@ If the panel is already open it is brought to the front instead of opening a sec
 
 from __future__ import annotations
 
+import faulthandler
+import os
+import sys
+import time
+import traceback
 from pathlib import Path
 
 from kipy import KiCad
@@ -52,6 +57,11 @@ def build_tools(board, session: Session):
         return f"{label}: highlighted {count} items ({', '.join(refs) or 'no series part'})"
 
     def write(results) -> str:
+        if session.config is None:
+            return "no signal chains to write"
+        if session.config.auto:
+            return ("groups are auto-detected (driver side and limits unknown): click Save config, "
+                    "review xsignals.json, then write DRC targets")
         return f"DRC targets written to {session.write_drc_targets(results).name}"
 
     def export() -> str:
@@ -60,18 +70,47 @@ def build_tools(board, session: Session):
         write_csv(out, summaries)
         return f"exported {len(summaries)} nets to {out.name}"
 
+    def save() -> str:
+        if session.config is None:
+            return "no signal chains to save"
+        return f"saved {session.save_config().name}; edit stub side, skew and limits, then reopen"
+
+    def source() -> str:
+        if session.config is None:
+            return "nothing"
+        return "auto-detected chains (Save config to review)" if session.config.auto else (
+            session.config_file.name if session.config_file else "config")
+
     evaluate = session.evaluate if config else (lambda: [])
-    return Tools(evaluate, hl_chain, hl_group, hl_selection, board.clear_selection, write, export)
+    return Tools(evaluate, hl_chain, hl_group, hl_selection, board.clear_selection, write, export,
+                 save, source)
+
+
+def _log_to_file() -> None:
+    """KiCad runs plugins without a console: keep a log with full tracebacks and fatal errors."""
+
+    log_dir = Path(os.environ.get("APPDATA", Path.home())) / "TraceForge"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stream = open(log_dir / "traceforge.log", "a", encoding="utf-8", buffering=1)  # noqa: SIM115
+    stream.write(f"\n--- start {time.strftime('%Y-%m-%d %H:%M:%S')} pid {os.getpid()} ---\n")
+    sys.stdout = sys.stderr = stream
+    faulthandler.enable(stream)
 
 
 def main() -> int:
     if try_activate_existing(PORT):
         return 0
-    from signal_path_analyzer import hub_ui
+    _log_to_file()
+    try:
+        from signal_path_analyzer import hub_ui
 
-    board = KiCad().get_board()
-    session = Session.open(board)
-    hub_ui.run(build_tools(board, session), single_instance_port=PORT)
+        board = KiCad().get_board()
+        session = Session.open(board)
+        hub_ui.run(build_tools(board, session), single_instance_port=PORT)
+        print("panel closed normally")
+    except Exception:
+        traceback.print_exc()
+        return 1
     return 0
 
 
