@@ -159,6 +159,14 @@ Put `xsignals.json` in the project root or in `docs/design/`:
 
 KiCad manages the plug-in Python environment and installs `requirements.txt`.
 
+## Native board access on KiCad 10
+
+If the IPC server remains busy after routing or tuning, run `tools/install_native_bridge.ps1`
+from this checkout and restart PCB Editor once. TraceForge then reads the live, unsaved board
+through an in-process helper and uses it for chain highlighting as well. The status line shows
+`native board access`. There is no polling or disk snapshot fallback. The separate Zoom selection
+button still uses IPC. See [native board access](docs/NATIVE-BOARD-ACCESS.md) for scope and tests.
+
 ## Development installation on Windows
 
 Clone this repository into KiCad's plug-in directory, or create a directory junction

@@ -24,6 +24,7 @@ from signal_path_analyzer.kicad_adapter import (
     highlight,
     selected_refs,
 )
+from signal_path_analyzer.model import TrackSample
 from signal_path_analyzer.report import write_csv
 from signal_path_analyzer.session import Session
 from signal_path_analyzer.single_instance import PORT, try_activate_existing
@@ -31,6 +32,13 @@ from signal_path_analyzer.single_instance import PORT, try_activate_existing
 
 def build_tools(board, session: Session, kicad=None):
     from signal_path_analyzer.hub_ui import Tools
+
+    native = getattr(session, 'native', None)
+
+    def select_paths(nets, refs):
+        if native:
+            return native.call('highlight', nets=list(nets), refs=list(refs))
+        return select_items(chain_items(board, nets, refs))
 
     def select_items(items):
         return highlight(board, items)
@@ -46,19 +54,21 @@ def build_tools(board, session: Session, kicad=None):
     # always read session.config: the Chain Editor replaces it while the panel is open
     def hl_chain(group: str, name: str) -> int:
         nets, refs = selection_paths(session.config.group(group), name)
-        return select_items(chain_items(board, nets, refs))
+        return select_paths(nets, refs)
 
     def hl_group(group: str) -> int:
         g = session.config.group(group)
-        return select_items(chain_items(board, [n for c in g.chains for n in c.nets],
-                                            [r for c in g.chains for r in c.series]))
+        return select_paths([n for c in g.chains for n in c.nets],
+                            [r for c in g.chains for r in c.series])
 
     def hl_selection(whole_group: bool) -> str:
-        selection = list(board.get_selection())
+        selection = native.call('selection') if native else list(board.get_selection())
         if not selection:
             return "select a track, via, pad or series part in KiCad first"
         item = selection[0]
-        if isinstance(item, FootprintInstance):
+        if native:
+            nets, refs, chain = session.resolve_chain(net=item.get('net'), ref=item.get('ref'))
+        elif isinstance(item, FootprintInstance):
             nets, refs, chain = session.resolve_chain(ref=item.reference_field.text.value)
         else:
             nets, refs, chain = session.resolve_chain(net=getattr(item.net, "name", None))
@@ -67,7 +77,7 @@ def build_tools(board, session: Session, kicad=None):
         if whole_group and chain is not None:
             return f"{chain.group}: highlighted {hl_group(chain.group)} items"
         count = (hl_chain(chain.group, chain.name) if chain is not None else
-                 select_items(chain_items(board, nets, refs)))
+                 select_paths(nets, refs))
         label = f"{chain.group} {chain.name}" if chain else "auto-detected chain"
         return f"{label}: highlighted {count} items ({', '.join(refs) or 'no series part'})"
 
@@ -81,7 +91,13 @@ def build_tools(board, session: Session, kicad=None):
 
     def export() -> str:
         out = session.project_dir / f"{Path(session.board_file).stem}.signal-paths.csv"
-        summaries = analyze_tracks(collect_track_samples(board))
+        if native:
+            geometry = native.snapshot(list(native.call('netclasses')))
+            samples = [TrackSample(n, seg.layer, seg.length_mm)
+                       for n, geo in geometry.items() for seg in geo.tracks]
+        else:
+            samples = collect_track_samples(board)
+        summaries = analyze_tracks(samples)
         write_csv(out, summaries)
         return f"exported {len(summaries)} nets to {out.name}"
 
@@ -93,8 +109,10 @@ def build_tools(board, session: Session, kicad=None):
     def source() -> str:
         if session.config is None:
             return "nothing"
-        return "auto-detected chains (open Chain editor to review)" if session.config.auto else (
+        backend = 'native board access' if native else 'IPC API'
+        label = "auto-detected chains (open Chain editor to review)" if session.config.auto else (
             session.config_file.name if session.config_file else "config")
+        return f'{label} - {backend}'
 
     def edit(parent) -> str:
         from signal_path_analyzer.chain_editor import edit_chains
@@ -103,10 +121,14 @@ def build_tools(board, session: Session, kicad=None):
             path = session.save_config(cfg)
             return f"saved {len(cfg.groups)} groups to {path.name}"
 
-        return edit_chains(parent, session.config, session.find_between,
-                           lambda: selected_refs(board), apply)
+        def refs():
+            return ([i['ref'] for i in native.call('selection') if 'ref' in i] if native else
+                    selected_refs(board))
 
-    return Tools(session.evaluate, hl_chain, hl_group, hl_selection, board.clear_selection, write,
+        return edit_chains(parent, session.config, session.find_between, refs, apply)
+
+    clear = (lambda: native.call('clear')) if native else board.clear_selection
+    return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,
                  export, save, source, edit, zoom)
 
 

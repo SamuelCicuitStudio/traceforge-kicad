@@ -23,12 +23,15 @@ def main() -> int:
     access = ApiAccess()
     board = access.call(kicad.get_board)
     session = access.call(lambda: Session.open(board))
-    selection = list(access.call(board.get_selection))
+    native = session.native
+    selection = native.call('selection') if native else list(access.call(board.get_selection))
     if not selection:
         print(f"{TAG}: select a track, via, pad or series part first.")
         return 1
     item = selection[0]
-    if isinstance(item, FootprintInstance):
+    if native:
+        nets, refs, chain = session.resolve_chain(net=item.get('net'), ref=item.get('ref'))
+    elif isinstance(item, FootprintInstance):
         nets, refs, chain = session.resolve_chain(ref=item.reference_field.text.value)
     else:
         net = getattr(getattr(item, "net", None), "name", None)
@@ -38,8 +41,11 @@ def main() -> int:
         return 1
     if chain is not None:
         nets, refs = selection_paths(session.config.group(chain.group), chain.name)
-    items = access.call(lambda: chain_items(board, nets, refs))
-    count = highlight(board, items)
+    if native:
+        count = native.call('highlight', nets=list(nets), refs=list(refs))
+    else:
+        items = access.call(lambda: chain_items(board, nets, refs))
+        count = highlight(board, items)
     label = f"{chain.group} {chain.name}" if chain else "auto-detected chain"
     via = ", ".join(refs) or "no series part"
     print(f"{TAG}: {label}: {len(nets)} nets via {via} ({count} items selected).")

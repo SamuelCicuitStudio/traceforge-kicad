@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -36,6 +37,7 @@ class Session:
     z: dict
     config: Optional[Config]
     config_file: Optional[Path]
+    native: Any = None
 
     @classmethod
     def open(cls, board: Any) -> Session:
@@ -47,6 +49,10 @@ class Session:
         config = load_config(cfg_file) if cfg_file else None
         session = cls(board, project_dir, board_file, timing, load_stackup_z(board_file), config,
                       cfg_file)
+        from .native_client import connect
+
+        session.native = connect(board_file)
+        logging.info("Board access backend: %s", "native" if session.native else "IPC API")
         if config is None:
             session.config = session.detect()
         return session
@@ -54,9 +60,11 @@ class Session:
     def detect(self) -> Optional[Config]:
         """Auto-detected chains for a project without xsignals.json (None when nothing found)."""
 
-        links = detect_chains(series_parts(self.board))
+        parts = self.native.call('parts') if self.native else series_parts(self.board)
+        links = detect_chains(parts)
         nets = sorted({n for _, pair in links for n in pair})
-        config = auto_config(links, netclass_of(self.board, nets),
+        classes = self.native.call('netclasses') if self.native else netclass_of(self.board, nets)
+        config = auto_config(links, classes,
                              self.timing.netclass_profile.keys())
         return config if config.groups else None
 
@@ -74,13 +82,14 @@ class Session:
                      with_caps: bool = False) -> list:
         """Signal chains from source to destination parts, driver side inferred from placement."""
 
-        parts = series_parts(self.board)
+        parts = self.native.call('parts') if self.native else series_parts(self.board)
         found = find_chains(parts, sources, destinations, max_ohms, with_caps)
-        pads, parts_xy = positions(self.board)
+        pads, parts_xy = self.native.call('positions') if self.native else positions(self.board)
         orient_by_placement(found, pads, parts_xy)
         found = dedupe(found)
         nets = sorted({n for c in found for n in c.nets})
-        mark_untimed(found, netclass_of(self.board, nets), self.timing.netclass_profile.keys())
+        classes = self.native.call('netclasses') if self.native else netclass_of(self.board, nets)
+        mark_untimed(found, classes, self.timing.netclass_profile.keys())
         name_and_group(found)  # names/pairs after orientation
         return found
 
@@ -98,7 +107,8 @@ class Session:
 
         if not self.config:
             return []
-        geo = snapshot(self.board, self.all_nets())
+        geo = (self.native.snapshot(self.all_nets()) if self.native else
+               snapshot(self.board, self.all_nets()))
         delays = {n: net_delay(g, self.timing, self.z, self.die_ps_per_mm) for n, g in geo.items()}
         return evaluate(self.config, delays, geo)
 
@@ -112,7 +122,8 @@ class Session:
             chain = cfg.chain_for_net(net) if net else cfg.chain_for_series(ref or "")
             if chain:
                 return list(chain.nets), list(chain.series), chain
-        links = detect_chains(series_parts(self.board))
+        parts = self.native.call('parts') if self.native else series_parts(self.board)
+        links = detect_chains(parts)
         if ref and not net:
             net = next((n[0] for r, n in links if r == ref), None)
         if not net:
@@ -123,6 +134,8 @@ class Session:
     def write_drc_targets(self, results: list[GroupResult]) -> Path:
         dru = self.board_file.with_suffix(".kicad_dru")
         existing = dru.read_text(encoding="utf-8") if dru.exists() else "(version 1)\n"
-        section = drc_rules(results, board_names(self.board, self.all_nets()))
+        names = (self.native.call('names') if self.native else
+                 board_names(self.board, self.all_nets()))
+        section = drc_rules(results, names)
         dru.write_text(merge_drc(existing, section), encoding="utf-8", newline="\n")
         return dru
