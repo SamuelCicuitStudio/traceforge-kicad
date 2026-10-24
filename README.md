@@ -18,7 +18,34 @@ using blind via arrays or batch autorouting:
 
 ## Current status
 
-Version 0.3.0 adds **net chains (xSignals)** for KiCad 10.0.1, which has no native net chains:
+Version 0.4.0 puts everything behind **one toolbar button, TraceForge**, which opens a floating
+**TraceForge panel** over the PCB editor:
+
+- **One button.** Clicking it again brings the open panel to the front instead of opening a second.
+- **Floating panel.** On Windows it is owned by the PCB editor window: it stays above KiCad, can be
+  left open, minimises with KiCad and does not cover other applications. It uses wxPython, KiCad's
+  own toolkit, which is available in KiCad's plugin environment.
+- **Live signal timing.** The panel refreshes every second with the chain totals through series
+  resistors and chokes, group targets, delta, P-N skew and stub length. Status is shown as
+  ✔ ok, ▲ short, ▼ long, … pending, and ✖ stub too long.
+- **Tools.** Highlight chain, Highlight group, Clear, Write DRC targets, Export paths, Shortcuts.
+- **Keyboard shortcuts.** These work from the KiCad canvas while the panel is open, and can be
+  changed under **Shortcuts…** (saved in `%APPDATA%\TraceForge\settings.json`):
+
+  | Shortcut | Action |
+  |---|---|
+  | Ctrl+Alt+H | highlight the chain of the item selected in KiCad |
+  | Ctrl+Alt+G | highlight its whole group |
+  | Ctrl+Alt+C | clear the selection |
+  | Ctrl+Alt+W | write DRC targets |
+  | Ctrl+Alt+E | export signal paths |
+  | Ctrl+Alt+T | show or hide the panel |
+
+The individual actions also remain in **Tools → External Plugins**, without toolbar buttons. The
+browser dashboard of 0.3.x is still available from the **TraceForge: Signal Timing Monitor** menu
+action.
+
+Version 0.3.0 added **net chains (xSignals)** for KiCad 10.0.1, which has no native net chains:
 
 - **Net Chain Monitor:** a live window, refreshed every second while you route. It shows each
   chain's total delay through series resistors and chokes (tracks + vias + pad-to-die), the group

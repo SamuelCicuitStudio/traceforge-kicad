@@ -51,8 +51,18 @@ def export(d: ImageDraw.ImageDraw, c: dict) -> None:
     d.polygon([(_w(46), _w(24)), (_w(38), _w(17)), (_w(38), _w(31))], fill=c["accent"])
 
 
-ICONS = {"signal-timing-monitor": monitor, "highlight-signal-chain": highlight,
-         "export-signal-paths": export}
+def traceforge(d: ImageDraw.ImageDraw, c: dict) -> None:
+    """TraceForge: a 'T' drawn as a PCB trace with a 45-degree bend ending in a via."""
+    d.line([(_w(5), _w(10)), (_w(43), _w(10))], fill=c["ink"], width=_w(6))
+    d.line([(_w(24), _w(10)), (_w(24), _w(28)), (_w(32), _w(36))], fill=c["ink"], width=_w(6),
+           joint="curve")
+    d.ellipse([_w(29), _w(33), _w(45), _w(49) - _w(2)], fill=c["accent"])
+    d.ellipse([_w(34), _w(38), _w(40), _w(44) - _w(2)], fill=(0, 0, 0, 0))
+    d.ellipse([_w(2), _w(5), _w(10), _w(15)], fill=c["good"])
+
+
+ICONS = {"traceforge": traceforge, "signal-timing-monitor": monitor,
+         "highlight-signal-chain": highlight, "export-signal-paths": export}
 
 
 def main() -> None:

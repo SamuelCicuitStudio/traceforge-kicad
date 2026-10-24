@@ -9,10 +9,28 @@
   },
   "actions": [
     {
+      "identifier": "traceforge-panel",
+      "name": "TraceForge",
+      "description": "Open the TraceForge panel: live signal timing, chain highlighting, DRC targets, export and shortcuts",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "traceforge_action.py",
+      "icons-light": [
+        "icons/traceforge-light-24.png",
+        "icons/traceforge-light-48.png"
+      ],
+      "icons-dark": [
+        "icons/traceforge-dark-24.png",
+        "icons/traceforge-dark-48.png"
+      ]
+    },
+    {
       "identifier": "signal-timing-monitor",
       "name": "TraceForge: Signal Timing Monitor",
       "description": "Live timing of signal chains through series resistors and chokes: totals, targets, pair skew, stubs, DRC targets",
-      "show-button": true,
+      "show-button": false,
       "scopes": [
         "pcb"
       ],
@@ -30,7 +48,7 @@
       "identifier": "highlight-signal-chain",
       "name": "TraceForge: Highlight Signal Chain",
       "description": "Select every net and series part of the signal chain containing the selected item",
-      "show-button": true,
+      "show-button": false,
       "scopes": [
         "pcb"
       ],
