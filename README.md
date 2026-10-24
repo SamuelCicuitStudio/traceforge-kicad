@@ -1,4 +1,4 @@
-# KiCad PCB Automation Toolkit
+# TraceForge — KiCad PCB Automation Toolkit
 
 An independent multi-tool KiCad add-on for repetitive and advanced PCB-layout work.
 The toolkit combines end-to-end signal-path analysis, copper-zone-aware via
@@ -91,8 +91,8 @@ New-Item -ItemType Junction -Path $destination -Target $source
 
 Restart PCB Editor, enable the IPC API if necessary, and run:
 
-**Tools → External Plugins → Net Chain Monitor**, **Highlight Net Chain** (toolbar buttons too), or
-**Analyze Signal Paths**
+**Tools → External Plugins → TraceForge: Signal Timing Monitor**, **TraceForge: Highlight Signal Chain** (toolbar buttons with icons), or
+**TraceForge: Export Signal Paths**
 
 The add-on writes `<board-name>.signal-paths.csv` next to the open board. Console
 messages appear in KiCad's warning/message area.

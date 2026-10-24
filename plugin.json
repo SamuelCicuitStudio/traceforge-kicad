@@ -1,42 +1,66 @@
 {
   "$schema": "https://go.kicad.org/api/schemas/v1",
-  "identifier": "kicad-pcb-automation-toolkit",
-  "name": "KiCad PCB Automation Toolkit",
-  "description": "Signal-path and net-chain (xSignal) timing, copper-zone via stitching, and interactive parallel routing",
+  "identifier": "traceforge",
+  "name": "TraceForge",
+  "description": "PCB signal-integrity and layout toolkit: live signal-chain timing through series parts, chain highlighting, signal-path export; via stitching and parallel routing planned",
   "runtime": {
     "type": "python",
     "min_version": "3.9"
   },
   "actions": [
     {
-      "identifier": "analyze-signal-paths",
-      "name": "Analyze Signal Paths",
+      "identifier": "signal-timing-monitor",
+      "name": "TraceForge: Signal Timing Monitor",
+      "description": "Live timing of signal chains through series resistors and chokes: totals, targets, pair skew, stubs, DRC targets",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "net_chain_monitor_action.py",
+      "icons-light": [
+        "icons/signal-timing-monitor-light-24.png",
+        "icons/signal-timing-monitor-light-48.png"
+      ],
+      "icons-dark": [
+        "icons/signal-timing-monitor-dark-24.png",
+        "icons/signal-timing-monitor-dark-48.png"
+      ]
+    },
+    {
+      "identifier": "highlight-signal-chain",
+      "name": "TraceForge: Highlight Signal Chain",
+      "description": "Select every net and series part of the signal chain containing the selected item",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "highlight_net_chain_action.py",
+      "icons-light": [
+        "icons/highlight-signal-chain-light-24.png",
+        "icons/highlight-signal-chain-light-48.png"
+      ],
+      "icons-dark": [
+        "icons/highlight-signal-chain-dark-24.png",
+        "icons/highlight-signal-chain-dark-48.png"
+      ]
+    },
+    {
+      "identifier": "export-signal-paths",
+      "name": "TraceForge: Export Signal Paths",
       "description": "Export routed net lengths and estimated delays to CSV",
       "show-button": false,
       "scopes": [
         "pcb"
       ],
-      "entrypoint": "signal_path_analyzer_action.py"
-    },
-    {
-      "identifier": "net-chain-monitor",
-      "name": "Net Chain Monitor",
-      "description": "Live xSignal timing through series parts: chain totals, targets, pair skew and stubs",
-      "show-button": true,
-      "scopes": [
-        "pcb"
+      "entrypoint": "signal_path_analyzer_action.py",
+      "icons-light": [
+        "icons/export-signal-paths-light-24.png",
+        "icons/export-signal-paths-light-48.png"
       ],
-      "entrypoint": "net_chain_monitor_action.py"
-    },
-    {
-      "identifier": "highlight-net-chain",
-      "name": "Highlight Net Chain",
-      "description": "Select every net and series part of the chain containing the selected item",
-      "show-button": true,
-      "scopes": [
-        "pcb"
-      ],
-      "entrypoint": "highlight_net_chain_action.py"
+      "icons-dark": [
+        "icons/export-signal-paths-dark-24.png",
+        "icons/export-signal-paths-dark-48.png"
+      ]
     }
   ]
 }

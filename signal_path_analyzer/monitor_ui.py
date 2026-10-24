@@ -34,7 +34,7 @@ class MonitorWindow:
         self.clear, self.write_targets, self.period = clear, write_targets, period_ms
         self.paused, self.results = False, []
         self.root = tk.Tk()
-        self.root.title("Net Chain Monitor")
+        self.root.title("TraceForge - Signal Timing Monitor")
         self.root.attributes("-topmost", True)
         bar = ttk.Frame(self.root)
         bar.pack(fill="x")

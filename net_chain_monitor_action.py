@@ -1,7 +1,8 @@
-"""KiCad IPC action: live Net Chain Monitor (xSignal timing through series parts).
+"""KiCad IPC action: TraceForge Signal Timing Monitor (xSignal timing through series parts).
 
-Tools > External Plugins > Net Chain Monitor opens a window that refreshes once per second while you
-route and tune. It reads chain definitions from xsignals.json (project root or docs/design/).
+Tools > External Plugins > TraceForge: Signal Timing Monitor opens a window that refreshes once
+per second while you route and tune. It reads chain definitions from xsignals.json (project root
+or docs/design/).
 """
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ def main() -> int:
     board = KiCad().get_board()
     session = Session.open(board)
     if not session.config:
-        print("Net Chain Monitor: no xsignals.json in the project root or docs/design/.")
+        print("TraceForge Signal Timing Monitor: no xsignals.json in the project root or "
+              "docs/design/.")
         return 1
 
     def chain_of(group: str, name: str):

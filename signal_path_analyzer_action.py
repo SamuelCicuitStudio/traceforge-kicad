@@ -22,7 +22,7 @@ def main() -> int:
     summaries = analyze_tracks(collect_track_samples(board))
     write_csv(output, summaries)
     print(
-        f"Signal Path Analyzer: wrote {len(summaries)} nets to {os.fspath(output)}. "
+        f"TraceForge Export Signal Paths: wrote {len(summaries)} nets to {os.fspath(output)}. "
         "Delay is blank until a KiCad tuning profile is imported."
     )
     return 0
