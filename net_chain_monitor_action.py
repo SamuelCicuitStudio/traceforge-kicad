@@ -7,10 +7,12 @@ or docs/design/).
 
 from __future__ import annotations
 
+import os
+
 from kipy import KiCad
 
 from signal_path_analyzer.kicad_adapter import chain_items, highlight
-from signal_path_analyzer.monitor_ui import MonitorWindow
+from signal_path_analyzer.monitor_web import serve
 from signal_path_analyzer.session import Session
 
 
@@ -40,7 +42,13 @@ def main() -> int:
         path = session.write_drc_targets(results)
         return f"targets written to {path.name}; run DRC or re-open Board Setup to reload rules"
 
-    MonitorWindow(session.evaluate, hl_chain, hl_group, board.clear_selection, write).run()
+    callbacks = (session.evaluate, hl_chain, hl_group, board.clear_selection, write)
+    if os.environ.get("TRACEFORGE_UI") == "tk":  # optional desktop window (needs tkinter)
+        from signal_path_analyzer.monitor_ui import MonitorWindow
+
+        MonitorWindow(*callbacks).run()
+    else:  # default: local web dashboard, standard library only (KiCad's Python has no tkinter)
+        serve(*callbacks)
     return 0
 
 
