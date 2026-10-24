@@ -2,7 +2,7 @@
   "$schema": "https://go.kicad.org/api/schemas/v1",
   "identifier": "kicad-pcb-automation-toolkit",
   "name": "KiCad PCB Automation Toolkit",
-  "description": "Signal-path analysis, copper-zone via stitching, and interactive parallel routing",
+  "description": "Signal-path and net-chain (xSignal) timing, copper-zone via stitching, and interactive parallel routing",
   "runtime": {
     "type": "python",
     "min_version": "3.9"
@@ -17,7 +17,26 @@
         "pcb"
       ],
       "entrypoint": "signal_path_analyzer_action.py"
+    },
+    {
+      "identifier": "net-chain-monitor",
+      "name": "Net Chain Monitor",
+      "description": "Live xSignal timing through series parts: chain totals, targets, pair skew and stubs",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "net_chain_monitor_action.py"
+    },
+    {
+      "identifier": "highlight-net-chain",
+      "name": "Highlight Net Chain",
+      "description": "Select every net and series part of the chain containing the selected item",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "highlight_net_chain_action.py"
     }
   ]
 }
-

@@ -18,18 +18,57 @@ using blind via arrays or batch autorouting:
 
 ## Current status
 
-Version 0.2.0 is the tested foundation and read-only first release:
+Version 0.3.0 adds **net chains (xSignals)** for KiCad 10.0.1, which has no native net chains:
 
-- connects to a running KiCad 10 PCB Editor through the official IPC API;
-- collects routed copper length by net and layer;
-- applies optional per-layer propagation-delay values;
-- exports a deterministic CSV report beside the board;
-- keeps the calculation engine independent from KiCad for automated testing.
+- **Net Chain Monitor:** a live window, refreshed every second while you route. It shows each
+  chain's total delay through series resistors and chokes (tracks + vias + pad-to-die), the group
+  target, the delta, P-N skew on chain totals, and stub length. It can highlight a chain or group,
+  and it writes ps length targets into the project `.kicad_dru`, so KiCad's own tuner brings each
+  whole chain to its target.
+- **Highlight Net Chain:** select any track, via, pad or series part and run the action. Every net
+  of the chain and its series parts are selected end to end. It uses the project's chain config,
+  or auto-detects through resistors of 100 Ω or less and 4-pad common-mode chokes.
+- **Delay model identical to KiCad 10.0.1:** tuning-profile per-layer delay; via delay = via unit
+  delay × the via's barrel height (top of start layer to bottom of end layer). On the reference board
+  board it reproduces KiCad's `GetDelay()`: 128.668 ps for F.Cu 10 mm + In2 10 mm, and 11.374 ps
+  per through via.
+- Signal Path Analyzer CSV export (0.2.0) is unchanged.
 
-It does **not yet** create schematic Net Chains or modify board copper. Via stitching
-and parallel routing are specified but not exposed as actions until their placement
-engines have undo support, collision checks, and tests. The analyzer does not replace
-a field solver.
+Limits in 10.0.1:
+
+- KiCad's length tuner still shows only the single net being dragged; the monitor shows the chain.
+- The IPC API has no change events, so the monitor polls only the chain nets.
+- The IPC API does not expose pad-to-die *delay*. Pad-to-die length × `pad_to_die_ps_per_mm`
+  from the chain config is used instead.
+- `kicad-cli pcb drc` ignores ps limits; the PCB editor's DRC applies them.
+
+Via stitching and parallel routing are specified but not exposed as actions until their placement
+engines have undo support, collision checks, and tests. The analyzer does not replace a field
+solver.
+
+## Net chain configuration
+
+Put `xsignals.json` in the project root or in `docs/design/`:
+
+```json
+{
+ "pad_to_die_ps_per_mm": 6.952,
+ "groups": {
+  "RGMII_RX": {"skew_ps": 20, "stub_max_ps": 15, "chains": {
+   "RXD0": {"nets": ["/ETHERNET/PHY1_RXD0_PHY", "/PHY1_RXD0_RXDLY"], "series": ["R141"]}}},
+  "USB_OTG0": {"pair_skew_ps": 0.7, "stub_max_ps": 15, "chains": {
+   "P": {"nets": ["/USB/CON_P", "/USB/OTG0_P"], "series": ["L10"], "pair": "N"},
+   "N": {"nets": ["/USB/CON_N", "/USB/OTG0_N"], "series": ["L10"], "pair": "P"}}}
+ }
+}
+```
+
+- **Chain nets** are listed from driver to receiver. The first net of a multi-net chain is the stub
+  (driver → series part). The last net is the one you tune.
+- **Group target** is the slowest routed chain.
+- **Pair-only groups** match P to N on the chain totals.
+- **Net names** use the schematic form ('/' plain); `{slash}` board names are matched
+  automatically.
 
 ## Requirements
 
@@ -52,7 +91,8 @@ New-Item -ItemType Junction -Path $destination -Target $source
 
 Restart PCB Editor, enable the IPC API if necessary, and run:
 
-**Tools → External Plugins → Analyze Signal Paths**
+**Tools → External Plugins → Net Chain Monitor**, **Highlight Net Chain** (toolbar buttons too), or
+**Analyze Signal Paths**
 
 The add-on writes `<board-name>.signal-paths.csv` next to the open board. Console
 messages appear in KiCad's warning/message area.
@@ -92,7 +132,7 @@ does not merely create a rectangular via array.
 4. Add interactive parallel multi-routing with ordered nets, configurable width and
    spacing, 45-degree corners, push/block/walk-around behavior, preview, and undo.
 5. Traverse explicit start-pin/end-pin paths with branch detection.
-6. Recognize and report schematic Net Chains through series passives.
+6. Recognize and report schematic Net Chains through series passives. (0.3.0: config + auto-detected chains, live monitor, highlighting)
 7. Compare bus groups and differential pairs in picoseconds.
 8. Generate reviewed `fromTo()`, `net_chain_length`, `length`, and `skew` rules.
 9. Package the toolkit for KiCad's Plugin and Content Manager.

@@ -4,5 +4,5 @@ from .analyzer import analyze_tracks
 from .model import DelayProfile, NetSummary, TrackSample
 
 __all__ = ["DelayProfile", "NetSummary", "TrackSample", "analyze_tracks"]
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
