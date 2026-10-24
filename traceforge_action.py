@@ -16,7 +16,12 @@ from kipy import KiCad
 from kipy.board_types import FootprintInstance
 
 from signal_path_analyzer import analyze_tracks
-from signal_path_analyzer.kicad_adapter import chain_items, collect_track_samples, highlight
+from signal_path_analyzer.kicad_adapter import (
+    chain_items,
+    collect_track_samples,
+    highlight,
+    selected_refs,
+)
 from signal_path_analyzer.report import write_csv
 from signal_path_analyzer.session import Session
 from signal_path_analyzer.single_instance import PORT, try_activate_existing
@@ -25,17 +30,16 @@ from signal_path_analyzer.single_instance import PORT, try_activate_existing
 def build_tools(board, session: Session):
     from signal_path_analyzer.hub_ui import Tools
 
-    config = session.config
-
+    # always read session.config: the Chain Editor replaces it while the panel is open
     def chain_of(group: str, name: str):
-        return next(c for c in config.group(group).chains if c.name == name)
+        return next(c for c in session.config.group(group).chains if c.name == name)
 
     def hl_chain(group: str, name: str) -> int:
         c = chain_of(group, name)
         return highlight(board, chain_items(board, c.nets, c.series))
 
     def hl_group(group: str) -> int:
-        g = config.group(group)
+        g = session.config.group(group)
         return highlight(board, chain_items(board, [n for c in g.chains for n in c.nets],
                                             [r for c in g.chains for r in c.series]))
 
@@ -60,8 +64,8 @@ def build_tools(board, session: Session):
         if session.config is None:
             return "no signal chains to write"
         if session.config.auto:
-            return ("groups are auto-detected (driver side and limits unknown): click Save config, "
-                    "review xsignals.json, then write DRC targets")
+            return ("groups are auto-detected (driver side and limits unknown): open Chain editor, "
+                    "review and Apply & save, then write DRC targets")
         return f"DRC targets written to {session.write_drc_targets(results).name}"
 
     def export() -> str:
@@ -78,12 +82,21 @@ def build_tools(board, session: Session):
     def source() -> str:
         if session.config is None:
             return "nothing"
-        return "auto-detected chains (Save config to review)" if session.config.auto else (
+        return "auto-detected chains (open Chain editor to review)" if session.config.auto else (
             session.config_file.name if session.config_file else "config")
 
-    evaluate = session.evaluate if config else (lambda: [])
-    return Tools(evaluate, hl_chain, hl_group, hl_selection, board.clear_selection, write, export,
-                 save, source)
+    def edit(parent) -> str:
+        from signal_path_analyzer.chain_editor import edit_chains
+
+        def apply(cfg) -> str:
+            path = session.save_config(cfg)
+            return f"saved {len(cfg.groups)} groups to {path.name}"
+
+        return edit_chains(parent, session.config, session.find_between,
+                           lambda: selected_refs(board), apply)
+
+    return Tools(session.evaluate, hl_chain, hl_group, hl_selection, board.clear_selection, write,
+                 export, save, source, edit)
 
 
 def _log_to_file() -> None:

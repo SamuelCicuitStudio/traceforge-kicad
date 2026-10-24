@@ -120,3 +120,24 @@ def netclass_of(board: Any, net_names: Sequence[str]) -> dict[str, Optional[str]
         return {}
     classes = board.get_netclass_for_nets(nets)
     return {plain_name(n.name): getattr(classes.get(n.name), "name", None) for n in nets}
+
+
+def positions(board: Any) -> tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]:
+    """Pad positions ("REF.PAD" -> mm) and footprint positions (REF -> mm) for orientation."""
+
+    pads, parts = {}, {}
+    for fp in board.get_footprints():
+        ref = fp.reference_field.text.value
+        parts[ref] = (fp.position.x / 1e6, fp.position.y / 1e6)
+        for p in fp.definition.pads:
+            pads[f"{ref}.{p.number}"] = (p.position.x / 1e6, p.position.y / 1e6)
+    return pads, parts
+
+
+def selected_refs(board: Any) -> list[str]:
+    """References of the footprints currently selected in the PCB editor."""
+
+    from kipy.board_types import FootprintInstance
+
+    return sorted(i.reference_field.text.value for i in board.get_selection()
+                  if isinstance(i, FootprintInstance))

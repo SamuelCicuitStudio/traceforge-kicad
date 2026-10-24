@@ -41,6 +41,26 @@ Version 0.4.0 puts everything behind **one toolbar button, TraceForge**, which o
   | Ctrl+Alt+E | export signal paths |
   | Ctrl+Alt+T | show or hide the panel |
 
+**Signal Chain Editor (Altium-style xSignals).** Open **Chain editor…** in the panel:
+
+1. Enter the source (driver) and destination parts, or click **Use KiCad selection**, for example
+   `U6` → `U7, U11, U12, U16, USB1`. Then click **Find chains**.
+2. TraceForge follows the netlist from each source pin to a destination pin through series parts:
+   resistors up to the set Ω (0R included), common-mode chokes and, optionally, AC-coupling
+   capacitors. Rails and other ICs end the walk. The driver side is taken from placement: a series
+   terminator sits next to its driver.
+3. Chains are named and grouped by interface templates (LPDDR4/DDR byte lanes and CA, RGMII RX/TX,
+   HDMI, MIPI, USB, eMMC/SD/SPI, then a net-name prefix rule), with suggested skew, pair-skew and
+   stub limits. Chains outside any timing netclass (resets, I²C, GPIO) start unticked.
+4. Untick or remove chains, rename groups (edit the Group cell) and adjust the limits, then
+   **Apply & save**. The chains are stored in `<board>.traceforge.json` and the live table uses
+   them at once.
+
+On reference board, U6 → all interface parts finds 130 chains, including all 112 hand-written ones.
+
+The lookup order is `<board>.traceforge.json`, then a legacy `xsignals.json` (imported on the
+first save), then automatic detection.
+
 **Any project works.** With no `xsignals.json`, TraceForge finds the chains on the board
 automatically. Every resistor of 100 Ω or less between nets of a netclass that has a KiCad tuning
 profile becomes a chain, and multi-resistor paths are joined. Chains are grouped by netclass, and

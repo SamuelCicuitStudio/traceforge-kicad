@@ -11,6 +11,7 @@ from .chains import (
     Config,
     GroupResult,
     auto_config,
+    board_config_path,
     chain_nets,
     config_to_json,
     detect_chains,
@@ -21,7 +22,8 @@ from .chains import (
     merge_drc,
     net_delay,
 )
-from .kicad_adapter import board_names, netclass_of, series_parts, snapshot
+from .kicad_adapter import board_names, netclass_of, positions, series_parts, snapshot
+from .pathfinder import dedupe, find_chains, mark_untimed, name_and_group, orient_by_placement
 from .profiles import ProjectTiming, load_project_timing, load_stackup_z
 
 
@@ -41,7 +43,7 @@ class Session:
         board_file = project_dir / Path(board.document.board_filename).name
         pro = board_file.with_suffix(".kicad_pro")
         timing = load_project_timing(pro) if pro.exists() else ProjectTiming()
-        cfg_file = find_config(project_dir)
+        cfg_file = find_config(project_dir, board_file)
         config = load_config(cfg_file) if cfg_file else None
         session = cls(board, project_dir, board_file, timing, load_stackup_z(board_file), config,
                       cfg_file)
@@ -58,13 +60,29 @@ class Session:
                              self.timing.netclass_profile.keys())
         return config if config.groups else None
 
-    def save_config(self) -> Path:
-        """Write the current (e.g. auto-detected) config as an editable project xsignals.json."""
+    def save_config(self, config: Optional[Config] = None) -> Path:
+        """Store the chains in <board>.traceforge.json (also imports a legacy xsignals.json)."""
 
-        path = self.config_file or self.project_dir / "xsignals.json"
+        if config is not None:
+            self.config = config
+        path = board_config_path(self.board_file)
         path.write_text(config_to_json(self.config), encoding="utf-8")
         self.config_file, self.config.auto = path, False
         return path
+
+    def find_between(self, sources: list[str], destinations: list[str], max_ohms: float = 100.0,
+                     with_caps: bool = False) -> list:
+        """Signal chains from source to destination parts, driver side inferred from placement."""
+
+        parts = series_parts(self.board)
+        found = find_chains(parts, sources, destinations, max_ohms, with_caps)
+        pads, parts_xy = positions(self.board)
+        orient_by_placement(found, pads, parts_xy)
+        found = dedupe(found)
+        nets = sorted({n for c in found for n in c.nets})
+        mark_untimed(found, netclass_of(self.board, nets), self.timing.netclass_profile.keys())
+        name_and_group(found)  # names/pairs after orientation
+        return found
 
     @property
     def die_ps_per_mm(self) -> float:

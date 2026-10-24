@@ -55,6 +55,7 @@ class Tools:
     export_paths: Callable[[], str]
     save_config: Callable[[], str] = lambda: "nothing to save"
     source: Callable[[], str] = lambda: ""  # e.g. "xsignals.json" or "auto-detected"
+    edit_chains: Callable[[wx.Window], str] = lambda parent: "chain editor unavailable"
 
 
 def load_shortcuts() -> dict[str, str]:
@@ -193,7 +194,7 @@ class TraceForgePanel(wx.Frame):
         bar = wx.BoxSizer(wx.HORIZONTAL)
         buttons = (("Highlight chain", self.on_chain), ("Highlight group", self.on_group),
                    ("Clear", self.on_clear), ("Write DRC targets", self.on_write),
-                   ("Export paths", self.on_export), ("Save config", self.on_save),
+                   ("Export paths", self.on_export), ("Chain editor…", self.on_edit),
                    ("Shortcuts…", self.on_shortcuts))
         for label, handler in buttons:
             btn = wx.Button(root, label=label, style=wx.BU_EXACTFIT)
@@ -332,6 +333,14 @@ class TraceForgePanel(wx.Frame):
 
     def on_save(self, _=None) -> None:
         self._run(self.tools.save_config)
+
+    def on_edit(self, _=None) -> None:
+        self.paused = True  # no live refresh while the modal editor is open
+        try:
+            self._run(lambda: self.tools.edit_chains(self))
+        finally:
+            self.paused = self.pause.GetValue()
+        self.on_timer(None)
 
     def on_overlay(self, _event) -> None:
         """Stay on top while KiCad or this panel is the active application."""

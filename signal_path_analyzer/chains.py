@@ -78,11 +78,18 @@ def load_config(path: Path) -> Config:
     return Config(groups, float(data.get("pad_to_die_ps_per_mm", 6.952)))
 
 
-def find_config(project_dir: Path) -> Optional[Path]:
-    for candidate in (project_dir / "xsignals.json", project_dir / "docs/design/xsignals.json"):
-        if candidate.exists():
-            return candidate
-    return None
+def board_config_path(board_file: Path) -> Path:
+    """Where the Signal Chain Editor stores a board's chains: <board>.traceforge.json."""
+
+    return Path(board_file).with_suffix(".traceforge.json")
+
+
+def find_config(project_dir: Path, board_file: Optional[Path] = None) -> Optional[Path]:
+    """The board's own TraceForge file first, then a legacy xsignals.json (imported on save)."""
+
+    candidates = [board_config_path(board_file)] if board_file else []
+    candidates += [project_dir / "xsignals.json", project_dir / "docs/design/xsignals.json"]
+    return next((c for c in candidates if c.exists()), None)
 
 
 # ---------------------------------------------------------------- geometry snapshot -> delay
