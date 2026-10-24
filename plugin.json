@@ -11,7 +11,7 @@
     {
       "identifier": "traceforge-panel",
       "name": "TraceForge",
-      "description": "Open the TraceForge panel: live signal timing, chain highlighting, DRC targets, export and shortcuts",
+      "description": "Open the TraceForge panel: manual timing refresh, chain highlighting and zoom, DRC targets, export and shortcuts",
       "show-button": true,
       "scopes": [
         "pcb"

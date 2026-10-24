@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from typing import Any, Optional
 
+from .api_access import trace_call
 from .chains import NetGeometry, TrackSeg, ViaHop
 from .model import TrackSample
 
@@ -45,7 +46,7 @@ def plain_name(board_name: str) -> str:
 
 def _nets_by_name(board: Any, names: Iterable[str]) -> list[Any]:
     wanted = {plain_name(n) for n in names}
-    return [n for n in board.get_nets() if plain_name(n.name) in wanted]
+    return [n for n in trace_call("get_nets", board.get_nets) if plain_name(n.name) in wanted]
 
 
 def board_names(board: Any, names: Iterable[str]) -> dict[str, str]:
@@ -62,10 +63,11 @@ def snapshot(board: Any, net_names: Sequence[str]) -> dict[str, NetGeometry]:
     nets = _nets_by_name(board, net_names)
     if not nets:
         return {}
-    classes = board.get_netclass_for_nets(nets)
+    classes = trace_call("snapshot.get_netclass_for_nets",
+                         lambda: board.get_netclass_for_nets(nets))
     geo = {plain_name(n.name): NetGeometry(netclass=getattr(classes.get(n.name), "name", None))
            for n in nets}
-    for item in board.get_items_by_net(nets):
+    for item in trace_call("snapshot.get_items_by_net", lambda: board.get_items_by_net(nets)):
         net = plain_name(_name(getattr(item, "net", None)))
         g = geo.get(net)
         if g is None:
@@ -99,16 +101,22 @@ def chain_items(board: Any, net_names: Sequence[str], refs: Sequence[str]) -> li
     """Every copper item of the nets plus the series footprints, for selection highlighting."""
 
     nets = _nets_by_name(board, net_names)
-    items = list(board.get_items_by_net(nets)) if nets else []
+    items = list(trace_call("selection.get_items_by_net",
+                            lambda: board.get_items_by_net(nets))) if nets else []
     wanted = set(refs)
-    items += [fp for fp in board.get_footprints() if fp.reference_field.text.value in wanted]
+    if wanted:
+        items += [fp for fp in trace_call("selection.get_footprints", board.get_footprints)
+                  if fp.reference_field.text.value in wanted]
     return items
 
 
 def highlight(board: Any, items: Sequence[Any]) -> int:
-    board.clear_selection()
+    from .api_access import ApiAccess
+
+    access = ApiAccess()
+    access.call(lambda: trace_call("clear_selection", board.clear_selection))
     if items:
-        board.add_to_selection(items)
+        access.call(lambda: trace_call("add_to_selection", lambda: board.add_to_selection(items)))
     return len(items)
 
 
@@ -141,3 +149,14 @@ def selected_refs(board: Any) -> list[str]:
 
     return sorted(i.reference_field.text.value for i in board.get_selection()
                   if isinstance(i, FootprintInstance))
+
+
+def zoom_selection(kicad: Any) -> bool:
+    """KiCad 10 has no viewport API; use its existing Zoom to Selection tool action."""
+    from kipy.proto.common.commands.editor_commands_pb2 import RAS_OK
+
+    from .api_access import ApiAccess
+
+    response = ApiAccess().call(lambda: trace_call(
+        "run_action.zoomFitSelection", lambda: kicad.run_action("common.Control.zoomFitSelection")))
+    return response.status == RAS_OK

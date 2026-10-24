@@ -143,10 +143,20 @@ TEMPLATES: list[tuple[re.Pattern, str, Limits]] = [
     (re.compile(r"DDR_?(?:CA\d+|CKE\d*|CS\d*N?|ODT\d*(?:_CA)?)_([A-Z])$", re.I), "DDR_{0}_CA",
      (7.0, 0.6, None)),
     (re.compile(r"DDR_?CLK([A-Z])_(?:P|N)$"), "DDR_{0}_CA", (7.0, 0.6, None)),
+    # link-prefixed MII buses (RGMII12_TXD0, RGMII23_RX_CTL, RMII_CRS_DV): one group per link
+    (re.compile(r"^(RMII\d*)_", re.I), "{0}", (50.0, None, 15.0)),
+    (re.compile(r"^(RGMII\d+)_(TX|RX)", re.I), "{0}_{1}", (20.0, None, 15.0)),
+    # Ethernet MDI per port/node (NODE01_MDI_TX_P), SFP lanes: pairs matter, not inter-pair skew
+    (re.compile(r"^(\w*?)_?MDI\d?_", re.I), "{0}_MDI", (None, 0.7, None)),
+    (re.compile(r"^(SFP\d*)_(TX|RX)", re.I), "{0}_{1}", (None, 0.7, None)),
     (re.compile(r"(RXD\d|RXDV|RX_?CTL|RXC(?:LK)?)", re.I), "RGMII_RX", (20.0, None, 15.0)),
     (re.compile(r"GMAC\d?_(TXD\d|TXEN|TX_?CTL|TXCLK)", re.I), "RGMII_TX", (20.0, None, 15.0)),
     (re.compile(r"HDMI.*TX", re.I), "HDMI", (30.0, 0.7, 12.0)),
     (re.compile(r"MIPI_(CSI|DSI)\w*?(?:RX|TX)", re.I), "MIPI_{0}", (10.0, 0.7, None)),
+    (re.compile(r"^USB(?:\d+)?_D_[PN]$", re.I), "USB2", (None, 0.7, 15.0)),
+    # Chip select is visible for monitoring, without a bus matching or stub target.
+    (re.compile(r"^FLASH_CS$", re.I), "QSPI_CS", (None, None, None)),
+    (re.compile(r"^FLASH_(?:CLK|IO\d+)$", re.I), "QSPI", (15.0, None, 12.0)),
     (re.compile(r"USB\w*?_?(OTG\d|HOST\d)", re.I), "USB_{0}", (None, 0.7, 15.0)),
     (re.compile(r"^(EMMC|SDMMC\d?|SDIO\d?|FSPI|QSPI|SPI\d?)", re.I), "{0}", (15.0, None, 12.0)),
 ]
@@ -201,13 +211,15 @@ def suggest_groups(chains: Iterable[FoundChain]) -> list[GroupSuggestion]:
             continue
         if c.group not in out:
             _, (skew, pskew, stub) = _group_for(c.name)
-            has_pair = c.pair is not None
-            out[c.group] = GroupSuggestion(c.group, skew, pskew if has_pair or pskew else None,
-                                           stub if len(c.nets) > 1 else None)
+            out[c.group] = GroupSuggestion(c.group, skew, pskew, stub if len(c.nets) > 1 else None)
         g = out[c.group]
         g.chains.append(c)
         if len(c.nets) > 1 and g.stub_max_ps is None:
-            g.stub_max_ps = _group_for(c.name)[1][2] or DEFAULT_LIMITS[2]
+            limits = _group_for(c.name)[1]
+            g.stub_max_ps = (limits[2] or DEFAULT_LIMITS[2]) if any(limits) else None
+    for g in out.values():  # pair limit only where pairs exist; differential default 0.7 ps
+        has_pair = any(c.pair for c in g.chains)
+        g.pair_skew_ps = (g.pair_skew_ps or 0.7) if has_pair else None
     return sorted(out.values(), key=lambda g: g.name)
 
 

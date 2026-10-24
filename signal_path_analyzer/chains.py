@@ -65,6 +65,15 @@ class Config:
         return next((g for g in self.groups if g.name == name), None)
 
 
+def selection_paths(group: GroupDef, name: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Nets and series parts for one chain, including its differential partner."""
+    chain = next(c for c in group.chains if c.name == name)
+    members = [chain] + [c for c in group.chains if c.name == chain.pair]
+    nets = tuple(dict.fromkeys(n for c in members for n in c.nets))
+    refs = tuple(dict.fromkeys(r for c in members for r in c.series))
+    return nets, refs
+
+
 def load_config(path: Path) -> Config:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     groups = []
@@ -161,6 +170,9 @@ class ChainResult:
     target_ps: Optional[float] = None
     tolerance_ps: Optional[float] = None
     pair_skew_ps: Optional[float] = None
+    length_mm: Optional[float] = None  # Sum of track/arc lengths on all chain nets.
+    tunable_mm: Optional[float] = None
+    stub_mm: Optional[float] = None
 
     @property
     def delta_ps(self) -> Optional[float]:
@@ -193,6 +205,7 @@ class GroupResult:
 def evaluate(config: Config, delays: Mapping[str, NetDelay],
              geometry: Mapping[str, NetGeometry]) -> list[GroupResult]:
     out = []
+    track_mm = {n: sum(seg.length_mm for seg in geo.tracks) for n, geo in geometry.items()}
     for group in config.groups:
         totals, routed = {}, {}
         for c in group.chains:
@@ -215,7 +228,10 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
                 stubs.append(c.name)
             tun = delays[c.tunable].total_ps if c.tunable in delays else 0.0
             results.append(ChainResult(c, totals[c.name], tun, stub, routed[c.name],
-                                       tgt if routed[c.name] else None, tol, pskew))
+                                       tgt if routed[c.name] else None, tol, pskew,
+                                       sum(track_mm.get(n, 0.0) for n in c.nets),
+                                       track_mm.get(c.tunable, 0.0),
+                                       track_mm.get(c.stub, 0.0) if c.stub else None))
         out.append(GroupResult(group, tuple(results), target, tuple(stubs)))
     return out
 

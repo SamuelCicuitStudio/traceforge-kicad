@@ -9,16 +9,18 @@ Shortcuts are registered by the panel itself and work while KiCad (or the panel)
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
 import wx
-import wx.dataview as dv
+import wx.lib.agw.hypertreelist as htl
 
+from .api_access import ApiAccess
 from .chains import GroupResult
 
 SETTINGS = Path(os.environ.get("APPDATA", Path.home())) / "TraceForge" / "settings.json"
@@ -38,7 +40,7 @@ LABELS = {
     "export_paths": "Export signal paths (CSV)",
     "toggle_panel": "Show / hide this panel",
 }
-# wx TreeListCtrl has no per-row colours, so status carries a symbol
+# Status text and symbols remain visible alongside semantic row colours.
 MARK = {"ok": "✔", "short": "▲", "long": "▼", "pending": "…", "routed": "•"}
 
 
@@ -56,6 +58,7 @@ class Tools:
     save_config: Callable[[], str] = lambda: "nothing to save"
     source: Callable[[], str] = lambda: ""  # e.g. "xsignals.json" or "auto-detected"
     edit_chains: Callable[[wx.Window], str] = lambda parent: "chain editor unavailable"
+    zoom_selection: Callable[[], str] = lambda: "zoom unavailable"
 
 
 def load_shortcuts() -> dict[str, str]:
@@ -174,13 +177,17 @@ class ShortcutDialog(wx.Dialog):
 
 
 class TraceForgePanel(wx.Frame):
-    """Floating TraceForge window: live signal timing plus every tool."""
+    """Floating TraceForge window: timing snapshots refreshed on demand."""
 
-    def __init__(self, tools: Tools, period_ms: int = 1000):
+    def __init__(self, tools: Tools):
         style = wx.DEFAULT_FRAME_STYLE | wx.FRAME_TOOL_WINDOW
-        super().__init__(None, title="TraceForge", size=(840, 520), style=style)
-        self.tools, self.period, self.results = tools, period_ms, []
-        self.paused, self.busy, self.open_groups = False, False, set()
+        super().__init__(None, title="TraceForge", size=(1160, 520), style=style)
+        self.tools, self.results = tools, []
+        self.busy, self.open_groups = False, set()
+        self.api = ApiAccess()
+        self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="traceforge-api")
+        self.actions_pending = 0
+        self.closing = False
         self.hotkey_ids: dict[int, str] = {}
         self.SetMinSize((520, 260))
         # Overlay: on top only while KiCad (or this panel) is the active application. A
@@ -190,9 +197,21 @@ class TraceForgePanel(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.on_overlay, self.overlay)
         self.overlay.Start(400)
 
+        self.dark = kicad_dark_theme()
+        self.colors = ({"ok": "#6EE7A0", "warning": "#FFD166", "error": "#FF8585",
+                        "pending": "#A8B4C7", "routed": "#7DCFFF"} if self.dark else
+                       {"ok": "#136C3B", "warning": "#895100", "error": "#B42332",
+                        "pending": "#586477", "routed": "#145FA0"})
+        icon = Path(__file__).resolve().parents[1] / "icons" / (
+            "traceforge-dark-48.png" if self.dark else "traceforge-light-48.png")
+        self.SetIcon(wx.Icon(str(icon), wx.BITMAP_TYPE_PNG))
         root = wx.Panel(self)
+        if self.dark:
+            root.SetBackgroundColour("#222C3A")
+            root.SetForegroundColour("#E5EDF8")
         bar = wx.BoxSizer(wx.HORIZONTAL)
         buttons = (("Highlight chain", self.on_chain), ("Highlight group", self.on_group),
+                   ("Zoom selection", self.on_zoom),
                    ("Clear", self.on_clear), ("Write DRC targets", self.on_write),
                    ("Export paths", self.on_export), ("Chain editor…", self.on_edit),
                    ("Shortcuts…", self.on_shortcuts))
@@ -200,58 +219,102 @@ class TraceForgePanel(wx.Frame):
             btn = wx.Button(root, label=label, style=wx.BU_EXACTFIT)
             btn.Bind(wx.EVT_BUTTON, handler)
             bar.Add(btn, 0, wx.RIGHT, 4)
-        self.pause = wx.ToggleButton(root, label="Pause", style=wx.BU_EXACTFIT)
-        self.pause.Bind(wx.EVT_TOGGLEBUTTON, lambda e: setattr(self, "paused", e.IsChecked()))
+        self.refresh = wx.Button(root, label="Refresh (F5)", style=wx.BU_EXACTFIT)
+        self.refresh.SetToolTip("Read current timing from KiCad. No automatic polling.")
+        self.refresh.Bind(wx.EVT_BUTTON, self.on_refresh)
         bar.AddStretchSpacer()
-        bar.Add(self.pause)
+        bar.Add(self.refresh)
+        refresh_id = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, self.on_refresh, id=refresh_id)
+        self.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_F5, refresh_id)]))
 
-        self.tree = dv.TreeListCtrl(root, style=dv.TL_SINGLE)
+        self.tree = htl.HyperTreeList(root, agwStyle=(wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS |
+                                                    wx.TR_FULL_ROW_HIGHLIGHT | wx.TR_LINES_AT_ROOT))
+        if self.dark:
+            self.tree.SetBackgroundColour("#19212D")
+            self.tree.SetForegroundColour("#E5EDF8")
         right = wx.ALIGN_RIGHT
         columns = (("Group / chain", 190, wx.ALIGN_LEFT), ("Total ps", 80, right),
                    ("Target ps", 80, right), ("Δ ps", 70, right), ("P−N ps", 70, right),
-                   ("Stub ps", 70, right), ("Status", 160, wx.ALIGN_LEFT))
+                   ("Stub ps", 70, right), ("Status", 160, wx.ALIGN_LEFT),
+                   ("Chain track mm", 110, right), ("Tunable mm", 100, right),
+                   ("Stub mm", 85, right))
         for title, width, align in columns:
-            self.tree.AppendColumn(title, width=width, align=align)
-        self.status = wx.StaticText(root, label="starting…")
+            self.tree.AddColumn(title, width=width, flag=align)
+        self.tree.AddRoot("signals")
+        self.rows = {}
+        self.row_states = {}
+        self.topology = None
+        self.tree.GetMainWindow().Bind(wx.EVT_LEFT_UP, self.on_row_click)
+        self.status = wx.StaticText(root, label="Click Refresh to load timing from KiCad.")
+        self.snapshot = wx.StaticText(root, label="No timing snapshot yet. Manual refresh only.")
+        self.snapshot.SetForegroundColour(self.colors["pending"])
+        self.tree.GetMainWindow().SetToolTip(
+            "Chain track mm = all tracks and arcs across every net in the chain. "
+            "Tunable mm = last net; Stub mm = first net before series parts. "
+            "Lengths exclude via barrels, pad-to-die lengths, and component internals. "
+            "All net branches are summed; KiCad tunes a point-to-point path. "
+            "Timing includes the configured via and pad-to-die delay estimates.")
+        self.status.SetForegroundColour(self.colors["pending"])
 
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
+        legend = wx.BoxSizer(wx.HORIZONTAL)
+        self.summary = {}
+        for key, label in (("ok", "OK"), ("warning", "Warning"), ("error", "Error"),
+                           ("pending", "Pending"), ("routed", "Routed")):
+            chip = wx.StaticText(root, label=f"\u25cf {label}: 0")
+            chip.SetForegroundColour(self.colors[key])
+            chip.SetFont(chip.GetFont().Bold())
+            self.summary[key] = chip
+            legend.Add(chip, 0, wx.RIGHT, 18)
+        box.Add(legend, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.tree, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
+        box.Add(self.snapshot, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 6)
         box.Add(self.status, 0, wx.EXPAND | wx.ALL, 6)
         root.SetSizer(box)
 
-        self.timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
         self.Bind(wx.EVT_HOTKEY, self.on_hotkey)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.register_shortcuts(load_shortcuts())
-        self.timer.Start(self.period)
-        self.on_timer(None)
 
-    # ----------------------------------------------------------- live refresh (worker thread)
-    def on_timer(self, _event) -> None:
-        if self.paused or self.busy:
+    # ----------------------------------------------------------- manual refresh (worker thread)
+    def on_refresh(self, _event=None) -> None:
+        if self.busy or self.actions_pending or self.closing:
             return
         self.busy = True
+        self.refresh.Disable()
+        self.status.SetLabel("Refreshing timing from KiCad...")
 
         def work():
+            logging.info("Refresh started")
             try:
-                results, error = self.tools.evaluate(), None
+                results, error = self.api.call(self.tools.evaluate, retries=0), None
+                logging.info("Refresh completed")
             except Exception as exc:  # KiCad busy, closed or board switched
+                logging.exception("Refresh failed")
                 results, error = None, str(exc)
-            wx.CallAfter(self._apply, results, error)
+            if not self.closing:
+                wx.CallAfter(self._apply, results, error)
 
-        threading.Thread(target=work, daemon=True).start()
+        self.worker.submit(work)
 
     def _apply(self, results, error) -> None:
         self.busy = False
-        if error:
-            self.status.SetLabel(f"waiting for KiCad: {error}")
+        if self.closing:
             return
+        self.refresh.Enable(not self.actions_pending)
+        if error:
+            self.status.SetForegroundColour(self.colors["warning"])
+            self.status.SetLabel(f"Refresh failed: {error}. Previous values kept; click Refresh "
+                                 "when KiCad is ready.")
+            return
+        self.status.SetForegroundColour(self.colors["pending"])
         self.results = results
         self.render()
         source = self.tools.source()
         when = wx.DateTime.Now().FormatTime()
+        self.snapshot.SetLabel(f"Snapshot: {when}. Click Refresh after changing routes.")
         if not results:
             self.status.SetLabel(f"{when} · no signal chains found (no xsignals.json and no series "
                                  "parts between tuning-profile netclasses)")
@@ -259,54 +322,163 @@ class TraceForgePanel(wx.Frame):
             self.status.SetLabel(f"{when} · groups from {source}")
 
     def render(self) -> None:
-        item = self.tree.GetFirstChild(self.tree.GetRootItem())
-        while item.IsOk():
-            if self.tree.IsExpanded(item):
-                self.open_groups.add(self.tree.GetItemText(item))
-            else:
-                self.open_groups.discard(self.tree.GetItemText(item))
-            item = self.tree.GetNextSibling(item)
-        selected = self.selected()
-        self.tree.DeleteAllItems()
+        # Keep native row objects on timing refreshes: rebuilding them resets scrolling,
+        # expansion and selection, and repaints the whole table unnecessarily.
+        topology = tuple((g.group.name, tuple(c.chain.name for c in g.chains))
+                         for g in self.results)
+        if topology == self.topology:
+            self.update_rows()
+            return
+        main = self.tree.GetMainWindow()
+        view = main.GetViewStart()
+        self.tree.Freeze()
+        try:
+            if topology != self.topology:
+                selected = self.selected()
+                expanded = {name for (name, chain), item in self.rows.items()
+                            if chain is None and self.tree.IsExpanded(item)}
+                first = self.topology is None
+                self.tree.DeleteChildren(self.tree.GetRootItem())
+                self.rows.clear()
+                self.row_states.clear()
+                for g in self.results:
+                    key = (g.group.name, None)
+                    gi = self.tree.AppendItem(self.tree.GetRootItem(), g.group.name)
+                    self.rows[key] = gi
+                    self.tree.SetItemBold(gi, True)
+                    for c in g.chains:
+                        ci = self.tree.AppendItem(gi, c.chain.name)
+                        self.rows[g.group.name, c.chain.name] = ci
+                    if first or g.group.name in expanded:
+                        self.tree.Expand(gi)
+                if selected in self.rows:
+                    self.tree.SelectItem(self.rows[selected])
+                self.topology = topology
+            self.update_rows()
+            main.Scroll(*view)
+        finally:
+            self.tree.Thaw()
+
+    def set_cells(self, item, cells) -> None:
+        for col, text in cells:
+            if self.tree.GetItemText(item, col) != text:
+                self.tree.SetItemText(item, text, col)
+
+    def set_row_state(self, key, state) -> None:
+        if self.row_states.get(key) == state:
+            return
+        item = self.rows[key]
+        self.tree.SetItemTextColour(item, wx.Colour(self.colors[state]))
+        bg = ("#40232C" if self.dark else "#FFF0F1") if state == "error" else (
+            "#19212D" if self.dark else "#FFFFFF")
+        self.tree.SetItemBackgroundColour(item, wx.Colour(bg))
+        self.row_states[key] = state
+
+    def update_rows(self) -> None:
+        counts = dict.fromkeys(self.colors, 0)
         fmt = lambda v, s=False: "" if v is None else (f"{v:+.1f}" if s else f"{v:.1f}")  # noqa: E731
         for g in self.results:
-            gi = self.tree.AppendItem(self.tree.GetRootItem(), g.group.name)
-            self.tree.SetItemText(gi, 2, fmt(g.target_ps))
-            self.tree.SetItemText(gi, 3, f"spread {fmt(g.spread_ps)}")
-            if g.stub_violations:
-                self.tree.SetItemText(gi, 6, f"✖ {len(g.stub_violations)} stub too long")
-            else:
-                done = all(c.status in ("ok", "routed") for c in g.chains)
-                self.tree.SetItemText(gi, 6, "✔ matched" if done else "")
+            key = (g.group.name, None)
+            states = [self.chain_color(c, g) for c in g.chains]
+            priority = ("error", "warning", "pending", "routed")
+            state = next((k for k in priority if k in states), "ok")
+            label = {"error": "\u2716 stub too long", "warning": "\u25b2 needs tuning",
+                     "pending": "\u2026 pending", "routed": "\u25cf routed",
+                     "ok": "\u2714 matched"}[state]
+            self.set_cells(self.rows[key], ((2, fmt(g.target_ps)),
+                           (3, f"spread {fmt(g.spread_ps)}"), (6, label)))
+            self.set_row_state(key, state)
             for c in g.chains:
-                ci = self.tree.AppendItem(gi, c.chain.name)
+                key = (g.group.name, c.chain.name)
                 status = f"{MARK.get(c.status, '')} {c.status}"
                 if c.chain.name in g.stub_violations:
-                    status += "  ✖ stub too long"
+                    status = "\u2716 stub too long"
                 cells = (fmt(c.total_ps), fmt(c.target_ps), fmt(c.delta_ps, True),
-                         fmt(c.pair_skew_ps, True), fmt(c.stub_ps), status)
-                for col, text in enumerate(cells, 1):
-                    self.tree.SetItemText(ci, col, text)
-                if selected == (g.group.name, c.chain.name):
-                    self.tree.Select(ci)
-            if g.group.name in self.open_groups or not self.open_groups:
-                self.tree.Expand(gi)
+                         fmt(c.pair_skew_ps, True), fmt(c.stub_ps), status,
+                         "" if c.length_mm is None else f"{c.length_mm:.3f}",
+                         "" if c.tunable_mm is None else f"{c.tunable_mm:.3f}",
+                         "" if c.stub_mm is None else f"{c.stub_mm:.3f}")
+                self.set_cells(self.rows[key], enumerate(cells, 1))
+                state = self.chain_color(c, g)
+                counts[state] += 1
+                self.set_row_state(key, state)
+        for key, chip in self.summary.items():
+            label = f"\u25cf {key.title() if key != 'ok' else 'OK'}: {counts[key]}"
+            if chip.GetLabel() != label:
+                chip.SetLabel(label)
+
+    def on_row_click(self, event) -> None:
+        if self.busy or self.actions_pending or self.closing:
+            event.Skip()
+            return
+        item, _flags, _column = self.tree.GetMainWindow().HitTest(event.GetPosition())
+        if item and self.tree.GetItemParent(item) != self.tree.GetRootItem():
+            group = self.tree.GetItemText(self.tree.GetItemParent(item))
+            chain = self.tree.GetItemText(item)
+            self.tree.SelectItem(item)
+            self._run(lambda: f"highlighted {self.tools.highlight_chain(group, chain)} items")
+        event.Skip()
+
+    @staticmethod
+    def chain_color(chain, group) -> str:
+        if chain.chain.name in group.stub_violations:
+            return "error"
+        return {"ok": "ok", "short": "warning", "long": "warning",
+                "pending": "pending", "routed": "routed"}.get(chain.status, "pending")
 
     # ----------------------------------------------------------- tools
     def selected(self) -> tuple[Optional[str], Optional[str]]:
         item = self.tree.GetSelection()
-        if not item.IsOk():
+        if not item or item == self.tree.GetRootItem():
             return None, None
         parent = self.tree.GetItemParent(item)
         if parent == self.tree.GetRootItem():
             return self.tree.GetItemText(item), None
         return self.tree.GetItemText(parent), self.tree.GetItemText(item)
 
-    def _run(self, fn: Callable[[], str]) -> None:
-        try:
-            self.status.SetLabel(fn())
-        except Exception as exc:
-            self.status.SetLabel(f"failed: {exc}")
+    def _run(self, fn: Callable[[], str], background: bool = True) -> None:
+        if self.closing:
+            return
+        if self.busy or self.actions_pending:
+            self.status.SetLabel("An operation is already running; no additional request queued.")
+            return
+        if not background:  # Modal dialogs must stay on the wx UI thread.
+            try:
+                self.status.SetLabel(self.api.call(fn, retries=0))
+            except Exception as exc:
+                self._action_done(None, exc, decrement=False)
+            return
+        self.actions_pending += 1
+        self.refresh.Disable()
+        self.status.SetForegroundColour(self.colors["routed"])
+        self.status.SetLabel("Selecting / working in KiCad...")
+
+        def work():
+            logging.info("Panel action started")
+            try:
+                message, error = self.api.call(fn, retries=0), None
+                logging.info("Panel action completed: %s", message)
+            except Exception as exc:
+                logging.exception("TraceForge action failed")
+                message, error = None, exc
+            if not self.closing:
+                wx.CallAfter(self._action_done, message, error)
+
+        self.worker.submit(work)
+
+    def _action_done(self, message, error, decrement=True) -> None:
+        if decrement:
+            self.actions_pending -= 1
+        if self.closing:
+            return
+        self.refresh.Enable(not self.busy and not self.actions_pending)
+        if error:
+            self.status.SetForegroundColour(self.colors["error"])
+            self.status.SetLabel(f"failed: {error}. If KiCad has an active tool or dialog, "
+                                 "finish it or press Esc in PCB Editor, then retry.")
+        else:
+            self.status.SetForegroundColour(self.colors["routed"])
+            self.status.SetLabel(message)
 
     def on_chain(self, _=None) -> None:
         group, chain = self.selected()
@@ -325,6 +497,9 @@ class TraceForgePanel(wx.Frame):
     def on_clear(self, _=None) -> None:
         self._run(lambda: (self.tools.clear(), "selection cleared")[1])
 
+    def on_zoom(self, _=None) -> None:
+        self._run(self.tools.zoom_selection)
+
     def on_write(self, _=None) -> None:
         self._run(lambda: self.tools.write_targets(self.results))
 
@@ -335,12 +510,10 @@ class TraceForgePanel(wx.Frame):
         self._run(self.tools.save_config)
 
     def on_edit(self, _=None) -> None:
-        self.paused = True  # no live refresh while the modal editor is open
-        try:
-            self._run(lambda: self.tools.edit_chains(self))
-        finally:
-            self.paused = self.pause.GetValue()
-        self.on_timer(None)
+        if self.busy or self.actions_pending or self.closing:
+            return
+        self._run(lambda: self.tools.edit_chains(self), background=False)
+        self.snapshot.SetLabel("Chain editor closed. Click Refresh to update the timing table.")
 
     def on_overlay(self, _event) -> None:
         """Stay on top while KiCad or this panel is the active application."""
@@ -399,8 +572,9 @@ class TraceForgePanel(wx.Frame):
             handler()
 
     def on_close(self, event) -> None:
-        self.timer.Stop()
+        self.closing = True
         self.overlay.Stop()
+        self.worker.shutdown(wait=False, cancel_futures=True)
         for hid in list(self.hotkey_ids):
             self.UnregisterHotKey(hid)
         event.Skip()

@@ -30,16 +30,19 @@ def _badge(d: ImageDraw.ImageDraw, c: dict) -> None:
 
 
 def traceforge(d: ImageDraw.ImageDraw, c: dict) -> None:
-    """TraceForge: a signal through a series resistor, with a timing bracket over the whole path."""
+    """A circuit chip with a lightning-shaped signal trace; legible at toolbar size."""
     _badge(d, c)
-    d.line([(_w(5), _w(29)), (_w(15), _w(29))], fill=c["trace"], width=_w(4))
-    d.line([(_w(33), _w(29)), (_w(43), _w(29))], fill=c["trace"], width=_w(4))
-    d.rounded_rectangle([_w(15), _w(23), _w(33), _w(35)], radius=_w(2), fill=c["accent"])
-    for x in (5, 43):
-        d.ellipse([_w(x - 3), _w(26), _w(x + 3), _w(32)], fill=c["trace"])
-    d.line([(_w(6), _w(12)), (_w(42), _w(12))], fill=c["timing"], width=_w(3))
-    for x in (6, 42):
-        d.line([(_w(x), _w(7)), (_w(x), _w(17))], fill=c["timing"], width=_w(3))
+    # Chip body, fine rim and symmetric contacts.
+    d.rounded_rectangle([_w(10), _w(10), _w(38), _w(38)], radius=_w(6),
+                        fill=(18, 30, 50), outline=(88, 137, 183), width=_w(1))
+    for pos in (17, 24, 31):
+        for x1, y1, x2, y2 in ((5, pos, 10, pos), (38, pos, 43, pos),
+                                 (pos, 5, pos, 10), (pos, 38, pos, 43)):
+            d.line([(_w(x1), _w(y1)), (_w(x2), _w(y2))], fill=c["timing"], width=_w(2))
+    # Amber energy mark forms the central routed signal.
+    pts = [(26, 13), (17, 25), (23, 25), (21, 35), (32, 21), (26, 21)]
+    d.polygon([(_w(x), _w(y)) for x, y in pts], fill=c["accent"])
+    d.ellipse([_w(13), _w(13), _w(16), _w(16)], fill=c["trace"])
 
 
 def monitor(d: ImageDraw.ImageDraw, c: dict) -> None:

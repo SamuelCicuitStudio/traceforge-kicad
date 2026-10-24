@@ -25,9 +25,27 @@ Version 0.4.0 puts everything behind **one toolbar button, TraceForge**, which o
 - **Floating panel.** On Windows it is owned by the PCB editor window: it stays above KiCad, can be
   left open, minimises with KiCad and does not cover other applications. It uses wxPython, KiCad's
   own toolkit, which is available in KiCad's plugin environment.
-- **Live signal timing.** The panel refreshes every second with the chain totals through series
+- **Manual signal timing.** Click **Refresh** (or press **F5** in the panel) to read chain totals
+  from KiCad. There is no automatic timing polling. The snapshot includes totals through series
   resistors and chokes, group targets, delta, P-N skew and stub length. Status is shown as
   ✔ ok, ▲ short, ▼ long, … pending, and ✖ stub too long.
+- **Chain lengths.** The panel also shows **Chain track mm**, **Tunable mm**, and **Stub mm**
+  to three decimal places. Chain track length sums every track/arc on the configured nets;
+  tunable length is the final net and stub length is the first net before series parts.
+  These copper totals exclude via barrels, pad-to-die lengths, and component internals.
+  Branches are summed, unlike the tuner's point-to-point path and pad clipping. The ps columns
+  remain delay estimates including configured via/pad contributions. Click Refresh after routing.
+- **Status colors.** Green = matched, amber = needs tuning, red = stub violation or failure,
+  blue = routed, gray = pending. Group rows show the most urgent state, with live counts above
+  the table. Text and symbols accompany colors in both light and dark themes.
+- **Stable refresh and click selection.** Manual refreshes keep the table scroll position,
+  collapsed groups and selected row. Click a chain to select its full path in KiCad;
+  differential chains select both P and N paths, including series parts.
+  Zoom is a separate **Zoom selection** button because KiCad exposes it through an unstable
+  tool-action API. One worker runs one operation at a time; extra clicks are ignored while
+  working, and a busy response stops the operation without automatic retries. Finish any
+  active tool or dialog (Esc in PCB Editor), then manually retry. IPC stages and failures
+  are recorded in the log. Closing the panel stops accepting work and cancels queued tasks.
 - **Tools.** Highlight chain, Highlight group, Clear, Write DRC targets, Export paths, Shortcuts.
 - **Keyboard shortcuts.** These work from the KiCad canvas while the panel is open, and can be
   changed under **Shortcuts…** (saved in `%APPDATA%\TraceForge\settings.json`):
@@ -53,7 +71,7 @@ Version 0.4.0 puts everything behind **one toolbar button, TraceForge**, which o
    HDMI, MIPI, USB, eMMC/SD/SPI, then a net-name prefix rule), with suggested skew, pair-skew and
    stub limits. Chains outside any timing netclass (resets, I²C, GPIO) start unticked.
 4. Untick or remove chains, rename groups (edit the Group cell) and adjust the limits, then
-   **Apply & save**. The chains are stored in `<board>.traceforge.json` and the live table uses
+   **Apply & save**. The chains are stored in `<board>.traceforge.json` and the timing table uses
    them at once.
 
 On reference board, U6 → all interface parts finds 130 chains, including all 112 hand-written ones.

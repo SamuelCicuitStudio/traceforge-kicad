@@ -136,7 +136,8 @@ class ChainEditor(wx.Dialog):
                 has_pair = any(c.pair for c in members)
                 has_stub = any(len(c.nets) > 1 for c in members)
                 self.limits[g] = (skew, pair if has_pair else None,
-                                  (stub or DEFAULT_LIMITS[2]) if has_stub else None)
+                                  (stub or DEFAULT_LIMITS[2])
+                                  if has_stub and any((skew, pair, stub)) else None)
             self.grid.SetCellValue(r, 0, g)
             self.grid.SetReadOnly(r, 0)
             for col, v in enumerate(self.limits[g], 1):

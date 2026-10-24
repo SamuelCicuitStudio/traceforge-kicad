@@ -10,6 +10,8 @@ from __future__ import annotations
 from kipy import KiCad
 from kipy.board_types import FootprintInstance
 
+from signal_path_analyzer.api_access import ApiAccess
+from signal_path_analyzer.chains import selection_paths
 from signal_path_analyzer.kicad_adapter import chain_items, highlight
 from signal_path_analyzer.session import Session
 
@@ -17,9 +19,11 @@ TAG = "TraceForge Highlight Signal Chain"
 
 
 def main() -> int:
-    board = KiCad().get_board()
-    session = Session.open(board)
-    selection = list(board.get_selection())
+    kicad = KiCad()
+    access = ApiAccess()
+    board = access.call(kicad.get_board)
+    session = access.call(lambda: Session.open(board))
+    selection = list(access.call(board.get_selection))
     if not selection:
         print(f"{TAG}: select a track, via, pad or series part first.")
         return 1
@@ -32,7 +36,10 @@ def main() -> int:
     if not nets:
         print(f"{TAG}: the selected item is not part of a net chain.")
         return 1
-    count = highlight(board, chain_items(board, nets, refs))
+    if chain is not None:
+        nets, refs = selection_paths(session.config.group(chain.group), chain.name)
+    items = access.call(lambda: chain_items(board, nets, refs))
+    count = highlight(board, items)
     label = f"{chain.group} {chain.name}" if chain else "auto-detected chain"
     via = ", ".join(refs) or "no series part"
     print(f"{TAG}: {label}: {len(nets)} nets via {via} ({count} items selected).")
