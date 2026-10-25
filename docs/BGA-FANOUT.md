@@ -4,6 +4,9 @@ TraceForge 0.8 adds an independent, native pcbnew BGA breakout tool. It creates 
 pad-to-via connections on the selected footprint. It does not route signals from
 those vias to other components or guarantee complete escape beyond the package.
 
+The proposed complete-escape feature and its validation gates are in
+[Fanout Escape Plan](FANOUT-ESCAPE-PLAN.md).
+
 ## Workflow
 
 1. Restart PCB Editor after updating TraceForge. Select one BGA footprint or pads

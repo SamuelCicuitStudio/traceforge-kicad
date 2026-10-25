@@ -22,6 +22,16 @@ pcbnew objects. Tabs share one worker and busy guard. Opening a tab or returning
 TraceForge checks the revision and geometry signature once, refreshing stale data.
 No periodic board polling or automatic replay of failed commands occurs. F5 remains
 available to force a read. Region drawing is not interrupted by automatic checks.
+Whole-board Trace Cleanup uses the long board-operation deadline because its
+connectivity scan can take longer than a signal snapshot. The panel waits for the
+scan result before accepting another request; a slow scan does not require a panel
+restart. Restart PCB Editor after updating the native helper so it loads the new
+deadline.
+Opening the Trace Cleanup tab reads enabled/hidden copper layers and track counts
+only. It does not run overlap or dangling-track analysis. Scan / Preview or F5 starts
+the full scan. Board operations show a rotating loader centered over the active
+tab's results area; only editable controls are disabled while an operation runs,
+so findings stay visible.
 
 ## Signals
 

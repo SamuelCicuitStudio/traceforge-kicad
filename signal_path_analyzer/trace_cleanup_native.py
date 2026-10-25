@@ -11,6 +11,22 @@ from .trace_cleanup import analyze
 _preview = None
 
 
+def overview(board):
+    """Cheap tab summary; do not build connectivity or analyze copper."""
+    copper_ids = [pcbnew.F_Cu, *(i for i in range(4, 32, 2)), pcbnew.B_Cu]
+    enabled = [layer for layer in copper_ids if board.IsLayerEnabled(layer)]
+    layers = [pcbnew.LayerName(layer) for layer in enabled]
+    tracks = {layer: 0 for layer in layers}
+    for item in board.GetTracks():
+        if not isinstance(item, pcbnew.PCB_VIA):
+            layer = pcbnew.LayerName(item.GetLayer())
+            if layer in tracks:
+                tracks[layer] += 1
+    return dict(board=board.GetFileName(), layers=layers, layer_tracks=tracks,
+                layer_visibility={pcbnew.LayerName(layer): bool(board.IsLayerVisible(layer))
+                                  for layer in enabled})
+
+
 def snapshot(board, net=''):
     ownership = Path(board.GetFileName()).with_suffix('.traceforge-fanout.json')
     managed = set()
@@ -72,17 +88,17 @@ def focus_ids(board, payload):
 
 def dispatch(board, operation, payload):
     global _preview
+    if operation == 'cleanup_info':
+        return overview(board)
     if operation == 'cleanup_scan':
         net = str(payload.get('net', '')).strip()
         names = {n.GetNetname() for n in board.GetNetsByNetcode().values()}
         if net and net not in names:
             raise ValueError('Net name was not found in this board. Use the exact net name.')
         rows, digest = snapshot(board, net)
-        copper_ids = [pcbnew.F_Cu, *(i for i in range(4, 32, 2)), pcbnew.B_Cu]
-        enabled = [layer for layer in copper_ids if board.IsLayerEnabled(layer)]
-        layers = [pcbnew.LayerName(layer) for layer in enabled]
-        visibility = {pcbnew.LayerName(layer): bool(board.IsLayerVisible(layer))
-                      for layer in enabled}
+        info = overview(board)
+        layers = info['layers']
+        visibility = info['layer_visibility']
         analysis = analyze(rows)
         for group in analysis['fusions']:
             group['id'] = 'fuse:' + hashlib.sha256(
@@ -105,6 +121,7 @@ def dispatch(board, operation, payload):
                                      reason='Dangling endpoint: review before removal'))
         _preview = dict(analysis, dangling=dangling, token=secrets.token_hex(16), net=net,
                         board=board.GetFileName(), digest=digest, scanned=len(rows),
+                        overview=info,
                         layers=layers, layer_visibility=visibility,
                         layer_tracks={layer: sum(row['layer'] == layer for row in rows)
                                       for layer in layers})

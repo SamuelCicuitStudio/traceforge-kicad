@@ -6,6 +6,7 @@ class TraceCleanupPanel(wx.Panel):
     def __init__(self, parent, host, native):
         super().__init__(parent)
         self.host, self.native, self.preview = host, native, None
+        self.overview_signature = None
         self.visible_rows = []
         self.layer_names = {}
         if host.dark:
@@ -18,6 +19,8 @@ class TraceCleanupPanel(wx.Panel):
                              'or unfinished. '
                              'Vias, locked and grouped items are preserved.')
         box.Add(note, 0, wx.ALL, 10)
+        self.board_summary = wx.StaticText(self, label='Board overview loads when this tab opens.')
+        box.Add(self.board_summary, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         top = wx.BoxSizer(wx.HORIZONTAL)
         top.Add(wx.StaticText(self, label='Exact net name (blank = whole board)'), 0,
                 wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
@@ -35,7 +38,8 @@ class TraceCleanupPanel(wx.Panel):
         self.layer.SetSelection(0)
         self.layer.Bind(wx.EVT_CHOICE, self.on_layer)
         filter_row.Add(self.layer, 0, wx.RIGHT, 10)
-        self.layer_summary = wx.StaticText(self, label='Scan to see counts by copper layer.')
+        self.layer_summary = wx.StaticText(
+            self, label='Open this tab to see copper layers; scan only when ready.')
         self.layer_summary.SetToolTip('For every enabled copper layer: cleanup findings / '
                                       'track objects scanned. Hidden layers are also analyzed.')
         filter_row.Add(self.layer_summary, 1, wx.ALIGN_CENTER_VERTICAL)
@@ -64,6 +68,29 @@ class TraceCleanupPanel(wx.Panel):
         self.SetSizer(box)
         self.Enable(native is not None)
 
+    def show_overview(self, info):
+        signature = (info['board'], tuple(info['layer_tracks'].items()))
+        self.board_summary.SetLabel(
+            f'{len(info["layers"])} copper layers, '
+            f'{sum(info["layer_tracks"].values())} track/arc objects. '
+            'Full scan runs only from Scan / Preview.')
+        if self.preview is not None and self.overview_signature == signature:
+            return  # Keep the reviewed preview when returning from PCB Editor.
+        self.invalidate()
+        self.overview_signature = signature
+        self.layer_names = {'All copper layers': 'All copper layers'}
+        self.layer_names.update({
+            layer + (' (hidden)' if not info['layer_visibility'][layer] else ''): layer
+            for layer in info['layers']})
+        self.layer.SetItems(list(self.layer_names))
+        self.layer.SetSelection(0)
+        self.layer_summary.SetLabel(' | '.join(
+            f'{layer}: {info["layer_tracks"][layer]} tracks' +
+            (' hidden' if not info['layer_visibility'][layer] else '')
+            for layer in info['layers']))
+        self.message(f'{len(info["layers"])} copper layers ready. '
+                     'Click Scan / Preview or press F5 to check for overlap and dangling tracks.')
+
     def invalidate(self):
         self.preview = None
         self.remove.Disable()
@@ -83,6 +110,11 @@ class TraceCleanupPanel(wx.Panel):
         def done(result):
             self.invalidate()
             self.preview = result
+            info = result['overview']
+            self.overview_signature = (info['board'], tuple(info['layer_tracks'].items()))
+            self.board_summary.SetLabel(
+                f'{len(info["layers"])} copper layers, '
+                f'{sum(info["layer_tracks"].values())} track/arc objects.')
             old_layer = self.layer_names.get(self.layer.GetStringSelection(),
                                              self.layer.GetStringSelection())
             self.layer_names = {('All copper layers'): 'All copper layers'}

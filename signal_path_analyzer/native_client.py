@@ -7,6 +7,7 @@ import socket
 from pathlib import Path
 
 from .chains import NetGeometry, TrackSeg, ViaHop
+from .native_timeout import client_timeout
 
 REGISTRY = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'TraceForge' / 'native-bridge'
 LIMIT = 32 * 1024 * 1024
@@ -21,8 +22,7 @@ class NativeBridge:
         request = dict(token=self.endpoint['token'], board=self.board_file,
                        operation=operation, payload=payload)
         with socket.create_connection(('127.0.0.1', self.endpoint['port']), timeout=1) as conn:
-            conn.settimeout(125 if operation.startswith(
-                ('stitch_', 'fanout_', 'tracefence_', 'endpoint_', 'pick_')) else 6)
+            conn.settimeout(client_timeout(operation))
             conn.sendall(json.dumps(request).encode('utf-8') + b'\n')
             with conn.makefile('rb') as stream:
                 raw = stream.readline(LIMIT + 1)

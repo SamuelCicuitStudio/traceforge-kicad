@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -58,6 +59,54 @@ class Tools:
     source: Callable[[], str] = lambda: ""  # e.g. "xsignals.json" or "auto-detected"
     edit_chains: Callable[[wx.Window], str] = lambda parent: "chain editor unavailable"
     zoom_selection: Callable[[], str] = lambda: "zoom unavailable"
+
+
+class BusyOverlay(wx.Panel):
+    """Rotating loader centered over the active tab's main results area."""
+
+    def __init__(self, parent, dark):
+        super().__init__(parent, size=(250, 132))
+        self.dark = dark
+        self.phase = 0
+        self.message = 'Scanning board...'
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+
+    def set_message(self, message):
+        self.message = message
+        self.Refresh(False)
+
+    def advance(self):
+        self.phase = (self.phase + 1) % 12
+        self.Refresh(False)
+
+    def on_paint(self, _event):
+        dc = wx.AutoBufferedPaintDC(self)
+        size = self.GetClientSize()
+        background = wx.Colour('#253449' if self.dark else '#F4F8FC')
+        border = wx.Colour('#59748E' if self.dark else '#A8BED1')
+        primary = wx.Colour('#7DCFFF' if self.dark else '#145FA0')
+        dim = wx.Colour('#39536E' if self.dark else '#B2CBDD')
+        dc.SetBackground(wx.Brush(background))
+        dc.Clear()
+        dc.SetPen(wx.Pen(border, 1))
+        dc.SetBrush(wx.Brush(background))
+        dc.DrawRoundedRectangle(1, 1, size.width - 2, size.height - 2, 10)
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        for index in range(12):
+            strength = (12 - (index - self.phase) % 12) / 12
+            color = wx.Colour(*(
+                round(a + strength * (b - a))
+                for a, b in zip((dim.Red(), dim.Green(), dim.Blue()),
+                                (primary.Red(), primary.Green(), primary.Blue()))))
+            dc.SetBrush(wx.Brush(color))
+            angle = 2 * math.pi * index / 12 - math.pi / 2
+            dc.DrawCircle(round(size.width / 2 + 24 * math.cos(angle)),
+                          round(52 + 24 * math.sin(angle)), 4)
+        dc.SetTextForeground(primary)
+        dc.SetFont(self.GetFont().Bold())
+        text_width, _ = dc.GetTextExtent(self.message)
+        dc.DrawText(self.message, max(8, (size.width - text_width) // 2), 99)
 
 
 def load_shortcuts() -> dict[str, str]:
@@ -309,11 +358,17 @@ class TraceForgePanel(wx.Frame):
             self.stitching.SetForegroundColour('#E5EDF8')
         frame_box = wx.BoxSizer(wx.VERTICAL)
         frame_box.Add(self.notebook, 1, wx.EXPAND)
+        self.activity = BusyOverlay(self, self.dark)
+        self.activity.Hide()
+        self.activity_count = 0
+        self.activity_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.on_activity_tick, self.activity_timer)
         self.SetSizer(frame_box)
         self.SetMinSize((820, 560))
         self.SetSize((1160, 720))
 
         self.Bind(wx.EVT_HOTKEY, self.on_hotkey)
+        self.Bind(wx.EVT_SIZE, self.on_resize)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.register_shortcuts(load_shortcuts())
         self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_tab_open)
@@ -322,7 +377,12 @@ class TraceForgePanel(wx.Frame):
 
     def on_tab_open(self, event):
         event.Skip()
+        self.position_activity()
         self.schedule_auto_refresh()
+
+    def on_resize(self, event):
+        event.Skip()
+        wx.CallAfter(self.position_activity)
 
     def on_activate(self, event):
         event.Skip()
@@ -354,11 +414,19 @@ class TraceForgePanel(wx.Frame):
             self.change_check_pending = False
             if self.closing or error:
                 if error and not self.closing:
-                    self.snapshot.SetLabel('Automatic change check unavailable. Use Refresh (F5).')
+                    if tab == 4:
+                        self.trace_cleanup.message(
+                            f'Board overview unavailable: {error}', 'warning')
+                    else:
+                        self.snapshot.SetLabel(
+                            'Automatic change check unavailable. Use Refresh (F5).')
                 return  # No automatic retry after a busy/closed/old helper.
             self.resume_auto_check()
             if (self.notebook.GetSelection() != tab or self.busy or self.actions_pending):
                 return
+            if tab == 4:
+                self.trace_cleanup.show_overview(state)
+                return  # Opening Cleanup never starts a full scan.
             if self.refresh_policy.needs_refresh(tab, state):
                 if tab == 2 and not state['selection']:
                     self.fanout.message('Select a BGA in PCB Editor, then return here '
@@ -368,7 +436,8 @@ class TraceForgePanel(wx.Frame):
 
         def work():
             try:
-                state, error = self.api.call(lambda: self.native_call('revision')), None
+                operation = 'cleanup_info' if tab == 4 else 'revision'
+                state, error = self.api.call(lambda: self.native_call(operation)), None
             except Exception as exc:
                 state, error = None, exc
             if not self.closing:
@@ -379,6 +448,39 @@ class TraceForgePanel(wx.Frame):
         if self.auto_check_deferred:
             self.auto_check_deferred = False
             self.schedule_auto_refresh()
+
+    def on_activity_tick(self, _event):
+        self.position_activity()
+        self.activity.advance()
+
+    def position_activity(self):
+        if not self.activity_count or self.closing:
+            return
+        tab = self.notebook.GetSelection()
+        target = (self.tree.GetMainWindow() if tab == 0 else
+                  self.trace_cleanup.table if tab == 4 else
+                  self.notebook.GetPage(tab).canvas)
+        bounds = target.GetScreenRect()
+        center = self.ScreenToClient((bounds.x + bounds.width // 2,
+                                      bounds.y + bounds.height // 2))
+        size = self.activity.GetSize()
+        self.activity.SetPosition((center.x - size.width // 2,
+                                   center.y - size.height // 2))
+        self.activity.Raise()
+
+    def begin_activity(self, label):
+        self.activity_count += 1
+        self.activity.set_message(label)
+        if self.activity_count == 1:
+            self.activity.Show()
+            self.position_activity()
+            self.activity_timer.Start(100)
+
+    def end_activity(self):
+        self.activity_count = max(0, self.activity_count - 1)
+        if not self.activity_count:
+            self.activity_timer.Stop()
+            self.activity.Hide()
 
     def on_endpoints(self, event):
         if self.busy or self.actions_pending or self.closing:
@@ -406,6 +508,7 @@ class TraceForgePanel(wx.Frame):
             return
         self.busy = True
         self.refresh.Disable()
+        self.begin_activity('Reading signal lengths...')
         self.status.SetLabel("Refreshing timing from KiCad...")
 
         def work():
@@ -423,6 +526,7 @@ class TraceForgePanel(wx.Frame):
 
     def _apply(self, results, error) -> None:
         self.busy = False
+        self.end_activity()
         self.resume_auto_check()
         if self.closing:
             return
@@ -615,16 +719,33 @@ class TraceForgePanel(wx.Frame):
             return
         self.actions_pending += 1
         self.refresh.Disable()
+        self.begin_activity('Scanning / working in KiCad...')
         page.message('Working in KiCad. Large previews and zone refill can take a moment.',
                      'routed')
-        page.Enable(False)
+        # Keep the canvas and findings visible instead of graying out the whole tab.
+        # Freeze only editable inputs while a preview is based on their values.
+        controls = []
+        editable = (wx.Button, wx.TextCtrl, wx.Choice, wx.ComboBox, wx.CheckBox,
+                    wx.RadioButton, wx.SpinCtrl, wx.SpinCtrlDouble, wx.Slider,
+                    wx.ListBox)
+        pending = list(page.GetChildren())
+        while pending:
+            child = pending.pop()
+            if isinstance(child, editable):
+                controls.append((child, child.IsEnabled()))
+                child.Disable()
+            else:
+                pending.extend(child.GetChildren())
 
         def finished(result, error):
             self.actions_pending -= 1
+            self.end_activity()
             self.resume_auto_check()
             if self.closing:
                 return
-            page.Enable(True)
+            for child, enabled in controls:
+                if enabled and child:
+                    child.Enable()
             self.refresh.Enable(not self.busy and not self.actions_pending)
             if error:
                 page.invalidate()
@@ -746,6 +867,7 @@ class TraceForgePanel(wx.Frame):
         if self.auto_refresh_later:
             self.auto_refresh_later.Stop()
         self.overlay.Stop()
+        self.activity_timer.Stop()
         self.worker.shutdown(wait=False, cancel_futures=True)
         for hid in list(self.hotkey_ids):
             self.UnregisterHotKey(hid)

@@ -14,6 +14,8 @@ from pathlib import Path
 import pcbnew
 import wx
 
+from signal_path_analyzer.native_timeout import editor_timeout
+
 LIMIT = 32 * 1024 * 1024
 REGISTRY = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'TraceForge' / 'native-bridge'
 
@@ -439,8 +441,7 @@ class Server:
                     done = threading.Event()
                     state = {'cancelled': False}
                     wx.CallAfter(self.execute, request, state, done)
-                    timeout = 120 if request.get('operation', '').startswith(
-                        ('stitch_', 'fanout_', 'tracefence_', 'endpoint_', 'pick_')) else 5
+                    timeout = editor_timeout(request.get('operation', ''))
                     if not done.wait(timeout):
                         state['cancelled'] = True
                         reply = {'error': 'PCB Editor did not service the native request in time'}
