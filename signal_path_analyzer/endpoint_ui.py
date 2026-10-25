@@ -15,6 +15,7 @@ class EndpointDialog(wx.Dialog):
         row = wx.BoxSizer(wx.HORIZONTAL)
         row.Add(wx.StaticText(self, label='Resistors up to (ohms):'), 0, wx.ALIGN_CENTER_VERTICAL)
         self.ohms = wx.SpinCtrlDouble(self, min=0, max=1000000, initial=100, inc=10)
+        self.ohms.Disable()
         row.Add(self.ohms, 0, wx.LEFT | wx.RIGHT, 8)
         self.caps = wx.CheckBox(self, label='Cross series capacitors')
         self.caps.SetValue(True)
@@ -23,6 +24,11 @@ class EndpointDialog(wx.Dialog):
         row.Add(self.caps, 0, wx.RIGHT, 8)
         row.Add(self.pair)
         box.Add(row, 0, wx.ALL, 10)
+        self.all_resistors = wx.CheckBox(self,
+                                        label='Follow all series resistors (ignore ohm limit)')
+        self.all_resistors.SetValue(True)
+        self.all_resistors.Bind(wx.EVT_CHECKBOX, self.changed)
+        box.Add(self.all_resistors, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         row = wx.BoxSizer(wx.HORIZONTAL)
         for label, handler in [('Detect / update path', self.detect),
                                ('Use new PCB endpoints', self.new_endpoints),
@@ -68,6 +74,7 @@ class EndpointDialog(wx.Dialog):
         self.ohms.Bind(wx.EVT_TEXT, self.changed)
 
     def changed(self, event):
+        self.ohms.Enable(not self.all_resistors.GetValue())
         self.invalidate()
         event.Skip()
 
@@ -92,7 +99,8 @@ class EndpointDialog(wx.Dialog):
 
     def pick_path(self, event):
         options = dict(max_ohms=self.ohms.GetValue(), capacitors=self.caps.GetValue(),
-                       include_pair=self.pair.GetValue())
+                       include_pair=self.pair.GetValue(),
+                       all_resistors=self.all_resistors.GetValue())
         self.invalidate()
         def work():
             wx.CallAfter(self.message, 'Click FIRST endpoint in PCB Editor. Esc cancels.', 'routed')
@@ -105,7 +113,8 @@ class EndpointDialog(wx.Dialog):
 
     def detect(self, event=None):
         payload = dict(max_ohms=self.ohms.GetValue(), capacitors=self.caps.GetValue(),
-                       include_pair=self.pair.GetValue(), endpoints=self.endpoints)
+                       include_pair=self.pair.GetValue(), endpoints=self.endpoints,
+                       all_resistors=self.all_resistors.GetValue())
         self.invalidate()
         self.host.submit_stitching(lambda: self.service.detect(**payload), self.accept, self)
 

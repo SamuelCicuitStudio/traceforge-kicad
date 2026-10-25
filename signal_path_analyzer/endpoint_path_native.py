@@ -42,7 +42,7 @@ def endpoint(item):
 
 
 class RoutedGraph:
-    def __init__(self, board, ohms, caps, started):
+    def __init__(self, board, ohms, caps, started, all_resistors=False):
         self.started = started
         self.items, self.bridges = {}, defaultdict(list)
         self.parts = {}
@@ -51,8 +51,9 @@ class RoutedGraph:
             pads = list(fp.Pads())
             self.raw.extend(pads)
             ref, value = fp.GetReference(), fp.GetValue()
-            eligible = (ref.upper().startswith('R') and series_ohms(value) is not None and
-                        series_ohms(value) <= ohms) or (caps and ref.upper().startswith('C'))
+            eligible = (ref.upper().startswith('R') and (all_resistors or
+                        (series_ohms(value) is not None and series_ohms(value) <= ohms))) or (
+                            caps and ref.upper().startswith('C'))
             if (eligible and len(pads) == 2 and len({net_name(p) for p in pads}) == 2 and
                     all(net_name(p) and not RAIL.search(net_name(p)) for p in pads)):
                 a, b = map(identity, pads)
@@ -196,7 +197,8 @@ def detect(board, payload):
     ohms = float(payload.get('max_ohms', 100))
     if not math.isfinite(ohms) or not 0 <= ohms <= 1_000_000:
         raise ValueError('Resistor traversal limit must be between 0 and 1,000,000 ohms.')
-    graph = RoutedGraph(board, ohms, bool(payload.get('capacitors', True)), started)
+    graph = RoutedGraph(board, ohms, bool(payload.get('capacitors', True)), started,
+                        all_resistors=bool(payload.get('all_resistors', False)))
     if payload.get('endpoints'):
         selected = [graph.all_items.get(k) for k in payload['endpoints']]
     else:
@@ -275,6 +277,8 @@ def detect(board, payload):
         elif any(names):
             note = 'Possible partner name detected, but both endpoint nets were not found.'
     return dict(primary=primary, partner=partner, pair_note=note,
-                settings=dict(max_ohms=ohms, capacitors=bool(payload.get('capacitors', True)),
+                settings=dict(max_ohms=ohms,
+                              all_resistors=bool(payload.get('all_resistors', False)),
+                              capacitors=bool(payload.get('capacitors', True)),
                               include_pair=bool(payload.get('include_pair', True))),
                 ids=list(dict.fromkeys(primary['ids'] + (partner['ids'] if partner else []))))

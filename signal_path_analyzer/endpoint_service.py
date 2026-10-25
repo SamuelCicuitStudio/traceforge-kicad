@@ -19,6 +19,7 @@ class EndpointService:
         self.session = session
 
     def detect(self, **payload):
+        payload.setdefault('all_resistors', True)
         pairs = {}
         for group in self.session.config.groups if self.session.config else []:
             for chain in group.chains:

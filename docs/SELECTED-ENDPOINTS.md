@@ -35,8 +35,13 @@ With both component fields empty, **Find chains** also uses endpoint detection.
    **Refresh** for timing; use Chain editor to review direction and timing limits.
 
 The search uses touching copper shapes on common layers, including arcs and via
-layer spans. It can cross two-pad resistors below the chosen limit and two-pad
-series capacitors when enabled. Power/ground rails, other parts, unrouted gaps and
+layer spans. **Follow all series resistors** is enabled by default for endpoint
+paths, so a 1 kOhm or 10 kOhm series part does not silently break detection at the
+old 100-ohm threshold. Turn it off to use the resistor limit. In Chain Editor this
+option applies to endpoint paths; component searches retain their explicit limit.
+Multiple successive two-pad resistors and series capacitors can join different
+net names along one path; endpoints need not share a net name. Capacitor traversal
+must be enabled. Power/ground rails, other parts, unrouted gaps and
 zone-only connections are excluded. A capacitor to ground is not a series bridge.
 
 Differential partners use existing chain pairing where available; otherwise common

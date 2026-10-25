@@ -84,6 +84,8 @@ class ChainEditor(wx.Dialog):
         self.include_pair = wx.CheckBox(self, label='Include differential partner')
         self.include_pair.SetValue(True)
         opts.Add(self.include_pair, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 12)
+        self.all_resistors = wx.CheckBox(self, label='Endpoint paths: follow all series resistors')
+        self.all_resistors.SetValue(True)
         endpoint_button = wx.Button(self, label='Detect path from 2 selected PCB items')
         endpoint_button.Enable(detect_selected is not None)
         endpoint_button.Bind(wx.EVT_BUTTON, lambda event: self.detect_endpoints())
@@ -129,6 +131,7 @@ class ChainEditor(wx.Dialog):
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(top, 0, wx.ALL, 8)
         box.Add(opts, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        box.Add(self.all_resistors, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(endpoint_button, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(pick_button, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.path_preview, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
@@ -213,7 +216,8 @@ class ChainEditor(wx.Dialog):
 
     def endpoint_options(self):
         return dict(max_ohms=self.ohms.GetValue(), capacitors=self.caps.GetValue(),
-                    include_pair=self.include_pair.GetValue())
+                    include_pair=self.include_pair.GetValue(),
+                    all_resistors=self.all_resistors.GetValue())
 
     def pick_path(self, event):
         if not self.pick_endpoint:
