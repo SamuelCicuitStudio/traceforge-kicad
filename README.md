@@ -16,8 +16,7 @@ inside PCB Editor. KiCad's official IPC API and the kicad-python SDK are not req
 The installer creates a junction under
 `%APPDATA%/kicad/10.0/scripting/plugins/traceforge_native_bridge`.
 KiCad's bundled Python and wxPython run the panel; no pip runtime dependencies are needed.
-The previous official-IPC `plugin.json` is archived under `docs/legacy/` and is no longer
-registered. The native toolbar has the same light/dark TraceForge icons.
+The native toolbar supports light and dark TraceForge icons.
 
 ## Panel features
 
@@ -75,7 +74,7 @@ manually moved, resized, renetted or locked. Missing metadata prevents managed r
 Drawing is currently in the overview, not directly on KiCad's canvas. Full custom DRC
 rule evaluation, courtyard exclusion, and copper/text bounding-box optimizations remain
 follow-up work; run KiCad DRC after placement. Board operations/refill can briefly occupy
-the editor's GUI thread. See [implementation notes](docs/VIA-STITCHING-PLAN.md).
+the editor's GUI thread. See [native board access](docs/NATIVE-BOARD-ACCESS.md).
 
 ## Chains and timing
 
@@ -115,16 +114,17 @@ logs are in `%APPDATA%/TraceForge/traceforge.log`.
 
 ## Development and checks
 
-Install development dependencies with `python -m pip install -e ".[dev]"`, then run
-`python -m pytest -q` and `python -m ruff check .`.
+Install development dependencies with `python -m pip install -e ".[dev]"`.
+Run `python -m ruff check .` and `python -m compileall -q signal_path_analyzer native_bridge`.
+Local unit/integration tests and generated board fixtures are intentionally ignored.
+Public CI validates source checks and builds the same allowlisted release ZIP.
 
-Run KiCad's bundled Python with
-`tools/check_native_bridge.py BOARD.kicad_pcb` to test a separate in-memory board copy,
-unsaved geometry changes, highlight cleanup, native transport and main-thread dispatch.
-This test does not save or alter the source board file.
+Build a release ZIP with `python tools/build_release.py`; output is written to `dist/`.
+It includes the runnable toolkit, native helper, installer, icons, license and public docs.
+It excludes Git history, tests, caches, credentials and user project data.
 
-See [native board access](docs/NATIVE-BOARD-ACCESS.md) for transport and installation details.
-The earlier [API reliability audit](docs/API-RELIABILITY-AUDIT.md) records the migration history.
+See [native board access](docs/NATIVE-BOARD-ACCESS.md) and
+[stitching testing](docs/VIA-STITCHING-TESTING.md) for operational details.
 
 ## Compatibility
 

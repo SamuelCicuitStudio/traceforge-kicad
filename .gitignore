@@ -8,3 +8,42 @@ build/
 dist/
 *.signal-paths.csv
 
+# Local tests, validation outputs, and internal notes are not published.
+/tests/
+/test/
+/test-data/
+/test-results/
+/tools/check_*.py
+/.private/
+/artifacts/
+
+# User projects, generated configuration, logs, backups, and credentials.
+*.kicad_pcb
+*.kicad_sch
+*.kicad_pro
+*.kicad_prl
+*.kicad_dru
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.traceforge.json
+*.traceforge-stitching.json
+xsignals.json
+*.log
+*.bak
+*.tmp
+*.bundle
+*.zip
+*.7z
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+*native-bridge/*.json
+
+# Editor and operating-system metadata.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+

@@ -84,7 +84,7 @@ def load_stackup_z(board_file: Path) -> dict[str, tuple[float, float]]:
 def via_height(z: dict[str, tuple[float, float]], layer_a: str, layer_b: str) -> float:
     """KiCad's default via length: top of the upper copper layer to the bottom of the lower one.
 
-    Checked against KiCad 10.0.1: a through via on reference board (F.Cu-B.Cu, 1.636 mm) reports
+    Reference calculation: a through via (F.Cu-B.Cu, 1.636 mm) reports
     11.374 ps at 6.952 ps/mm.
     """
 

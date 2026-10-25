@@ -9,10 +9,8 @@ The agreed layout is one window with **Signals / xSignals** as the first tab and
 **Via Stitching** as the second. Keep net/chain analysis, timing, highlighting,
 chain editing, DRC targets and exports together in Signals. The stitching tab owns
 regions, via settings, preview and management of generated stitching sets. Tab changes
-preserve state and do not trigger board refreshes. See the implementation sequence,
-native capability proof points and acceptance checks in
-[VIA-STITCHING-PLAN.md](VIA-STITCHING-PLAN.md). Version 0.7 implements both tabs and
-initial stitching; that document identifies differences from the full intended scope.
+preserve state and do not trigger board refreshes. See [native board access](NATIVE-BOARD-ACCESS.md) for implementation limits and
+[via stitching testing](VIA-STITCHING-TESTING.md) for the current workflow.
 
 ## Signal Path Analyzer
 

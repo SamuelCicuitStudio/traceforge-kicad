@@ -1,67 +1,58 @@
-# pcbnew-only mode (0.6)
+# Native board access
 
-All TraceForge actions, including startup, use the native helper. No kicad-python SDK, official
-API command, or API-enabled preference is needed. The panel remains a separate wxPython process;
-its colors, table, chain editor, shortcuts, automatic zoom and exports remain available.
+TraceForge uses KiCad 10's embedded `pcbnew` Python bindings for live board access.
+The wxPython panel runs separately using KiCad's bundled Python. The official IPC API
+and kicad-python SDK are not required or used as a fallback.
 
-Run `tools/install_native_bridge.ps1`, restart PCB Editor and launch from the native TraceForge
-button. The helper's distinct ActionPlugin classes register the panel, highlight, export and
-optional older monitor commands. The native launcher selects KiCad's bundled Python, passes the
-editor endpoint and board filename, and removes official IPC environment variables from its child.
-The retired IPC manifest is archived under `docs/legacy/` rather than registered at the repo root.
+## Installation and connection
 
-The helper is installed under `%APPDATA%/kicad/10.0/scripting/plugins/traceforge_native_bridge`.
-Its source lives in `native_bridge/` in this checkout. Refresh reports `pcbnew native board access`.
-If the helper cannot be found, startup reports how to install it and does not fall back to IPC.
-Multiple-editor launches require an explicit endpoint or board identity, preventing accidental
-access to a different board. Native toolbar launch supplies both.
+Extract the release to a permanent directory and run `tools/install_native_bridge.ps1`.
+The installer creates a junction at
+`%APPDATA%/kicad/10.0/scripting/plugins/traceforge_native_bridge`.
+Restart PCB Editor, open a saved board and use the native TraceForge toolbar button.
 
-The helper binds only to localhost and authenticates requests with a random per-editor token.
-Only predefined operations are accepted; arbitrary code and board-saving commands are not exposed.
-Requests verify the board path and have size/time limits. Board reads and highlight changes run
-on the editor's wx main thread. The socket worker never accesses pcbnew objects.
+Each editor registers an authenticated localhost endpoint under
+`%LOCALAPPDATA%/TraceForge/native-bridge/`. The launcher passes its endpoint and board
+identity to the panel. Standalone discovery rejects ambiguous editors. Endpoint files
+contain session credentials: do not share or commit them.
 
-Snapshots read the live in-memory board, including unsaved routing/tuning changes. Existing
-propagation profiles and stackup information are loaded from project files. No board reload or
-file snapshot is substituted silently. Native zoom uses the editor's zoom control and a temporary
-unregistered focus point. No board object is added. Transient highlight cleanup stores UUIDs and
-previous flags so deleted items cannot leave dangling Python pointers. A mouse/key event filter
-clears Forge-owned flags before normal PCB interaction without consuming the event.
+Requests accept predefined operations, verify board identity and have size/deadline
+limits. Board access executes on KiCad's GUI thread. The socket worker does not access
+pcbnew objects. Both tabs share one worker and busy guard, use manual refresh, and do
+not automatically replay failed commands.
 
-Automatic zoom calibrates to board extents once per board/window size, rather than fitting
-the entire board on each row click. Subsequent selections preserve magnification, except
-when a larger chain needs a zoom-out. Native focus pans only if its focus point needs to
-be brought into view. The explicit Zoom selection button requests a fresh selection fit.
-Five camera regression checks cover adjacent chains, shorter/larger chains, explicit
-refitting and manual magnification changes.
+## Signals
 
-Signal chain highlights remain visual flags, not a promise that KiCad's selection manager will
-treat the highlighted chain as a multi-object edit selection. Signal commands do not route,
-delete, move or save copper. Failure does not trigger automatic retries or an IPC fallback.
+Snapshots read live unsaved routing/tuning geometry. Timing profiles and stackup settings
+are read from project files. Refresh never reloads or saves the PCB. Highlight cleanup
+records UUIDs and prior flags, not item pointers. Forge-owned highlights clear on the
+next PCB click/key action.
 
-In 0.7, separate `stitch_*` commands support the Via Stitching tab. These commands can
-add/remove through vias and refill zones, using a registered internal ActionPlugin whose
-Run executes inside KiCad's native undo wrapper. Exact generated via UUIDs and settings
-are journaled in a separate stitching JSON file before placement; history remains for
-Undo/Redo recovery. Native groups were rejected after the prototype exposed inconsistent
-membership restoration across regeneration. Stitching selection synchronizes individual
-via flags with the real selection tool via native Refresh. Signal highlighting behavior
-is unchanged. Stitching operations use longer transport deadlines for refill; they do
-not retry or save the PCB automatically. See README for the current placement limits.
+Automatic zoom retains magnification for nearby or shorter chains after the initial
+fit and zooms out when a larger chain needs room. Explicit Zoom selection refits.
+Signal highlights are visual flags, not guaranteed editable multi-object selections.
+Lengths and delays are aggregate estimates, not replicas of KiCad's point-to-point tuner.
 
-For tests, run KiCad's Python with `tools/check_native_bridge.py BOARD.kicad_pcb`.
-The test uses an isolated in-memory board, changes geometry twice without saving, verifies
-new lengths, transient highlight cleanup and board-path validation, and checks the source file
-hash is unchanged. Unit tests also cover startup without the official SDK, missing helpers,
-ambiguous editors, and all panel board callbacks.
+## Via stitching
 
-Migration validation: 48 unit tests and Ruff passed. KiCad's bundled Python, without the
-official SDK installed, evaluated the management board's 29 groups and 123 chains. A
-disposable PCB Editor instance launched the panel through its native menu, refreshed the
-saved chain configuration, displayed the colored status counters, repeated native
-highlight/zoom/clear three times, and exported 386 net summaries. The in-memory helper
-check verified unsaved geometry changes; real interactive rerouting/tuning remains a
-manual acceptance check.
+Stitching commands create/remove through vias, refill zones and validate connectivity.
+Changes execute through an internal registered ActionPlugin so KiCad captures undo
+history. The user saves the PCB normally; TraceForge never silently rewrites the PCB.
 
-This backend targets KiCad 10. The legacy Python interface is planned for removal in KiCad 11;
-this migration does not restore or patch the official API's native busy flag.
+Sets use exact generated via UUIDs, with recipes and ownership history in
+`<board>.traceforge-stitching.json`. Native groups are not used. Selection synchronizes
+individual via flags through native Refresh. Ownership recovers from live UUIDs after
+undo/redo and save/reopen. Ordinary vias are not inferred from size or location.
+Locked or manually altered vias are preserved by automatic removal/regeneration.
+
+Preview is non-destructive. Apply revalidates live geometry and uses a single-use token.
+Drawing and preview use the tab's board overview, not KiCad's canvas. Custom DRC-rule
+evaluation and courtyard exclusion are incomplete: run KiCad DRC after placement.
+Native geometry/refill may briefly occupy the editor's GUI thread.
+
+## Compatibility and diagnostics
+
+This release targets KiCad 10 on Windows. Legacy pcbnew bindings are planned for removal
+in KiCad 11. TraceForge does not modify KiCad's official API implementation.
+Logs are at `%APPDATA%/TraceForge/traceforge.log`. Review private board paths before
+sharing logs. See [stitching testing](VIA-STITCHING-TESTING.md) for manual acceptance.

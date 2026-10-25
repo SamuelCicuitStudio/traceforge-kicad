@@ -36,18 +36,11 @@ larger spacing when a limit is reported. Finish routing/tuning and close modal e
 dialogs before starting stitching operations. Failed mutations are not automatically
 replayed; refresh and inspect the live state before another attempt.
 
-Validation performed on disposable synthetic boards: apply Undo/Redo; regeneration
-Undo/Redo with exact UUID membership; removal Undo; ordinary-via preservation; real
-multi-via selection; save/reload ownership; symmetric/staggered grids; cutouts/keepouts;
-read-only previews; stale preview rejection and single-use tokens. The real management
-board was used only for read-only preview and existing signal-chain checks. A DRC
-comparison across synthetic patterns found the same two isolated-copper warnings,
-zero unconnected items and no clearance violations. This is not a complete DRC proof.
+Validation uses synthetic boards for cutouts, keepouts, both grid patterns, exact UUID
+ownership, placement/removal/regeneration, Undo/Redo and save/reopen recovery. Local
+unit and native integration checks are maintained outside the published source tree.
+Public CI checks lint, compilation and the release package.
 
-Development checks: 71 unit tests and Ruff pass. With KiCad's bundled Python, run
-`tools/check_stitching.py` for geometry/serialization checks and
-`tools/check_native_bridge.py BOARD.kicad_pcb` for existing signal checks. The former
-creates temporary synthetic boards; the latter never saves the source PCB.
-
-Logs: `%APPDATA%/TraceForge/traceforge.log`. Include the failed action and whether the
-failure happened during Preview, Apply, zone refill, Select or Remove.
+Logs: `%APPDATA%/TraceForge/traceforge.log`. Include the failed action and whether it
+happened during Preview, Apply, zone refill, Select or Remove. Remove private board
+paths and project names before sharing logs.
