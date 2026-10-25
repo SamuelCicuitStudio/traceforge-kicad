@@ -9,8 +9,10 @@ pruning potentially intentional branches.
 
 1. Open **Trace Cleanup** and click **Scan / Preview**. Optionally enter an exact
    net name; blank scans the board. Opening this tab also scans changed geometry.
-   Use **Show layer** to inspect F.Cu, inner layers or B.Cu independently. The
-   summary gives finding counts on every detected copper layer.
+   Use **Show layer** to inspect F.Cu, every enabled inner layer or B.Cu
+   independently. Hidden layers are scanned and marked `(hidden)`. Layers with
+   no track objects appear with zero counts. Each summary entry shows
+   **cleanup findings / track objects scanned** on that layer.
 2. Review duplicate, fuse and dangling findings and the excess counted length. Select a row to
    highlight and zoom to that object in PCB Editor. Uncheck objects to keep.
 3. Redundant tracks and compatible fusions start checked. Dangling tracks start unchecked: review them

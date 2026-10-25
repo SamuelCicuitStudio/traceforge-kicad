@@ -78,6 +78,11 @@ def dispatch(board, operation, payload):
         if net and net not in names:
             raise ValueError('Net name was not found in this board. Use the exact net name.')
         rows, digest = snapshot(board, net)
+        copper_ids = [pcbnew.F_Cu, *(i for i in range(4, 32, 2)), pcbnew.B_Cu]
+        enabled = [layer for layer in copper_ids if board.IsLayerEnabled(layer)]
+        layers = [pcbnew.LayerName(layer) for layer in enabled]
+        visibility = {pcbnew.LayerName(layer): bool(board.IsLayerVisible(layer))
+                      for layer in enabled}
         analysis = analyze(rows)
         for group in analysis['fusions']:
             group['id'] = 'fuse:' + hashlib.sha256(
@@ -100,7 +105,9 @@ def dispatch(board, operation, payload):
                                      reason='Dangling endpoint: review before removal'))
         _preview = dict(analysis, dangling=dangling, token=secrets.token_hex(16), net=net,
                         board=board.GetFileName(), digest=digest, scanned=len(rows),
-                        layers=sorted({row['layer'] for row in rows}))
+                        layers=layers, layer_visibility=visibility,
+                        layer_tracks={layer: sum(row['layer'] == layer for row in rows)
+                                      for layer in layers})
         return _preview
     if operation != 'cleanup_remove':
         raise ValueError('Unknown trace cleanup operation.')

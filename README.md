@@ -159,10 +159,17 @@ See [BGA fanout](docs/BGA-FANOUT.md).
 
 *Actual fifth-tab preview on a synthetic board; no board edits were applied.*
 
+![TraceForge Trace Cleanup: hidden inner layer in a complete six-layer scan](docs/screenshots/trace-cleanup-six-layers.png)
+
+*Six-layer synthetic check: all six copper layers are reported, including two
+hidden layers. In1.Cu remains available for review while hidden in PCB Editor.*
+
 Scan the whole board or an exact net to find duplicate tracks, overlapping
 collinear tracks and native dangling endpoints. Filter findings by copper layer;
-partially overlapping same-net segments can be fused into one continuous track. Preview rows highlight in PCB
-Editor. Redundant copper starts checked; dangling tracks require review and start
+partially overlapping same-net segments can be fused into one continuous track.
+Every enabled copper layer appears in the summary, including hidden and empty
+layers; counts show findings and scanned track objects per layer. Preview rows
+highlight in PCB Editor. Redundant copper starts checked; dangling tracks require review and start
 unchecked. Cleanup is undoable. **Recheck length matching** returns to Signals and
 refreshes the measurements. Partial overlaps, vias, locked and grouped copper are
 preserved. See [trace cleanup](docs/TRACE-CLEANUP.md).

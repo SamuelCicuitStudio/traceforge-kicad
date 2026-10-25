@@ -6,6 +6,8 @@ class TraceCleanupPanel(wx.Panel):
     def __init__(self, parent, host, native):
         super().__init__(parent)
         self.host, self.native, self.preview = host, native, None
+        self.visible_rows = []
+        self.layer_names = {}
         if host.dark:
             self.SetBackgroundColour('#222C3A')
             self.SetForegroundColour('#E5EDF8')
@@ -34,6 +36,8 @@ class TraceCleanupPanel(wx.Panel):
         self.layer.Bind(wx.EVT_CHOICE, self.on_layer)
         filter_row.Add(self.layer, 0, wx.RIGHT, 10)
         self.layer_summary = wx.StaticText(self, label='Scan to see counts by copper layer.')
+        self.layer_summary.SetToolTip('For every enabled copper layer: cleanup findings / '
+                                      'track objects scanned. Hidden layers are also analyzed.')
         filter_row.Add(self.layer_summary, 1, wx.ALIGN_CENTER_VERTICAL)
         box.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.table = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
@@ -79,16 +83,25 @@ class TraceCleanupPanel(wx.Panel):
         def done(result):
             self.invalidate()
             self.preview = result
-            old_layer = self.layer.GetStringSelection()
-            choices = ['All copper layers', *result['layers']]
+            old_layer = self.layer_names.get(self.layer.GetStringSelection(),
+                                             self.layer.GetStringSelection())
+            self.layer_names = {('All copper layers'): 'All copper layers'}
+            self.layer_names.update({
+                layer + (' (hidden)' if not result['layer_visibility'][layer] else ''): layer
+                for layer in result['layers']})
+            choices = list(self.layer_names)
             self.layer.SetItems(choices)
-            self.layer.SetStringSelection(old_layer if old_layer in choices else choices[0])
+            selected = next((label for label, layer in self.layer_names.items()
+                             if layer == old_layer), choices[0])
+            self.layer.SetStringSelection(selected)
             self.fill_rows()
             counts = {layer: sum(row['layer'] == layer for row in
                                 result['redundant'] + result['fusions'] + result['dangling'])
                       for layer in result['layers']}
-            self.layer_summary.SetLabel(' | '.join(f'{layer}: {count}'
-                                                    for layer, count in counts.items()))
+            self.layer_summary.SetLabel(' | '.join(
+                f'{layer}: {counts[layer]}/{result["layer_tracks"][layer]}' +
+                (' hidden' if not result['layer_visibility'][layer] else '')
+                for layer in result['layers']))
             self.message(f"{len(result['redundant'])} redundant tracks; "
                          f"{result['removed_length_mm']:.6f} mm extra counted length. "
                          f"{len(result['fusions'])} overlap groups to fuse; "
@@ -104,7 +117,7 @@ class TraceCleanupPanel(wx.Panel):
         self.visible_rows = []
         if self.preview is None:
             return
-        layer = self.layer.GetStringSelection()
+        layer = self.layer_names.get(self.layer.GetStringSelection(), 'All copper layers')
         rows = (self.preview['redundant'] + self.preview['fusions'] +
                 self.preview['dangling'])
         for row in rows:
