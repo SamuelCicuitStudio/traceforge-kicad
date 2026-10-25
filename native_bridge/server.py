@@ -165,6 +165,13 @@ def dispatch(board, operation, payload):
             result.append(fp)
         return result
 
+    if operation.startswith('stitch_'):
+        from signal_path_analyzer.stitching_native import dispatch as stitch_dispatch
+
+        if operation in ('stitch_select', 'stitch_apply', 'stitch_remove'):
+            _highlights.clear(board, board_items(board))
+        return stitch_dispatch(board, operation, payload)
+
     if operation == 'info':
         return {'board': board.GetFileName(), 'protocol': 2,
                 'features': ['transient_highlight', 'native_zoom']}
@@ -279,7 +286,8 @@ class Server:
                     done = threading.Event()
                     state = {'cancelled': False}
                     wx.CallAfter(self.execute, request, state, done)
-                    if not done.wait(5):
+                    timeout = 120 if request.get('operation', '').startswith('stitch_') else 5
+                    if not done.wait(timeout):
                         state['cancelled'] = True
                         reply = {'error': 'PCB Editor did not service the native request in time'}
                     else:

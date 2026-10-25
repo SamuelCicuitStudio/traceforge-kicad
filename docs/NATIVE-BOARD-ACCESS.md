@@ -35,9 +35,19 @@ be brought into view. The explicit Zoom selection button requests a fresh select
 Five camera regression checks cover adjacent chains, shorter/larger chains, explicit
 refitting and manual magnification changes.
 
-These remain visual highlight flags, not a promise that KiCad's internal selection manager will
-treat the highlighted chain as a multi-object edit selection. The helper does not route, delete,
-move or save copper. Failure does not trigger automatic retries or an IPC fallback.
+Signal chain highlights remain visual flags, not a promise that KiCad's selection manager will
+treat the highlighted chain as a multi-object edit selection. Signal commands do not route,
+delete, move or save copper. Failure does not trigger automatic retries or an IPC fallback.
+
+In 0.7, separate `stitch_*` commands support the Via Stitching tab. These commands can
+add/remove through vias and refill zones, using a registered internal ActionPlugin whose
+Run executes inside KiCad's native undo wrapper. Exact generated via UUIDs and settings
+are journaled in a separate stitching JSON file before placement; history remains for
+Undo/Redo recovery. Native groups were rejected after the prototype exposed inconsistent
+membership restoration across regeneration. Stitching selection synchronizes individual
+via flags with the real selection tool via native Refresh. Signal highlighting behavior
+is unchanged. Stitching operations use longer transport deadlines for refill; they do
+not retry or save the PCB automatically. See README for the current placement limits.
 
 For tests, run KiCad's Python with `tools/check_native_bridge.py BOARD.kicad_pcb`.
 The test uses an isolated in-memory board, changes geometry twice without saving, verifies

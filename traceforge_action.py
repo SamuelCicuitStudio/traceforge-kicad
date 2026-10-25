@@ -125,7 +125,7 @@ def main() -> int:
         from signal_path_analyzer import hub_ui
 
         session = Session.open()
-        hub_ui.run(build_tools(session), single_instance_port=PORT)
+        hub_ui.run(build_tools(session), single_instance_port=PORT, stitching=session.native.call)
         print("panel closed normally")
     except Exception:
         traceback.print_exc()

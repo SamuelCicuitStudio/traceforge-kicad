@@ -1,6 +1,6 @@
 # TraceForge - KiCad 10 PCB tools
 
-TraceForge 0.6 uses KiCad 10's embedded `pcbnew` interface for all board access.
+TraceForge 0.7 uses KiCad 10's embedded `pcbnew` interface for all board access.
 The colored wxPython panel runs separately and talks to an authenticated native helper
 inside PCB Editor. KiCad's official IPC API and the kicad-python SDK are not required.
 
@@ -40,9 +40,42 @@ registered. The native toolbar has the same light/dark TraceForge icons.
 
 All board operations run through the native helper on KiCad's GUI thread. The panel accepts
 one operation at a time and does not poll or automatically retry failed operations.
-Zone stitching and parallel routing remain planned features, not implemented routing tools.
-The [tabs and via stitching plan](docs/VIA-STITCHING-PLAN.md) defines a Signals / xSignals
-tab and a separate Via Stitching tab, including regions, via defaults and managed sets.
+The window has **Signals / xSignals** and **Via Stitching** tabs. Switching tabs retains
+their state without reading the board. Parallel routing remains planned.
+
+## Via stitching
+
+Restart PCB Editor after updating the helper, open TraceForge and select **Via Stitching**.
+
+1. Click **Refresh board** (or F5 in this tab), then choose the net.
+2. Choose **Symmetric** (aligned rows) or **Staggered** (alternate rows offset by half
+   the X spacing). Set center-to-center X/Y spacing, offsets and setbacks in mm.
+3. Use the active board via preset, the chosen net's netclass, a listed board preset,
+   or custom diameter/drill. Resolved sizes are shown before placement.
+4. Choose **Whole board**, **Use PCB selection** for a copper zone/non-copper drawing,
+   or draw a rectangle/polygon on the tab's **board overview**. Drag a rectangle;
+   click polygon vertices and press Enter/right-click to finish; Esc cancels.
+5. Click **Preview**. Green locations are accepted, amber locations are skipped and
+   blue locations belong to existing sets. Review rejection reasons, then **Apply stitching**.
+6. Use the set list to select stitching vias, regenerate a set or remove managed vias.
+   Placement, regeneration and removal support KiCad Undo/Redo. Save the PCB normally.
+
+The helper checks board cutouts, via keepouts, filled copper on at least two layers
+(or every copper layer), board minimums and conservative geometry clearance. Refilling
+zones and a native connectivity check follow placement. Refill zones in KiCad before
+previewing if fills are missing/stale. Preview is read-only; Apply revalidates it.
+Large grids are limited to 5,000 candidates and previews have a time budget.
+
+Set ownership and recipes are stored in `<board>.traceforge-stitching.json` using exact
+via UUIDs. Keep this file alongside the PCB, including when copying/renaming a project.
+Undo history records are retained so sets recover after Undo/Redo and save/reopen.
+Ordinary vias are preserved; removal/regeneration also preserve managed vias that were
+manually moved, resized, renetted or locked. Missing metadata prevents managed removal.
+
+Drawing is currently in the overview, not directly on KiCad's canvas. Full custom DRC
+rule evaluation, courtyard exclusion, and copper/text bounding-box optimizations remain
+follow-up work; run KiCad DRC after placement. Board operations/refill can briefly occupy
+the editor's GUI thread. See [implementation notes](docs/VIA-STITCHING-PLAN.md).
 
 ## Chains and timing
 

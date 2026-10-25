@@ -178,7 +178,7 @@ class ShortcutDialog(wx.Dialog):
 class TraceForgePanel(wx.Frame):
     """Floating TraceForge window: timing snapshots refreshed on demand."""
 
-    def __init__(self, tools: Tools):
+    def __init__(self, tools: Tools, stitching=None):
         style = wx.DEFAULT_FRAME_STYLE | wx.FRAME_TOOL_WINDOW
         super().__init__(None, title="TraceForge", size=(1160, 520), style=style)
         self.tools, self.results = tools, []
@@ -204,7 +204,8 @@ class TraceForgePanel(wx.Frame):
         icon = Path(__file__).resolve().parents[1] / "icons" / (
             "traceforge-dark-48.png" if self.dark else "traceforge-light-48.png")
         self.SetIcon(wx.Icon(str(icon), wx.BITMAP_TYPE_PNG))
-        root = wx.Panel(self)
+        self.notebook = wx.Notebook(self)
+        root = wx.Panel(self.notebook)
         if self.dark:
             root.SetBackgroundColour("#222C3A")
             root.SetForegroundColour("#E5EDF8")
@@ -273,12 +274,29 @@ class TraceForgePanel(wx.Frame):
         box.Add(self.status, 0, wx.EXPAND | wx.ALL, 6)
         root.SetSizer(box)
 
+        from .stitching_ui import StitchingPanel
+
+        self.notebook.AddPage(root, 'Signals / xSignals')
+        self.stitching = StitchingPanel(self.notebook, self, stitching)
+        self.notebook.AddPage(self.stitching, 'Via Stitching')
+        if self.dark:
+            self.stitching.SetBackgroundColour('#222C3A')
+            self.stitching.SetForegroundColour('#E5EDF8')
+        frame_box = wx.BoxSizer(wx.VERTICAL)
+        frame_box.Add(self.notebook, 1, wx.EXPAND)
+        self.SetSizer(frame_box)
+        self.SetMinSize((820, 560))
+        self.SetSize((1160, 720))
+
         self.Bind(wx.EVT_HOTKEY, self.on_hotkey)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.register_shortcuts(load_shortcuts())
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 1:
+            self.stitching.on_refresh()
+            return
         if self.busy or self.actions_pending or self.closing:
             return
         self.busy = True
@@ -479,6 +497,47 @@ class TraceForgePanel(wx.Frame):
             self.status.SetForegroundColour(self.colors["routed"])
             self.status.SetLabel(message)
 
+    def submit_stitching(self, fn, done, page):
+        """Use the same worker/guard as Signals; tab switching never submits work."""
+        if self.closing:
+            return
+        if self.busy or self.actions_pending:
+            page.message('Another operation is running. No additional request was queued.',
+                         'warning')
+            return
+        self.actions_pending += 1
+        self.refresh.Disable()
+        page.message('Working in KiCad. Large previews and zone refill can take a moment.',
+                     'routed')
+        page.Enable(False)
+
+        def finished(result, error):
+            self.actions_pending -= 1
+            if self.closing:
+                return
+            page.Enable(True)
+            self.refresh.Enable(not self.busy and not self.actions_pending)
+            if error:
+                page.invalidate()
+                page.message(str(error), 'error')
+            else:
+                try:
+                    done(result)
+                except Exception as exc:
+                    logging.exception('Stitching UI completion failed')
+                    page.message(str(exc), 'error')
+
+        def work():
+            try:
+                result, error = self.api.call(fn, retries=0), None
+            except Exception as exc:
+                logging.exception('Stitching operation failed')
+                result, error = None, exc
+            if not self.closing:
+                wx.CallAfter(finished, result, error)
+
+        self.worker.submit(work)
+
     def on_chain(self, _=None) -> None:
         group, chain = self.selected()
         if group and chain:
@@ -568,6 +627,7 @@ class TraceForgePanel(wx.Frame):
                    "clear": self.on_clear, "write_targets": self.on_write,
                    "export_paths": self.on_export}.get(action)
         if handler:
+            self.notebook.ChangeSelection(0)
             handler()
 
     def on_close(self, event) -> None:
@@ -579,11 +639,11 @@ class TraceForgePanel(wx.Frame):
         event.Skip()
 
 
-def run(tools: Tools, single_instance_port: Optional[int] = None) -> None:
+def run(tools: Tools, single_instance_port: Optional[int] = None, stitching=None) -> None:
     app = wx.App(False)
     if kicad_dark_theme() and hasattr(app, "MSWEnableDarkMode"):
         app.MSWEnableDarkMode(1)  # wxWidgets 3.3 DarkMode_Always, matching KiCad's dark theme
-    panel = TraceForgePanel(tools)
+    panel = TraceForgePanel(tools, stitching=stitching)
     panel.Show()
     listener = None
     if single_instance_port is not None:

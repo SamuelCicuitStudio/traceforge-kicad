@@ -3,14 +3,17 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pcbnew
 import wx
 
-from .server import start
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from .server import start  # noqa: E402
 
 
 def launch(script):
@@ -74,7 +77,21 @@ class MonitorLauncher(NativeLauncher):
                          'signal-timing-monitor')
 
 
-for _plugin in (TraceForgeLauncher(), HighlightLauncher(), ExportLauncher(), MonitorLauncher()):
+class StitchingCommit(pcbnew.ActionPlugin):
+    def defaults(self):
+        self.name = 'TraceForge: Apply Stitching Changes'
+        self.category = 'TraceForge'
+        self.description = 'Internal undoable stitching transaction; use the Via Stitching tab'
+        self.show_toolbar_button = False
+
+    def Run(self):
+        from signal_path_analyzer.stitching_native import commit_pending
+
+        commit_pending()
+
+
+for _plugin in (TraceForgeLauncher(), HighlightLauncher(), ExportLauncher(), MonitorLauncher(),
+                StitchingCommit()):
     _plugin.register()
 
 wx.CallAfter(start)

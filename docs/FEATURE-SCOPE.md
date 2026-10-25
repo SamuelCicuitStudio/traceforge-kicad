@@ -11,7 +11,8 @@ chain editing, DRC targets and exports together in Signals. The stitching tab ow
 regions, via settings, preview and management of generated stitching sets. Tab changes
 preserve state and do not trigger board refreshes. See the implementation sequence,
 native capability proof points and acceptance checks in
-[VIA-STITCHING-PLAN.md](VIA-STITCHING-PLAN.md). Tabs and stitching are planned, not yet implemented.
+[VIA-STITCHING-PLAN.md](VIA-STITCHING-PLAN.md). Version 0.7 implements both tabs and
+initial stitching; that document identifies differences from the full intended scope.
 
 ## Signal Path Analyzer
 
@@ -40,6 +41,8 @@ This feature is not a generic via-array command.
 6. Confirm all vias as one undoable KiCad commit, then refill affected zones.
 7. Keep generated vias in identifiable, persistent stitching sets. Select, remove
    or regenerate one set or all managed sets while preserving ordinary routing vias.
+8. Choose symmetric aligned rows or staggered alternate rows; preserve grid origin
+   and row parity when regenerating a region.
 
 ### Placement rules
 
