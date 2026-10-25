@@ -1,24 +1,22 @@
-# TraceForge 0.9.7 - KiCad 10 preview
+# TraceForge 0.9.8
 
-TraceForge combines signal-path/timing analysis, managed via stitching, RF trace
-fencing and BGA fanout in one native pcbnew-based panel for Windows/KiCad 10.
+Adds **Dim unrelated nets** in the Signals tab. Enable it to keep the selected
+chain or differential pair bright while KiCad dims unrelated copper. Works with
+chains crossing series resistors/capacitors and endpoint path detection. Native
+net focus includes all branches of each highlighted net. Clear, Esc or a changed
+native selection releases focus; panning and zooming retain it.
 
-- Guided first/second endpoint picking and detection through series resistors and
-  capacitors across different net names, with differential-pair review.
-- Change-aware tab refresh without continuous polling or automatic retry loops.
-- Path highlights retained while panning and zooming.
-- Symmetric/staggered stitching, trace-following fences on both sides, editable
-  net inputs and RF spacing guidance.
-- BGA suggestions, preview, apply and managed removal for through-via breakouts.
-- Public repository cleanup, illustrated README and install/update instructions.
-  Removed obsolete web/Tk dashboards; the Signals tab is the timing interface.
-- Installer can safely switch an existing junction with `-ReplaceExisting`.
+Rerun the installer with PCB Editor closed, then restart PCB Editor and reopen
+TraceForge. The installer configures an unused Ctrl+Alt+Shift+F12 shortcut for
+KiCad's Highlight Net (selected nets) action when it has no binding. It preserves
+custom bindings and backs up a changed user.hotkeys file. Shortcut conflicts are
+reported instead of overwritten. Clear Net Highlighting must also have a shortcut.
+The installer now respects KICAD_CONFIG_HOME when set.
 
-Extract the Windows ZIP to a permanent folder, close PCB Editor and run
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\install_native_bridge.ps1`.
-Restart PCB Editor, open a saved board and launch TraceForge from its toolbar.
-Use `-ReplaceExisting` when changing the installation folder.
+Verified on a disposable PCB Editor with repeated visual on/off cycles, switching
+nets and Clear. Native geometry/ownership checks cover multi-net differential
+chains. No global keyboard input or continuous board/selection polling is used.
 
-Keep generated ownership sidecars with the PCB. Preview placements and run KiCad
-DRC. Microvias, full BGA escape routing and live parallel multirouting are not
-implemented. This is a pre-release for review and testing.
+Supports KiCad 10 on Windows. Existing signal timing, via stitching, RF fencing
+and through-via BGA fanout features remain available. Preview generated geometry,
+keep ownership sidecars with the board, and run KiCad DRC before manufacturing.

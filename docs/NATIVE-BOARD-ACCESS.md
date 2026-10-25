@@ -35,6 +35,16 @@ pressed. Cleanup preserves the user's new native selection. It does not poll.
 Automatic zoom retains magnification for nearby or shorter chains after the initial
 fit and zooms out when a larger chain needs room. Explicit Zoom selection refits.
 Signal highlights are visual flags, not guaranteed editable multi-object selections.
+
+The optional **Dim unrelated nets** mode also invokes KiCad's native renderer
+highlight for all selected copper nets. Board highlight flags alone do not update
+the canvas renderer, so the helper uses targeted wx key events for the configured
+`pcbnew.EditorControl.highlightNetSelection` and `clearHighlight` actions. Events
+target the visible drawing canvas; no global key simulation, internal action-ID
+guessing, or selection polling is used. The installer supplies an unused default
+shortcut for an unbound selection action, preserving existing custom bindings.
+Restart PCB Editor after installer changes. Clearing releases the native focus.
+Net focus includes same-net branches outside the chosen endpoint path.
 Lengths and delays are aggregate estimates, not replicas of KiCad's point-to-point tuner.
 
 ## Via stitching

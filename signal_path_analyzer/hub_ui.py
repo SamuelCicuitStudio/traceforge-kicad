@@ -272,6 +272,12 @@ class TraceForgePanel(wx.Frame):
         detect.Enable(endpoints is not None)
         detect.Bind(wx.EVT_BUTTON, self.on_endpoints)
         box.Add(detect, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        self.dim_nets = wx.CheckBox(root, label='Dim unrelated nets')
+        self.dim_nets.Enable(stitching is not None)
+        self.dim_nets.SetToolTip('Use native net highlighting for all nets in the selected '
+                                'chain/pair. Other branches on those nets also stay bright.')
+        self.dim_nets.Bind(wx.EVT_CHECKBOX, self.on_dim_nets)
+        box.Add(self.dim_nets, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
         legend = wx.BoxSizer(wx.HORIZONTAL)
         self.summary = {}
         for key, label in (("ok", "OK"), ("warning", "Warning"), ("error", "Error"),
@@ -320,6 +326,20 @@ class TraceForgePanel(wx.Frame):
         event.Skip()
         self.schedule_auto_refresh()
 
+    def on_dim_nets(self, event):
+        enabled = self.dim_nets.GetValue()
+        if self.busy or self.actions_pending or self.closing:
+            self.dim_nets.SetValue(not enabled)
+            return
+        def work():
+            try:
+                self.native_call('highlight_dimming', enabled=enabled)
+            except Exception:
+                wx.CallAfter(self.dim_nets.SetValue, not enabled)
+                raise
+            return 'Dim unrelated nets ' + ('enabled.' if enabled else 'disabled.')
+        self._run(work)
+
     def on_activate(self, event):
         event.Skip()
         if event.GetActive():
@@ -353,6 +373,8 @@ class TraceForgePanel(wx.Frame):
                     self.snapshot.SetLabel('Automatic change check unavailable. Use Refresh (F5).')
                 return  # No automatic retry after a busy/closed/old helper.
             self.resume_auto_check()
+            if 'dim_enabled' in state:
+                self.dim_nets.SetValue(state['dim_enabled'])
             if (self.notebook.GetSelection() != tab or self.busy or self.actions_pending):
                 return
             if self.refresh_policy.needs_refresh(tab, state):

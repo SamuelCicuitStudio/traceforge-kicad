@@ -84,6 +84,24 @@ and zooming; changing the native selection or pressing Esc clears them. Green,
 amber, red, blue and gray states distinguish matched, warning, error, routed and
 pending results. Signals refresh preserves scrolling and expanded groups.
 
+Enable **Dim unrelated nets** in Signals to keep the chain's nets bright while
+KiCad dims unrelated copper. This also applies to endpoint detection and both
+differential legs. Other branches belonging to those same nets remain bright.
+Clear, Esc or a changed native selection releases the effect; panning/zooming keeps it.
+
+![Native net focus: RF trace bright while surrounding copper is dimmed](docs/screenshots/net-focus.png)
+
+*Actual PCB Editor result on a synthetic board with native net focus enabled.*
+
+For this option, rerun the installer with PCB Editor closed, then restart it.
+The installer assigns **Ctrl+Alt+Shift+F12** to KiCad's **Highlight Net (selected
+nets)** action only if it is unassigned and that shortcut is unused. Existing
+custom bindings are preserved; a changed hotkey file is backed up as
+`user.hotkeys.traceforge.bak`. A conflict is reported instead of overwritten.
+The native **Clear Net Highlighting** action also needs its shortcut enabled.
+TraceForge sends these actions directly to KiCad's visible canvas, without global
+keyboard input or a polling loop. The checkbox is optional and off initially.
+
 See [endpoint detection](docs/SELECTED-ENDPOINTS.md) for details. Saved chain timing
 sums whole-net copper, including branches; the endpoint preview follows one routed
 path. Neither is an exact reproduction of KiCad's point-to-point tuner. Timing

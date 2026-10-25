@@ -28,8 +28,16 @@ class TransientHighlight:
         self.board = None
         self.previous = {}
         self.selection = set()
+        self.dim = False
+        self.dim_active = False
 
     def clear(self, board, items, restore_selection=True):
+        if self.dim_active and self.board == board_path(board):
+            from .net_focus import run
+
+            run('clearHighlight')
+            board.ResetNetHighLight()
+        self.dim_active = False
         if self.board == board_path(board):
             for item in items:
                 old = self.previous.get(item.m_Uuid.AsString())
@@ -60,7 +68,51 @@ class TransientHighlight:
                 item.SetBrightened()
                 chosen.append(item)
         self.selection = {item.m_Uuid.AsString() for item in items if item.IsSelected()}
+        self.apply_dimming(board, chosen)
         return chosen
+
+    def apply_dimming(self, board, chosen):
+        codes = sorted({it.GetNetCode() for it in chosen if hasattr(it, 'GetNetCode') and
+                        not isinstance(it, pcbnew.FOOTPRINT) and it.GetNetCode() > 0})
+        if self.dim and codes:
+            from .net_focus import run, shortcut
+
+            shortcut('highlightNet')
+            shortcut('clearHighlight')
+            board.ResetNetHighLight()
+            for index, code in enumerate(codes):
+                board.SetHighLightNet(code, index > 0)
+            board.HighLightON()
+            # Restrict the action to this chain, even if unrelated user items were
+            # selected beforehand. Restore those flags after the renderer has its nets.
+            live = board_items(board)
+            selected = {it.m_Uuid.AsString() for it in live if it.IsSelected()}
+            wanted = {it.m_Uuid.AsString() for it in chosen if hasattr(it, 'GetNetCode') and
+                      not isinstance(it, pcbnew.FOOTPRINT) and it.GetNetCode() > 0}
+            for item in live:
+                if item.m_Uuid.AsString() in wanted:
+                    item.SetSelected()
+                else:
+                    item.ClearSelected()
+            try:
+                pcbnew.Refresh()  # Synchronize copper flags with the native selection tool.
+                if not run('highlightNet'):
+                    board.ResetNetHighLight()
+                    raise ValueError('KiCad did not handle the native Highlight Selection action.')
+            finally:
+                for item in live:
+                    if item.m_Uuid.AsString() in selected:
+                        item.SetSelected()
+                    else:
+                        item.ClearSelected()
+                pcbnew.Refresh()
+            self.dim_active = True
+        elif self.dim_active:
+            from .net_focus import run
+
+            run('clearHighlight')
+            board.ResetNetHighLight()
+            self.dim_active = False
 
 
 _highlights = TransientHighlight()
@@ -263,6 +315,7 @@ def dispatch(board, operation, payload):
         from .revision import signature
 
         return dict(board=board_path(board), revision=signature(board),
+                    dim_enabled=_highlights.dim,
                     selection=sorted(it.m_Uuid.AsString() for it in pcbnew.GetCurrentSelection()))
     if operation == 'selection':
         selected = {it.m_Uuid.AsString(): it for it in pcbnew.GetCurrentSelection()
@@ -272,6 +325,22 @@ def dispatch(board, operation, payload):
                 dict(net=it.GetNetname().replace('{slash}', '/'))
                 for it in selected.values() if hasattr(it, 'GetNetname') or
                 isinstance(it, pcbnew.FOOTPRINT)]
+    if operation == 'highlight_dimming':
+        if payload.get('enabled', False):
+            from .net_focus import shortcut
+
+            shortcut('highlightNet')
+            shortcut('clearHighlight')
+        old = _highlights.dim
+        _highlights.dim = bool(payload.get('enabled', False))
+        chosen = [it for it in items() if it.m_Uuid.AsString() in _highlights.previous]
+        try:
+            _highlights.apply_dimming(board, chosen)
+        except Exception:
+            _highlights.dim = old
+            raise
+        pcbnew.Refresh()
+        return dict(enabled=_highlights.dim, active=_highlights.dim_active)
     if operation in ('clear', 'highlight', 'zoom'):
         live = items()
         if operation == 'clear':
