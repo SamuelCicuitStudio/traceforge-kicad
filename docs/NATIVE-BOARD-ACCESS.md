@@ -36,7 +36,7 @@ Automatic zoom retains magnification for nearby or shorter chains after the init
 fit and zooms out when a larger chain needs room. Explicit Zoom selection refits.
 Signal highlights are visual flags, not guaranteed editable multi-object selections.
 
-The optional **Dim unrelated nets** mode also invokes KiCad's native renderer
+Every signal-path highlight automatically invokes KiCad's native renderer
 highlight for all selected copper nets. Board highlight flags alone do not update
 the canvas renderer, so the helper uses targeted wx key events for the configured
 `pcbnew.EditorControl.highlightNetSelection` and `clearHighlight` actions. Events

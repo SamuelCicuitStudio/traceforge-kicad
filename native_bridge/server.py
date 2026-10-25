@@ -28,7 +28,7 @@ class TransientHighlight:
         self.board = None
         self.previous = {}
         self.selection = set()
-        self.dim = False
+        self.dim = True
         self.dim_active = False
 
     def clear(self, board, items, restore_selection=True):
