@@ -300,6 +300,10 @@ class TraceForgePanel(wx.Frame):
 
         self.trace_fence = TraceFencePanel(self.notebook, self, stitching)
         self.notebook.AddPage(self.trace_fence, 'Via Fencing')
+        from .trace_cleanup_ui import TraceCleanupPanel
+
+        self.trace_cleanup = TraceCleanupPanel(self.notebook, self, stitching)
+        self.notebook.AddPage(self.trace_cleanup, 'Trace Cleanup')
         if self.dark:
             self.stitching.SetBackgroundColour('#222C3A')
             self.stitching.SetForegroundColour('#E5EDF8')
@@ -341,7 +345,7 @@ class TraceForgePanel(wx.Frame):
             return
         self.auto_check_deferred = False
         tab = self.notebook.GetSelection()
-        page = (None, self.stitching, self.fanout, self.trace_fence)[tab]
+        page = (None, self.stitching, self.fanout, self.trace_fence, self.trace_cleanup)[tab]
         if page and getattr(page, 'canvas', None) and getattr(page.canvas, 'mode', None):
             return  # Never interrupt drawing a region.
         self.change_check_pending = True
@@ -386,6 +390,9 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 4:
+            self.trace_cleanup.on_refresh()
+            return
         if self.notebook.GetSelection() == 3:
             self.trace_fence.on_refresh()
             return

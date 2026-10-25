@@ -32,6 +32,8 @@ class TransientHighlight:
         self.dim_active = False
 
     def clear(self, board, items, restore_selection=True):
+        native_selection = ({it.m_Uuid.AsString() for it in pcbnew.GetCurrentSelection()}
+                            if not restore_selection else set())
         if self.dim_active and self.board == board_path(board):
             from .net_focus import run
 
@@ -47,6 +49,10 @@ class TransientHighlight:
                             item.SetSelected()
                         else:
                             item.ClearSelected()
+                    elif item.m_Uuid.AsString() not in native_selection:
+                        # Direct SetSelected flags on pads can outlive KiCad's native
+                        # selection container. Release our stale flags, keep new picks.
+                        item.ClearSelected()
                     if old[1]:
                         item.SetBrightened()
                     else:
@@ -267,6 +273,18 @@ def dispatch(board, operation, payload):
         result['highlighted'] = len(chosen)
         result['zoomed'] = zoom_to_items(board, chosen, force=True)
         return result
+
+    if operation.startswith('cleanup_'):
+        from signal_path_analyzer import trace_cleanup_native
+
+        if operation == 'cleanup_highlight':
+            identities = trace_cleanup_native.validate(board, payload)
+            chosen = _highlights.apply(board, board_items(board), set(), set(), identities)
+            pcbnew.Refresh()
+            return dict(highlighted=len(chosen), zoomed=zoom_to_items(board, chosen))
+        if operation == 'cleanup_remove':
+            _highlights.clear(board, board_items(board))
+        return trace_cleanup_native.dispatch(board, operation, payload)
 
     if operation.startswith('fanout_'):
         from signal_path_analyzer.fanout_native import dispatch as fanout_dispatch

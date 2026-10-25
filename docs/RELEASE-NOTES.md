@@ -1,14 +1,17 @@
-# TraceForge 0.9.9
+# TraceForge 0.10.0
 
-Native net focus now applies automatically whenever TraceForge highlights a signal
-path or differential pair. Unrelated copper dims without enabling an option.
-The Signals checkbox has been removed. Clear, Esc or a changed native selection
-releases focus; panning and zooming retain it. All branches on highlighted nets
-remain bright.
+- New **Trace Cleanup** tab: scan the whole board or an exact net for duplicate
+  tracks, fully covered straight tracks and dangling endpoints.
+- Preview and highlight findings before removing checked tracks with native
+  KiCad Undo. Redundant tracks start checked; dangling tracks start unchecked
+  and require review because they may be intentional or unfinished routing.
+- **Recheck length matching** returns to Signals and refreshes the measurements.
+- Preserve partial overlaps, vias, locked/grouped items and unassigned copper.
+  Geometry changes invalidate removal previews; dangling connectivity is checked
+  again before deletion. No periodic polling or automatic board saving.
+- Fix stale pad-selection flags after switching paths or making another PCB
+  selection. Newly selected native items are preserved; pan/zoom retains focus.
 
 Close all KiCad windows, including KiCad Manager, run
-`tools/install_native_bridge.ps1`, then restart PCB Editor.
-The installer configures the required native highlight shortcut while preserving
-existing custom bindings. This step is required when updating from older versions.
-
-Supports KiCad 10 on Windows.
+`tools/install_native_bridge.ps1`, then reopen PCB Editor and TraceForge.
+Supports KiCad 10 on Windows. Run DRC after reviewing cleanup changes.

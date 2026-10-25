@@ -1,8 +1,8 @@
 # TraceForge
 
-**Signal paths, via stitching, RF fencing and BGA fanout for KiCad 10 on Windows.**
+**Signal paths, trace cleanup, via stitching, RF fencing and BGA fanout for KiCad 10 on Windows.**
 
-TraceForge puts four PCB tools in one colored panel. It reads the open board through
+TraceForge puts five PCB tools in one colored panel. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. No official
 IPC API setup, API token, or pip runtime dependencies are needed.
 
@@ -63,6 +63,8 @@ folder while the junction exists leaves a broken plugin link.
 | **Via Stitching** | Preview symmetric or staggered via grids in a whole board, selected zone, rectangle or polygon; select, regenerate or remove managed sets. |
 | **BGA Fanout** | Analyze a selected BGA, suggest geometry-checked settings and preview dogbone or explicitly confirmed via-in-pad breakouts. |
 | **Via Fencing** | Place managed ground-via rows on either or both sides of a routed RF trace; control copper gap, spacing and via size. |
+
+| **Trace Cleanup** | Preview redundant copper and native dangling-end findings, remove reviewed tracks with Undo, then recheck Signals. |
 
 ### Signals and path detection
 
@@ -150,6 +152,19 @@ fanout can be removed while preserving manually edited routing.
 Through vias are supported. Via-in-pad requires explicit fabrication confirmation.
 Microvias, HDI layer assignment and full escape routing are not implemented.
 See [BGA fanout](docs/BGA-FANOUT.md).
+
+### Trace cleanup
+
+![TraceForge Trace Cleanup: checked duplicate copper and an unchecked dangling track](docs/screenshots/trace-cleanup.png)
+
+*Actual fifth-tab preview on a synthetic board; no board edits were applied.*
+
+Scan the whole board or an exact net to find duplicate tracks, fully covered
+collinear tracks and native dangling endpoints. Preview rows highlight in PCB
+Editor. Redundant copper starts checked; dangling tracks require review and start
+unchecked. Removal is undoable. **Recheck length matching** returns to Signals and
+refreshes the measurements. Partial overlaps, vias, locked and grouped copper are
+preserved. See [trace cleanup](docs/TRACE-CLEANUP.md).
 
 ## Keep project metadata
 

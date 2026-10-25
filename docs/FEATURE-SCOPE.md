@@ -7,7 +7,9 @@ prevents similarly named PCB features from being implemented with the wrong mode
 
 The layout is one window with **Signals / xSignals** as the first tab,
 **Via Stitching** as the second, **BGA Fanout** as the third, and **Via Fencing**
-as the fourth. Keep net/chain analysis,
+as the fourth, with **Trace Cleanup** as the fifth. Cleanup previews redundant
+copper and native dangling endpoints, with reviewed undoable removal and a return
+to Signals for length checks. See [trace cleanup](TRACE-CLEANUP.md). Keep net/chain analysis,
 timing, highlighting, chain editing, DRC targets and exports together in Signals. The stitching tab owns
 regions, via settings, preview and management of generated stitching sets. Tab changes
 preserve state; first use loads data, and later visits refresh only when board data
