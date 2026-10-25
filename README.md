@@ -65,6 +65,11 @@ folder while the junction exists leaves a broken plugin link.
 
 ### Signals and path detection
 
+![TraceForge Signals / xSignals: timing, differential-pair skew and chain lengths](docs/screenshots/signals-xsignals.png)
+
+*Synthetic example chains evaluated by TraceForge's timing engine. The sample
+6 ps/mm propagation profile illustrates the interface, not manufacturing guidance.*
+
 Select two pads, vias, tracks or components, then use **Detect path between 2 selected
 PCB items**. Alternatively choose **Pick first, then second** and click each endpoint
 in PCB Editor. The Chain Editor supports the same guided workflow.
@@ -110,6 +115,11 @@ lateral copper gap. Inspect the reported largest gap after skipped locations.
 See [RF fencing](docs/VIA-FENCING.md).
 
 ### BGA fanout
+
+![TraceForge BGA Fanout: dogbone breakout preview for a 4 by 4 ball grid](docs/screenshots/bga-fanout.png)
+
+*Native geometry-checked preview on a synthetic 4 by 4, 1 mm-pitch BGA: 16 accepted
+pad-to-via breakouts. This preview has not been applied to a user board.*
 
 Select a BGA footprint and open **BGA Fanout**. Review detected pitch, fabrication
 limits, offsets and filters. **Suggest settings** evaluates candidates without
