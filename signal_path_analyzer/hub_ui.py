@@ -260,7 +260,7 @@ class TraceForgePanel(wx.Frame):
 
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
-        detect = wx.Button(root, label='Detect between selected vias / pads...')
+        detect = wx.Button(root, label='Detect path between 2 selected PCB items...')
         detect.Enable(endpoints is not None)
         detect.Bind(wx.EVT_BUTTON, self.on_endpoints)
         box.Add(detect, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)

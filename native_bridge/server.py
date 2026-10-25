@@ -170,6 +170,8 @@ def dispatch(board, operation, payload):
         from signal_path_analyzer.endpoint_path_native import detect
 
         result = detect(board, payload)
+        if 'choices' in result:
+            return result
         chosen = _highlights.apply(board, board_items(board), set(), set(), set(result['ids']))
         pcbnew.Refresh()
         result['highlighted'] = len(chosen)

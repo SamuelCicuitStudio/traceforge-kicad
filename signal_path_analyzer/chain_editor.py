@@ -44,11 +44,12 @@ def chains_from_config(config: Optional[Config]) -> list[FoundChain]:
 class ChainEditor(wx.Dialog):
     def __init__(self, parent: Optional[wx.Window], config: Optional[Config],
                  find: Callable[[list[str], list[str], float, bool], list[FoundChain]],
-                 selection: Callable[[], list[str]], detect_selected=None):
+                 selection: Callable[[], list[str]], detect_selected=None, selection_items=None):
         super().__init__(parent, title="TraceForge · Signal Chain Editor", size=(1100, 720),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.find, self.selection = find, selection
         self.detect_selected = detect_selected
+        self.selection_items = selection_items
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='chain-editor')
         self.working, self.closed = False, False
         self.chains: list[FoundChain] = chains_from_config(config)
@@ -70,6 +71,7 @@ class ChainEditor(wx.Dialog):
         opts = wx.BoxSizer(wx.HORIZONTAL)
         self.ohms = wx.SpinCtrlDouble(self, min=0, max=1000, initial=100, inc=1, size=(80, -1))
         self.caps = wx.CheckBox(self, label="through AC-coupling capacitors")
+        self.caps.SetValue(True)
         find_btn = wx.Button(self, label="Find chains")
         find_btn.Bind(wx.EVT_BUTTON, self.on_find)
         opts.Add(wx.StaticText(self, label="Series resistors up to (Ω)"), 0,
@@ -80,12 +82,12 @@ class ChainEditor(wx.Dialog):
         self.include_pair = wx.CheckBox(self, label='Include differential partner')
         self.include_pair.SetValue(True)
         opts.Add(self.include_pair, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 12)
-        endpoint_button = wx.Button(self, label='Detect path from 2 selected pads / vias')
+        endpoint_button = wx.Button(self, label='Detect path from 2 selected PCB items')
         endpoint_button.Enable(detect_selected is not None)
         endpoint_button.Bind(wx.EVT_BUTTON, lambda event: self.detect_endpoints())
         self.path_preview = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY,
                                        size=(-1, 75))
-        self.path_preview.ChangeValue('Select two pads/vias in PCB Editor, then click '
+        self.path_preview.ChangeValue('Select two pads, vias, tracks or components, then click '
                                      'Use KiCad selection or Detect path. For component searches, '
                                      'pick source and destination footprints separately.')
 
@@ -180,8 +182,14 @@ class ChainEditor(wx.Dialog):
         # do not silently replace the text field with an empty string in that case.
         options = self.endpoint_options()
         def work():
-            refs = self.selection()
-            if refs:
+            if self.selection_items:
+                items = self.selection_items()
+                if len(items) == 2 and self.detect_selected:
+                    return None, self.detect_selected(**options)
+                refs = [item['ref'] for item in items if 'ref' in item]
+            else:
+                refs = self.selection()
+            if refs and (len(set(refs)) != 2 or not self.detect_selected):
                 return refs, None
             if self.detect_selected:
                 return None, self.detect_selected(**options)
@@ -207,6 +215,20 @@ class ChainEditor(wx.Dialog):
             self.task(lambda: self.detect_selected(**options), self.accept_endpoints)
 
     def accept_endpoints(self, result):
+        if 'choices' in result:
+            choices = result['choices']
+            with wx.SingleChoiceDialog(self, 'Several signal paths connect these components. '
+                                       'Choose an endpoint pair (first 128 shown).',
+                                       'Choose signal path',
+                                       [c['label'] for c in choices]) as dialog:
+                if dialog.ShowModal() != wx.ID_OK:
+                    self.status.SetLabel('Path choice cancelled; no chains added.')
+                    return
+                endpoints = choices[dialog.GetSelection()]['endpoints']
+            options = self.endpoint_options()
+            self.task(lambda: self.detect_selected(endpoints=endpoints, **options),
+                      self.accept_endpoints)
+            return
         paths = [p for p in (result['primary'], result['partner']) if p]
         details = []
         for path in paths:
@@ -368,8 +390,9 @@ class ChainEditor(wx.Dialog):
 
 
 def edit_chains(parent: Optional[wx.Window], config: Optional[Config], find, selection,
-                save: Callable[[Config], str], detect_selected=None) -> str:
-    dlg = ChainEditor(parent, config, find, selection, detect_selected=detect_selected)
+                save: Callable[[Config], str], detect_selected=None, selection_items=None) -> str:
+    dlg = ChainEditor(parent, config, find, selection, detect_selected=detect_selected,
+                      selection_items=selection_items)
     try:
         if dlg.ShowModal() == wx.ID_OK:
             return save(dlg.result())

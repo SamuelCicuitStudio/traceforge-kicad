@@ -33,8 +33,10 @@ def mate_name(net):
 
 def endpoint(item):
     p = item.GetPosition()
+    kind = 'Via' if isinstance(item, pcbnew.PCB_VIA) else 'Track'
     label = (f'{item.GetParentFootprint().GetReference()}.{item.GetNumber()}'
-             if isinstance(item, pcbnew.PAD) else f'Via at {p.x / 1e6:.3f}, {p.y / 1e6:.3f} mm')
+             if isinstance(item, pcbnew.PAD) else
+             f'{kind} at {p.x / 1e6:.3f}, {p.y / 1e6:.3f} mm')
     return dict(id=identity(item), net=net_name(item), label=label,
                 position=[p.x / 1e6, p.y / 1e6])
 
@@ -89,8 +91,10 @@ class RoutedGraph:
             if len(nets) > 500:
                 raise ValueError('Too many connected passive nets; reduce the resistor limit.')
         if net_name(end) not in nets:
-            raise ValueError('No allowed passive/net path connects the selected endpoints. '
-                             'Check resistor limit and AC-coupling capacitor setting.')
+            raise ValueError('No path connects these endpoints with the current settings. '
+                             'Enable AC-coupling capacitor traversal or increase the resistor '
+                             'limit if the signal crosses those parts. IC internals and '
+                             'unrouted gaps cannot be crossed.')
         layers = list(start.GetBoard().GetEnabledLayers().CuStack())
         for net in nets:
             for item in self.by_net[net]:
@@ -143,8 +147,10 @@ class RoutedGraph:
             raise ValueError('This signal-path tool excludes power/ground endpoints.')
         self.prepare(start, end)
         source, target = identity(start), identity(end)
-        distances, previous = {source: 0}, {}
-        pending = [(0, source)]
+        initial = (start.GetLength() / 1e6 if isinstance(start, pcbnew.PCB_TRACK) and
+                   not isinstance(start, pcbnew.PCB_VIA) else 0)
+        distances, previous = {source: initial}, {}
+        pending = [(initial, source)]
         while pending:
             self.check_time()
             distance, key = heapq.heappop(pending)
@@ -194,10 +200,41 @@ def detect(board, payload):
         selected = [graph.all_items.get(k) for k in payload['endpoints']]
     else:
         selected = list(pcbnew.GetCurrentSelection())
-    if (len(selected) != 2 or any(not isinstance(t, (pcbnew.PCB_VIA, pcbnew.PAD))
-                                for t in selected) or
+    supported = (pcbnew.PCB_TRACK, pcbnew.PAD, pcbnew.FOOTPRINT)
+    if (len(selected) != 2 or any(not isinstance(t, supported) for t in selected) or
             identity(selected[0]) == identity(selected[1])):
-        raise ValueError('Select exactly two vias or pads on the same signal path in PCB Editor.')
+        raise ValueError('Select exactly two pads, vias, tracks/arcs or footprints as endpoints '
+                         'in PCB Editor. Select endpoints, not every item along the route.')
+    if any(isinstance(t, pcbnew.FOOTPRINT) for t in selected):
+        candidates = [list(t.Pads()) if isinstance(t, pcbnew.FOOTPRINT) else [t]
+                      for t in selected]
+        choices = []
+        for a in candidates[0]:
+            if not net_name(a) or RAIL.search(net_name(a)):
+                continue
+            reachable, queue = {net_name(a)}, deque([net_name(a)])
+            while queue:
+                graph.check_time()
+                for name in graph.net_bridges[queue.popleft()]:
+                    if name not in reachable:
+                        reachable.add(name)
+                        queue.append(name)
+            for b in candidates[1]:
+                if identity(a) != identity(b) and net_name(b) in reachable:
+                    choices.append(dict(endpoints=[identity(a), identity(b)],
+                                        label=f"{endpoint(a)['label']} [{net_name(a)}] -> "
+                                              f"{endpoint(b)['label']} [{net_name(b)}]"))
+                    if len(choices) >= 128:
+                        break
+            if len(choices) >= 128:
+                break
+        if not choices:
+            raise ValueError('No signal-net path joins the selected components with these '
+                             'resistor/capacitor settings. Select individual pads to narrow it.')
+        choices.sort(key=lambda choice: choice['label'])
+        if len(choices) > 1:
+            return dict(choices=choices)
+        selected = [graph.all_items[k] for k in choices[0]['endpoints']]
     primary = graph.route(*selected)
     partner, note = None, ''
     if payload.get('include_pair', True):

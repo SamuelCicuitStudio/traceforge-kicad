@@ -4,11 +4,11 @@ import wx
 
 class EndpointDialog(wx.Dialog):
     def __init__(self, host, service):
-        super().__init__(host, title='Detect between selected vias / pads', size=(760, 620),
+        super().__init__(host, title='Detect between selected PCB items', size=(760, 620),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.host, self.service, self.result, self.endpoints = host, service, None, None
         box = wx.BoxSizer(wx.VERTICAL)
-        intro = wx.StaticText(self, label='In PCB Editor select two vias or pads on ONE signal.\n'
+        intro = wx.StaticText(self, label='Select two pads, vias, tracks/arcs or components.\n'
                               'Detect follows connected tracks and allowed series parts, then '
                               'highlights and fits the path.')
         box.Add(intro, 0, wx.ALL, 10)
@@ -96,6 +96,17 @@ class EndpointDialog(wx.Dialog):
         self.host.submit_stitching(lambda: self.service.detect(**payload), self.accept, self)
 
     def accept(self, result):
+        if 'choices' in result:
+            choices = result['choices']
+            with wx.SingleChoiceDialog(self, 'Choose the signal to trace (first 128 shown).',
+                                       'Choose endpoint path',
+                                       [c['label'] for c in choices]) as dialog:
+                if dialog.ShowModal() != wx.ID_OK:
+                    self.message('Path choice cancelled; no chains added.')
+                    return
+                self.endpoints = choices[dialog.GetSelection()]['endpoints']
+            self.detect()
+            return
         self.result = result
         self.endpoints = [e['id'] for e in result['primary']['endpoints']]
         lines = []

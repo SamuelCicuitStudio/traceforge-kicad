@@ -99,7 +99,8 @@ def build_tools(session: Session):
             return [i['ref'] for i in native.call('selection') if 'ref' in i]
 
         return edit_chains(parent, session.config, session.find_between, refs, apply,
-                           detect_selected=EndpointService(session).detect)
+                           detect_selected=EndpointService(session).detect,
+                           selection_items=lambda: native.call('selection'))
 
     clear = lambda: native.call('clear')  # noqa: E731
     return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,

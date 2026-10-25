@@ -50,7 +50,8 @@ The native toolbar supports light and dark TraceForge icons.
 - Highlight group, clear highlight, explicit zoom, CSV export and DRC target generation.
 - Signal Chain Editor: find paths between ICs/connectors through series parts, review
   groups and timing limits, and save the board-specific configuration.
-- Select two vias/pads, then **Detect between selected vias / pads** to highlight and fit
+- Select two pads, vias, tracks or components, then **Detect path between 2 selected PCB items**
+  to highlight and fit
   the routed copper between them. Review crossed resistors/capacitors, differential
   partners and existing-chain status before adding. See [selected endpoints](docs/SELECTED-ENDPOINTS.md).
 - Via Fencing includes an **RF spacing helper** using frequency and saved stackup

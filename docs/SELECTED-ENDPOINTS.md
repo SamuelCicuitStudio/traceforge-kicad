@@ -1,18 +1,20 @@
-# Detect a signal path from selected vias or pads
+# Detect a signal path from selected PCB items
 
-You can also use the **Signal Chain Editor** directly: select two pads/vias in PCB
-Editor, then click either **Use KiCad selection** button or **Detect path from 2
-selected pads / vias**. The editor previews the highlighted path and crossed parts,
+You can also use the **Signal Chain Editor** directly: select two pads, vias, tracks
+or components, then click either **Use KiCad selection** button or **Detect path
+from 2 selected PCB items**. The editor previews the highlighted path and crossed parts,
 selects any existing matching rows, and stages new chains for **Apply & save**.
 Detection runs in a worker without blocking the dialog. Invalid selections show an
 error instead of silently clearing the component reference field. Selecting source
-or destination footprints still fills references for the component-search workflow.
+or destination footprints individually still fills references for component search.
 With both component fields empty, **Find chains** also uses endpoint detection.
 
-1. In PCB Editor select exactly **two vias or pads on one signal**. Do not select a
-   whole track, footprint, or the two opposite legs at one end of a differential pair.
-2. Open TraceForge's **Signals / xSignals** tab and click **Detect between selected
-   vias / pads**. Detection runs once, highlights the routed path and fits it in view.
+1. Select exactly **two pads, vias, tracks/arcs or footprints** as path endpoints.
+   Mixed types work. Components with multiple signal candidates open a pad-pair
+   choice (up to 128 shown); the chosen path must still be continuously routed.
+   Select opposite ends of one signal, not both differential legs at the same end.
+2. Open **Signals / xSignals** and click **Detect path between 2 selected PCB items**.
+   Detection runs once, highlights the routed path and fits it in view.
 3. Review the path's nets, crossed components, track-object length and existing-chain
    status. Adjust the resistor limit, series capacitor option or differential partner
    option, then click **Detect / update path** to reuse the same endpoints.
