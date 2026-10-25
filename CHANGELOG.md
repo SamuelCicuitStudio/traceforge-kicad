@@ -182,4 +182,3 @@ Local unit/lint checks and synthetic-board integration checks passed before pack
 Live editor checks covered placement, native selection, regeneration, removal,
 Undo/Redo and save/reopen recovery. No user boards or generated project data are
 included. Public CI validates lint, Python compilation and release packaging.
-
