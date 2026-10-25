@@ -27,6 +27,13 @@ class BoardOverview(wx.Panel):
 
     def transform(self):
         points = [p for rings in self.scene['outline'] for p in rings[0]] if self.scene else []
+        if getattr(self.GetParent(), 'trace_mode', False) and self.region:
+            points = self.region.get('points', []) + (
+                [p[:2] for key in ('accepted', 'rejected') for p in self.preview[key]]
+                if self.preview else [])
+            if points:
+                xs, ys = zip(*points)
+                points = points + [[min(xs) - 2, min(ys) - 2], [max(xs) + 2, max(ys) + 2]]
         if not points:
             return (0, 0, 1, 12, 12)
         xs, ys = zip(*points)
@@ -136,32 +143,41 @@ class BoardOverview(wx.Panel):
         if len(region) > 1:
             dc.SetPen(wx.Pen(self.colors['routed'], 2))
             pts = [self.screen(p) for p in region]
-            dc.DrawLines(pts if self.mode == 'polygon' else pts + pts[:1])
+            dc.DrawLines(pts if self.mode == 'polygon' or (self.region or {}).get(
+                'kind') == 'trace' else pts + pts[:1])
+            if (self.region or {}).get('kind') == 'trace':
+                dc.SetTextForeground(self.colors['routed'])
+                dc.DrawText('Start', pts[0].x + 4, pts[0].y + 4)
 
 
 class StitchingPanel(wx.Panel):
-    def __init__(self, parent, host, native):
+    def __init__(self, parent, host, native, trace_mode=False):
         super().__init__(parent)
         if host.dark:
             self.SetBackgroundColour('#222C3A')
             self.SetForegroundColour('#E5EDF8')
         self.host, self.native, self.scene = host, native, None
+        self.trace_mode = trace_mode
         self.preview, self.region, self.replace = None, dict(kind='board'), None
         self.identities, self.loaded, self.filling = [], False, False
         outer = wx.BoxSizer(wx.VERTICAL)
         bar = wx.BoxSizer(wx.HORIZONTAL)
-        for text, handler in (('Refresh board (F5)', self.on_refresh),
+        toolbar = (('Refresh board (F5)', self.on_refresh),
                               ('Use PCB selection', self.on_selected),
                               ('Draw rectangle', lambda event: self.draw('rectangle')),
                               ('Draw polygon', lambda event: self.draw('polygon')),
-                              ('Whole board', self.on_whole)):
+                              ('Whole board', self.on_whole))
+        if trace_mode:
+            toolbar = (('Refresh fence sets (F5)', self.on_refresh),
+                       ('Use selected trace', self.on_selected))
+        for text, handler in toolbar:
             button = wx.Button(self, label=text, style=wx.BU_EXACTFIT)
             button.Bind(wx.EVT_BUTTON, handler)
             bar.Add(button, 0, wx.RIGHT, 5)
         outer.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
         body = wx.BoxSizer(wx.HORIZONTAL)
         form = wx.FlexGridSizer(cols=2, vgap=5, hgap=8)
-        self.name = wx.TextCtrl(self, value='Ground stitching')
+        self.name = wx.TextCtrl(self, value='RF trace fence' if trace_mode else 'Ground stitching')
         self.net = wx.ComboBox(self, style=wx.CB_READONLY)
         self.source = wx.Choice(self, choices=['Active board preset', 'Netclass', 'Custom'])
         self.source.SetSelection(0)
@@ -172,33 +188,48 @@ class StitchingPanel(wx.Panel):
                                                'Staggered (alternate rows offset)',
                                                'Perimeter fence'])
         self.pattern.SetSelection(0)
+        if trace_mode:
+            self.pattern.Set(['Both sides', 'Left side', 'Right side'])
+            self.pattern.SetSelection(0)
         for label, control in (('Set name', self.name), ('Net', self.net),
                                ('Via size source', self.source),
-                               ('Placement pattern', self.pattern),
+                               ('Fence side' if trace_mode else 'Placement pattern', self.pattern),
                                ('Copper contact', self.connection)):
             form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
             form.Add(control, 1, wx.EXPAND)
         self.fields = {}
-        for key, label, value in (('diameter', 'Via diameter (mm)', '.6'),
+        fields = [('diameter', 'Via diameter (mm)', '.6'),
                                   ('drill', 'Drill diameter (mm)', '.25'),
                                   ('pitch_x', 'Spacing X (mm)', '5'),
                                   ('pitch_y', 'Spacing Y (mm)', '5'),
                                   ('offset_x', 'Grid offset X (mm)', '0'),
                                   ('offset_y', 'Grid offset Y (mm)', '0'),
                                   ('boundary', 'Region/copper setback (mm)', '.2'),
-                                  ('edge', 'Board-edge setback (mm)', '.5')):
+                                  ('edge', 'Board-edge setback (mm)', '.5')]
+        if trace_mode:
+            fields.append(('trace_gap', 'Copper gap to signal trace (mm)', '.3'))
+        for key, label, value in fields:
+            if trace_mode and key == 'pitch_x':
+                label = 'Spacing along trace (mm)'
+            if trace_mode and key == 'boundary':
+                label, value = 'Copper-fill setback (mm)', '0'
             control = wx.TextCtrl(self, value=value, size=(100, -1))
             self.fields[key] = control
-            form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
-            form.Add(control, 1, wx.EXPAND)
+            if trace_mode and key in ('pitch_y', 'offset_x', 'offset_y'):
+                control.Hide()
+            else:
+                form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+                form.Add(control, 1, wx.EXPAND)
             control.Bind(wx.EVT_TEXT, self.invalidate)
         form.AddGrowableCol(1)
         body.Add(form, 0, wx.ALL, 6)
         right = wx.BoxSizer(wx.VERTICAL)
         self.region_label = wx.StaticText(self, label='Region: Whole board')
         right.Add(self.region_label, 0, wx.BOTTOM, 4)
-        right.Add(wx.StaticText(self, label='Board overview: drag a rectangle; click polygon '
-                               'vertices, then Enter/right-click. Esc cancels.'), 0, wx.BOTTOM, 4)
+        instructions = ('Blue: selected signal path. Start marks the direction for left/right.'
+                        if trace_mode else 'Board overview: drag a rectangle; click polygon '
+                        'vertices, then Enter/right-click. Esc cancels.')
+        right.Add(wx.StaticText(self, label=instructions), 0, wx.BOTTOM, 4)
         self.canvas = BoardOverview(self, self.set_region, host.colors)
         right.Add(self.canvas, 1, wx.EXPAND)
         self.counts = wx.StaticText(self, label='Green: accepted   Amber: skipped   '
@@ -207,7 +238,7 @@ class StitchingPanel(wx.Panel):
         body.Add(right, 1, wx.EXPAND | wx.ALL, 6)
         outer.Add(body, 1, wx.EXPAND)
         actions = wx.BoxSizer(wx.HORIZONTAL)
-        self.apply = wx.Button(self, label='Apply stitching')
+        self.apply = wx.Button(self, label='Apply trace fence' if trace_mode else 'Apply stitching')
         self.apply.Enable(False)
         for text, handler in (('Preview', self.on_preview), ('Clear preview', self.clear_preview)):
             button = wx.Button(self, label=text)
@@ -230,6 +261,8 @@ class StitchingPanel(wx.Panel):
                               ('Edit / regenerate', self.on_edit),
                               ('Remove set', lambda event: self.remove(False)),
                               ('Remove all stitching', lambda event: self.remove(True))):
+            if trace_mode:
+                text = text.replace('stitching', 'fences')
             button = wx.Button(self, label=text, style=wx.BU_EXACTFIT)
             button.Bind(wx.EVT_BUTTON, handler)
             manage.Add(button, 0, wx.RIGHT, 5)
@@ -299,6 +332,9 @@ class StitchingPanel(wx.Panel):
         index = self.scene['active_preset'] if source == 'board' else 0
         if source.startswith('preset:'):
             index = int(source.split(':')[1])
+        if not 0 <= index < len(self.scene['presets']):
+            self.message('Via preset is unavailable. Refresh board or choose Custom.', 'warning')
+            return
         dims = (self.scene['presets'][index] if index else
                 self.scene['nets'].get(self.net.GetValue(), [0, 0]))
         for key, value in zip(('diameter', 'drill'), dims):
@@ -424,6 +460,8 @@ class StitchingPanel(wx.Panel):
         self.task(lambda: self.native('stitch_preview', **request), self.accept_preview)
 
     def accept_preview(self, result):
+        if self.trace_mode:
+            self.region = self.canvas.region = result['region']
         self.preview = self.canvas.preview = result
         for key in ('diameter', 'drill'):
             self.fields[key].ChangeValue(str(result['settings'][key]))
@@ -454,7 +492,7 @@ class StitchingPanel(wx.Panel):
 
         def done(result):
             self.replace = None
-            self.apply.SetLabel('Apply stitching')
+            self.apply.SetLabel('Apply trace fence' if self.trace_mode else 'Apply stitching')
             self.accept_scene(result[1])
             self.message(f"Placed {result[0]['count']} stitching vias. Undo is available in KiCad; "
                          'save the PCB normally.', 'ok')

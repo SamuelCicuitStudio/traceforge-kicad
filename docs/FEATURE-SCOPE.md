@@ -6,7 +6,8 @@ prevents similarly named PCB features from being implemented with the wrong mode
 ## TraceForge feature tabs
 
 The layout is one window with **Signals / xSignals** as the first tab,
-**Via Stitching** as the second, and **BGA Fanout** as the third. Keep net/chain analysis,
+**Via Stitching** as the second, **BGA Fanout** as the third, and **Via Fencing**
+as the fourth. Keep net/chain analysis,
 timing, highlighting, chain editing, DRC targets and exports together in Signals. The stitching tab owns
 regions, via settings, preview and management of generated stitching sets. Tab changes
 preserve state and do not trigger board refreshes. See [native board access](NATIVE-BOARD-ACCESS.md),

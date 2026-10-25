@@ -21,7 +21,8 @@ class NativeBridge:
         request = dict(token=self.endpoint['token'], board=self.board_file,
                        operation=operation, payload=payload)
         with socket.create_connection(('127.0.0.1', self.endpoint['port']), timeout=1) as conn:
-            conn.settimeout(125 if operation.startswith(('stitch_', 'fanout_')) else 6)
+            conn.settimeout(125 if operation.startswith(
+                ('stitch_', 'fanout_', 'tracefence_')) else 6)
             conn.sendall(json.dumps(request).encode('utf-8') + b'\n')
             with conn.makefile('rb') as stream:
                 raw = stream.readline(LIMIT + 1)

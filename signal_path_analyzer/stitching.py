@@ -81,7 +81,7 @@ def settings(values):
     if not result.get('net'):
         raise ValueError('Choose a stitching net.')
     result['pattern'] = values.get('pattern', 'symmetric')
-    if result['pattern'] not in ('symmetric', 'staggered', 'fence'):
+    if result['pattern'] not in ('symmetric', 'staggered', 'fence', 'trace'):
         raise ValueError('Choose Symmetric, Staggered or Perimeter fence placement.')
     return result
 

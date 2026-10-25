@@ -16,7 +16,7 @@ def release_files():
         'signal_path_analyzer_action.py', 'net_chain_monitor_action.py',
         'tools/install_native_bridge.ps1', 'docs/NATIVE-BOARD-ACCESS.md',
         'docs/VIA-STITCHING-TESTING.md', 'docs/FEATURE-SCOPE.md',
-        'docs/BGA-FANOUT.md',
+        'docs/BGA-FANOUT.md', 'docs/VIA-FENCING.md',
     )]
     for directory in ('signal_path_analyzer', 'native_bridge'):
         paths.extend((ROOT / directory).glob('*.py'))

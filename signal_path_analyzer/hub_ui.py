@@ -283,6 +283,10 @@ class TraceForgePanel(wx.Frame):
 
         self.fanout = FanoutPanel(self.notebook, self, stitching)
         self.notebook.AddPage(self.fanout, 'BGA Fanout')
+        from .trace_fence_ui import TraceFencePanel
+
+        self.trace_fence = TraceFencePanel(self.notebook, self, stitching)
+        self.notebook.AddPage(self.trace_fence, 'Via Fencing')
         if self.dark:
             self.stitching.SetBackgroundColour('#222C3A')
             self.stitching.SetForegroundColour('#E5EDF8')
@@ -298,6 +302,9 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 3:
+            self.trace_fence.on_refresh()
+            return
         if self.notebook.GetSelection() == 2:
             self.fanout.on_refresh()
             return

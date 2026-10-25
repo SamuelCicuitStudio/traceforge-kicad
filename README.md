@@ -5,8 +5,9 @@ Signal-chain analysis, managed via stitching and BGA breakout for **KiCad 10 on 
 | Feature | Status | What it does |
 | --- | --- | --- |
 | Signals / xSignals | Available | Analyze timing and chain lengths, highlight pairs, edit chains and export results |
-| Via Stitching / Fencing | Available | Manage symmetric/staggered grids and inset perimeter fences |
+| Via Stitching | Available | Manage symmetric/staggered grids and optional perimeter patterns |
 | BGA Fanout | Available | Detect ball pitch and preview/apply pad-to-via breakouts |
+| Via Fencing | Available | Ground vias along one or both sides of a selected RF trace |
 | Parallel multirouting | Planned | Route an ordered bundle of nets along a shared guide |
 
 TraceForge 0.8 uses KiCad 10's embedded `pcbnew` interface for all board access.
@@ -53,7 +54,7 @@ The native toolbar supports light and dark TraceForge icons.
 
 All board operations run through the native helper on KiCad's GUI thread. The panel accepts
 one operation at a time and does not poll or automatically retry failed operations.
-The window has **Signals / xSignals**, **Via Stitching** and **BGA Fanout** tabs.
+The window has **Signals / xSignals**, **Via Stitching**, **BGA Fanout** and **Via Fencing** tabs.
 Switching tabs retains their state without reading the board. F5 refreshes only the active tab.
 
 ## Via stitching
@@ -93,7 +94,18 @@ rule evaluation, courtyard exclusion, and copper/text bounding-box optimizations
 follow-up work; run KiCad DRC after placement. Board operations/refill can briefly occupy
 the editor's GUI thread. See [native board access](docs/NATIVE-BOARD-ACCESS.md).
 
+## Via fencing along RF traces
+
+Select connected segments/arcs of an antenna feed or RF trace in PCB Editor. In the
+separate **Via Fencing** tab, click **Use selected trace**, choose GND (or another
+separate fence net), then set left/right/both sides, spacing, via size and copper gap.
+Preview follows the selected path and shows rejected locations and the largest gap.
+Apply is undoable; managed sets can be selected, removed and regenerated without
+changing the RF signal tracks. This is distinct from the perimeter pattern in Via
+Stitching. See [Via Fencing](docs/VIA-FENCING.md) for the workflow and RF limitations.
+
 ## BGA fanout
+
 
 Select a BGA footprint in PCB Editor, open **BGA Fanout**, and click **Analyze PCB
 selection**. TraceForge detects its rectangular ball grid and X/Y pitch, including

@@ -107,8 +107,11 @@ def catalog(board, store=None):
     return result
 
 
-def scene(board):
+def scene(board, trace_mode=False):
     ds = board.GetDesignSettings()
+    active_preset = ds.GetViaSizeIndex()
+    if not 0 <= active_preset < len(ds.m_ViasDimensionsList):
+        active_preset = 0
     nets = {}
     for net in board.GetNetsByNetcode().values():
         if net.GetNetname():
@@ -122,11 +125,28 @@ def scene(board):
             selection = item_region(board, selected[0])
         except ValueError as exc:
             selection_error = str(exc)
+    trace, trace_error = None, None
+    if trace_mode:
+        from .trace_fence_native import read_trace
+
+        try:
+            trace = read_trace(board)
+        except ValueError as exc:
+            trace_error = str(exc)
+    sets = [g for g in catalog(board) if bool(
+        g['record']['region']['kind'] == 'trace') == trace_mode]
+    last = load_store(board.GetFileName()).get('last', {})
+    if bool(last.get('region', {}).get('kind') == 'trace') != trace_mode:
+        last = {}
+    if trace_mode and last:
+        live_ids = {uid(t) for t in board.GetTracks()}
+        if any(k not in live_ids for k in last.get('region', {}).get('tracks', [])):
+            last = {}
     return dict(board=board.GetFileName(), outline=contours(outline(board)), nets=nets,
                 presets=[[v.m_Diameter / 1e6, v.m_Drill / 1e6]
-                         for v in ds.m_ViasDimensionsList], active_preset=ds.GetViaSizeIndex(),
+                         for v in ds.m_ViasDimensionsList], active_preset=active_preset,
                 selected_region=selection, selection_error=selection_error,
-                sets=catalog(board), last=load_store(board.GetFileName()).get('last', {}))
+                selected_trace=trace, trace_error=trace_error, sets=sets, last=last)
 
 
 def resolve(board, values):
@@ -139,6 +159,8 @@ def resolve(board, values):
     if source not in ('board', 'netclass', 'custom') and not source.startswith('preset:'):
         raise ValueError('Choose a board preset, netclass or custom via size.')
     index = ds.GetViaSizeIndex() if source == 'board' else 0
+    if source == 'board' and not 0 <= index < len(ds.m_ViasDimensionsList):
+        index = 0
     if source.startswith('preset:'):
         index = int(source.split(':')[1])
         if not 0 < index < len(ds.m_ViasDimensionsList):
@@ -188,6 +210,16 @@ def plan(board, request):
     started = time.monotonic()
     values, net = resolve(board, request['settings'])
     region = dict(request['region'])
+    trace = region['kind'] == 'trace'
+    if trace:
+        from .trace_fence_native import read_trace
+
+        region = read_trace(board, region['tracks'])
+        if region['net'] == values['net']:
+            raise ValueError('Choose a separate fence net, normally GND; '
+                             'do not use the RF signal net.')
+        if values['pattern'] != 'trace':
+            raise ValueError('Use the Via Fencing tab for fences along a trace.')
     if region['kind'] in ('zone', 'shape'):
         item = region_item(board, region['uuid'])
         if item is None:
@@ -197,8 +229,8 @@ def plan(board, request):
             raise ValueError('The region zone belongs to another net.')
     board_poly = outline(board)
     rings = contours(board_poly)
-    points = ([p for ring in rings for p in ring[0]] if region['kind'] == 'board'
-              else polygon(region['points']))
+    points = ([p for ring in rings for p in ring[0]] if region['kind'] == 'board' else
+              region['points'] if trace else polygon(region['points']))
     xs, ys = zip(*points)
     radius = round(values['diameter'] * 5e5)
     ds = board.GetDesignSettings()
@@ -207,8 +239,30 @@ def plan(board, request):
     boundary = round(values['boundary'] * 1e6)
     board_edge = max(round(values['edge'] * 1e6), ds.m_CopperEdgeClearance)
     candidate_paths, path_lengths = [], []
-    fence = values['pattern'] == 'fence'
-    if fence:
+    fence = values['pattern'] in ('fence', 'trace')
+    if trace:
+        import math
+
+        from .trace_fence import offset_path, sample_open
+
+        gap = float(values.get('trace_gap', .3))
+        if not math.isfinite(gap) or gap < 0:
+            raise ValueError('Trace copper gap must be finite and non-negative.')
+        values['trace_gap'] = gap
+        side = values.get('side', 'both')
+        if side not in ('left', 'right', 'both'):
+            raise ValueError('Choose left, right or both sides of the trace.')
+        distance = region['width_mm'] / 2 + values['diameter'] / 2 + gap
+        candidates = []
+        for direction in ([1, -1] if side == 'both' else [1] if side == 'left' else [-1]):
+            locations, length = sample_open(offset_path(points, distance, direction),
+                                            values['pitch_x'])
+            candidate_paths.extend((len(path_lengths), station) for _, station in locations)
+            path_lengths.append(length)
+            candidates.extend(point for point, _ in locations)
+        if len(candidates) > MAX_CANDIDATES:
+            raise ValueError('Trace fence exceeds the candidate limit; increase spacing.')
+    elif fence:
         if region['kind'] == 'board':
             source = board_poly
             inset = radius + max(boundary, board_edge) + 2000
@@ -318,7 +372,7 @@ def plan(board, request):
         reason = None
         if not fits(board_poly, point, radius + board_edge):
             reason = 'board edge / cutout'
-        elif region['kind'] != 'board' and not inside((x, y), points,
+        elif region['kind'] not in ('board', 'trace') and not inside((x, y), points,
                                                      (radius + boundary) / 1e6):
             reason = 'region boundary'
         elif any(poly.Collide(circle) for poly in keepouts):
@@ -347,11 +401,14 @@ def plan(board, request):
             if fence:
                 path_id, distance = candidate_paths[candidate_index]
                 accepted_paths[path_id].append(distance)
+    from .trace_fence import open_gap
+
+    gap_fn = open_gap if trace else fence_gaps
     return dict(settings=values, region=region, accepted=accepted, rejected=rejected,
                 reasons=dict(Counter(p[2] for p in rejected)), clearance_mm=clearance / 1e6,
                 replace=request.get('replace'), name=request.get('name') or 'Ground stitching',
                 fence=(dict(spacing_mm=values['pitch_x'], contours=len(path_lengths),
-                            largest_gap_mm=max(fence_gaps(length, accepted_paths[i])
+                            largest_gap_mm=max(gap_fn(length, accepted_paths[i])
                                                for i, length in enumerate(path_lengths)))
                        if fence else None))
 
@@ -431,7 +488,7 @@ def remove_members(board, chosen):
 def dispatch(board, operation, payload):
     global _preview
     if operation == 'stitch_scene':
-        return scene(board)
+        return scene(board, payload.get('trace_mode', False))
     if operation == 'stitch_preview':
         result = plan(board, payload)
         token = secrets.token_hex(16)
