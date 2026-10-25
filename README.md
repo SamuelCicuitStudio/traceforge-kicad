@@ -1,5 +1,7 @@
 # TraceForge
 
+<img src="icons/traceforge-light-48.png" alt="TraceForge icon" width="72" height="72">
+
 **Signal paths, trace cleanup, via stitching, RF fencing and BGA fanout for KiCad 10 on Windows.**
 
 TraceForge puts five PCB tools in one colored panel. It reads the open board through
@@ -61,7 +63,7 @@ folder while the junction exists leaves a broken plugin link.
 | --- | --- |
 | **Signals / xSignals** | Detect paths through series passives, inspect chain length/timing, highlight differential pairs, export CSV and write reviewed DRC targets. |
 | **Via Stitching** | Preview symmetric or staggered via grids in a whole board, selected zone, rectangle or polygon; select, regenerate or remove managed sets. |
-| **BGA Fanout** | Analyze a selected BGA, suggest geometry-checked settings and preview dogbone or explicitly confirmed via-in-pad breakouts. |
+| **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
 | **Via Fencing** | Place managed ground-via rows on either or both sides of a routed RF trace; control copper gap, spacing and via size. |
 
 | **Trace Cleanup** | Preview redundant copper and native dangling-end findings, remove reviewed tracks with Undo, then recheck Signals. |
@@ -145,12 +147,15 @@ See [RF fencing](docs/VIA-FENCING.md).
 pad-to-via breakouts. This preview has not been applied to a user board.*
 
 Select a BGA footprint and open **BGA Fanout**. Review detected pitch, fabrication
-limits, offsets and filters. **Suggest settings** evaluates candidates without
-placing them. Preview accepted pad-to-via breakouts, then Apply. Managed generated
-fanout can be removed while preserving manually edited routing.
+limits, offsets and filters. Fit guidance explains board-rule floors and nominal
+inter-ball space; **Suggest settings** evaluates candidates without placing them.
+Choose Dogbone, Via-in-pad, or **Auto escape to BGA edge**. The escape preview shows
+which selected single-ended pads have a connected route past the pad field and which
+are blocked. Apply only reviewed routes. Managed removal preserves edited routing.
 
 Through vias are supported. Via-in-pad requires explicit fabrication confirmation.
-Microvias, HDI layer assignment and full escape routing are not implemented.
+Escape endpoints still need onward routing to their destination. Microvias, HDI
+layer assignment, differential-pair escape and full-board autorouting are not implemented.
 See [BGA fanout](docs/BGA-FANOUT.md).
 
 ### Trace cleanup

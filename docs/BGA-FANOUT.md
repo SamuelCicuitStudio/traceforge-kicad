@@ -1,11 +1,11 @@
-# BGA Fanout: pad-to-via breakout
+# BGA Fanout: breakout and bounded edge escape
 
-TraceForge 0.8 adds an independent, native pcbnew BGA breakout tool. It creates short
-pad-to-via connections on the selected footprint. It does not route signals from
-those vias to other components or guarantee complete escape beyond the package.
+TraceForge offers native pcbnew dogbone and via-in-pad breakout, plus a bounded
+**Auto escape to BGA edge** mode. That mode routes selected individual nets from
+their pads through a legal through via to a point just outside the BGA pad field
+on one chosen copper layer. It does not continue to the signal destination.
 
-The proposed complete-escape feature and its validation gates are in
-[Fanout Escape Plan](FANOUT-ESCAPE-PLAN.md).
+The focused design and remaining scope are in [Fanout Escape Plan](FANOUT-ESCAPE-PLAN.md).
 
 ## Workflow
 
@@ -17,19 +17,26 @@ The proposed complete-escape feature and its validation gates are in
 3. Choose **Dogbone** for a short stub to a via in an adjacent inter-ball gap. Zero
    X/Y offset means half the respective pitch. Custom positive offsets are supported.
    The planner tries four gap directions, preferring outward sites and processing
-   inner pads first. Blocked locations are reported rather than silently forced.
+   inner pads first. **Auto escape** uses the same breakout sites, then checks short
+   straight and dogleg routes to the pad-field edge on the selected escape layer.
+   Differential nets with a recognized P/N or +/- partner are skipped until a
+   coupled-pair escape is implemented.
 4. Choose active board preset, per-net netclass, a named board preset or custom via
    diameter/drill. Configure track width, clearance and board-edge setback in mm.
    Respect netclass widths is enabled by default. Disabling it uses the requested
    width subject to the board minimum; check custom rules with KiCad DRC.
-5. Filter nets and pad numbers using comma-separated wildcard patterns. For example,
+5. Review the fit explanation. It compares board minima, effective width/clearance,
+   straight inter-ball channel and diagonal via space. This is a nominal guide;
+   Preview checks the live board's copper, holes, filled zones and outline.
+   Filter nets and pad numbers using comma-separated wildcard patterns. For example,
    include `*DATA*,*CLK*`, exclude `GND,*VCC*`, or limit pads to `A*,B*`. Patterns are
    case-sensitive. Unconnected pads and existing routed breakouts are skipped.
-6. Click **Preview fanout**. Inspect every accepted, blocked and skipped row. Green
-   lines/circles are proposed stubs/vias. The board is unchanged by preview.
-7. **Apply accepted breakouts** revalidates the live footprint/board and creates the
-   accepted vias/tracks as one undoable native operation. Partial fanout requires an
-   explicit confirmation. Refill/connectivity checks follow. Save the PCB normally.
+6. Click **Preview fanout**. Inspect escaped, breakout-only, already-routed, blocked
+   and skipped pads. Green geometry is proposed copper. Breakout-only pads are not
+   applied in Auto escape mode. The board is unchanged by Preview.
+7. **Apply escaped routes** (or Apply accepted breakouts) revalidates the live board
+   and creates accepted vias/tracks as one undoable native operation. Partial fanout
+   requires confirmation. Connectivity checks and zone refill follow. Save normally.
 
 **Suggest settings** evaluates a bounded selection of board presets and dimensions
 at or above the board's through-via manufacturing limits. It considers pitch, pad
@@ -61,11 +68,15 @@ manufacturing limits or change project design rules to force a result.
   Clearance uses at least the board minimum and involved netclass values. Full
   custom-rule evaluation, mask/fabrication constraints, teardrops and courtyard
   filtering are not implemented; review the result with KiCad DRC and your fabricator.
+- Auto escape has a 256-selected-pad limit per preview. It searches up to four
+  breakout sites and a bounded set of straight/dogleg edge routes on one user-selected
+  enabled copper layer. It keeps existing copper fixed and reports pads that only
+  fit a breakout. It does not route beyond the BGA pad field.
 - No blind/buried/microvias, differential-pair coupling, length matching, automatic
-  layer assignment or channel routing to the package edge in this version.
+  layer assignment, obstacle rip-up or destination routing.
 - Blocked pads remain blocked in the result; a partial result is not a complete
-  BGA escape. Unfinished breakout vias can be reported as dangling by DRC until
-  subsequent routing connects them onward.
+  BGA escape. Edge route endpoints are intentionally open for onward routing, so
+  KiCad may report track-dangling warnings until they connect to the rest of the net.
 - The initial limits are 1,600 pads and a bounded preview time. GUI-thread native
   work/refill can briefly occupy the editor. There is no polling or automatic retry.
 - Atomic replacement/regeneration is not implemented. Use Remove generated fanout,
@@ -77,14 +88,15 @@ manufacturing limits or change project design rules to force a result.
 TraceForge is not currently a more complete BGA router than KiCadRoutingTools.
 The reviewed upstream documentation describes channel escape, under-pad routing,
 multiple-layer assignment and differential-pair escape. Our implementation focuses
-on live-board, previewed pad-to-via placement, editable settings, managed removal and
-native undo. Its current limitations should not be confused with a complete escape router.
+on live-board, previewed pad-to-via placement and short single-net edge routes,
+editable settings, managed removal and native undo. It is not a full autorouter.
 
-| Capability | TraceForge 0.8 | Reviewed upstream documentation |
+| Capability | TraceForge | Reviewed upstream documentation |
 | --- | --- | --- |
 | Dogbone / via-in-pad placement | Implemented with through vias | Documented |
-| Full channel/under-pad escape to package boundary | Not implemented | Documented |
-| Escape-layer allocation and coupled differential pairs | Not implemented | Documented |
+| Short, bounded single-net route to pad-field edge | Implemented | Documented in broader router |
+| General channel/under-pad escape to package boundary | Not implemented | Documented |
+| User-selected one-layer escape / coupled differential pairs | One layer / not implemented | Documented |
 | Live-board native preview/apply and managed removal | Implemented in TraceForge | File-oriented workflow described |
 | HDI microvia stacks / blind-buried fabrication validation | Not implemented or tested | Not established by the reviewed BGA README |
 
@@ -109,9 +121,12 @@ and the [upstream fanout documentation](https://github.com/drandyhaas/KiCadRouti
 
 ## Validation and design background
 
-Synthetic integration checks cover 16 independent dogbones, rotated and back-side
-footprints, exact native pad-to-via connectivity, existing-route avoidance and
-single-use apply tokens. Live editor validation checks native Undo/Redo separately.
+Synthetic integration checks cover 16 independent dogbones and edge routes, rotated
+and back-side footprints, blocked-pad reporting, exact native connectivity,
+managed removal after manual edits, and single-use apply tokens. KiCad DRC on
+the disposable edge-route board found zero new errors; its open endpoints produced
+expected dangling-track warnings. Live editor Undo/Redo still needs interactive
+confirmation for the new mode.
 Fixtures and local tests remain ignored and are not included in releases.
 
 The external [KiCadRoutingTools BGA fanout documentation](https://github.com/drandyhaas/KiCadRoutingTools/tree/main/py_router/bga_fanout)

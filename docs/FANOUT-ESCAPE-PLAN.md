@@ -1,6 +1,7 @@
 # TraceForge fanout: focused next step
 
-Status: design plan, not an implemented feature.
+Status: focused first implementation is in the BGA Fanout tab. Live editor Undo/Redo,
+fabricator-specific rules and more difficult blocked-pad layouts remain to validate.
 
 ## Goal
 

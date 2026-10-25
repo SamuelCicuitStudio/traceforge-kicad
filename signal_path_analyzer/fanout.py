@@ -77,8 +77,59 @@ def validate(values):
     if result['drill'] <= 0 or result['diameter'] <= result['drill'] or result['width'] <= 0:
         raise ValueError('Use a positive track width/drill and a via diameter '
                          'larger than its drill.')
-    if result.get('mode', 'dogbone') not in ('dogbone', 'via-in-pad'):
-        raise ValueError('Choose Dogbone or explicit Via-in-pad mode.')
+    if result.get('mode', 'dogbone') not in ('dogbone', 'via-in-pad', 'auto-escape'):
+        raise ValueError('Choose Dogbone, Auto escape, or explicit Via-in-pad mode.')
     if result.get('mode') == 'via-in-pad' and not result.get('allow_via_in_pad'):
         raise ValueError('Confirm that your fabrication process supports via-in-pad.')
     return result
+
+
+def fit_guidance(data, values):
+    """Explain nominal BGA fit before the live obstacle/DRC preview."""
+    grid, limits = data['grid'], data['limits']
+    selected = [p for p in data['pads'] if p['net'] and
+                matches(p['net'], values.get('include', '*'), values.get('exclude', '')) and
+                matches(p['number'], values.get('pads', '*'))]
+    pads = selected or data['pads']
+    rules = [data.get('net_rules', {}).get(p['net'], {}) for p in pads]
+    width = max([values['width']] + ([r.get('width', 0) for r in rules]
+                                   if values.get('netclass_width', True) else []))
+    clearance = max([values['clearance'], limits['clearance']] +
+                    [r.get('clearance', 0) for r in rules])
+    via_sizes = ([tuple((r.get('diameter', values['diameter']),
+                         r.get('drill', values['drill']))) for r in rules]
+                 if values.get('preset') == 'netclass' or
+                 (values.get('preset') == 'active' and data.get('active') == 0) else
+                 [(values['diameter'], values['drill'])])
+    if not via_sizes:
+        via_sizes = [(values['diameter'], values['drill'])]
+    minimum_diameter = max(limits['diameter'],
+                           max(drill for _, drill in via_sizes) + 2 * limits['annulus'])
+    minimum_channel = min(grid['pitch_x'] - max(p['size'][0] for p in pads),
+                          grid['pitch_y'] - max(p['size'][1] for p in pads))
+    channel_width = minimum_channel - 2 * clearance
+    radius = max(math.hypot(*p['size']) / 2 for p in pads)
+    via_limit = 2 * (math.hypot(grid['pitch_x'] / 2, grid['pitch_y'] / 2)
+                     - radius - clearance)
+    reasons = []
+    if width + 1e-9 < limits['width']:
+        reasons.append(f'Track {width:.3f} mm is below board minimum '
+                       f'{limits["width"]:.3f} mm.')
+    if any(drill + 1e-9 < limits['drill'] or diameter + 1e-9 < minimum_diameter or
+           (diameter - drill) / 2 + 1e-9 < limits['annulus']
+           for diameter, drill in via_sizes):
+        reasons.append('Via/drill/annular ring violates board minimums: '
+                       f'via >= {minimum_diameter:.3f} mm, drill >= '
+                       f'{limits["drill"]:.3f} mm, annulus >= '
+                       f'{limits["annulus"]:.3f} mm.')
+    if values.get('mode') != 'via-in-pad' and max(d for d, _ in via_sizes) > via_limit + 1e-9:
+        reasons.append(f'Interior diagonal gap fits about {max(0, via_limit):.3f} mm '
+                       f'via; selected size reaches {max(d for d, _ in via_sizes):.3f} mm.')
+    if width > channel_width + 1e-9:
+        reasons.append(f'Straight inter-ball channel fits about '
+                       f'{max(0, channel_width):.3f} mm track; '
+                       f'effective width is {width:.3f} mm.')
+    return dict(ok=not reasons, reasons=reasons, selected=len(selected),
+                effective_width=width, effective_clearance=clearance,
+                channel_width=max(0, channel_width), via_gap_limit=max(0, via_limit),
+                minimum_diameter=minimum_diameter)

@@ -13,6 +13,7 @@ from pathlib import Path
 import pcbnew
 
 from .fanout import candidates, grid_info, matches, validate, world
+from .fanout_escape import edge_paths, paired_net
 from .stitching_native import fits, outline, point_mm, refill, transaction, uid
 
 _preview = None
@@ -103,10 +104,22 @@ def analyze(board, identity=None):
         active = 0
     layer = pcbnew.B_Cu if fp.IsFlipped() else pcbnew.F_Cu
     items, changed = managed(board, uid(fp))
+    net_rules = {}
+    for pad in data:
+        if pad['net'] and pad['net'] not in net_rules:
+            nc = ds.m_NetSettings.GetEffectiveNetClass(pad['net'])
+            net_rules[pad['net']] = dict(width=nc.GetTrackWidth() / 1e6,
+                                         clearance=nc.GetClearance() / 1e6,
+                                         diameter=nc.GetViaDiameter() / 1e6,
+                                         drill=nc.GetViaDrill() / 1e6)
+    names = {net.GetNetname() for net in board.GetNetsByNetcode().values()}
     return dict(id=uid(fp), reference=fp.GetReference(), pads=data, grid=grid,
                 managed_items=len(items), modified_items=changed,
                 position=point_mm(fp.GetPosition()), angle=fp.GetOrientationDegrees(),
                 layer=pcbnew.LayerName(layer),
+                copper_layers=[pcbnew.LayerName(c) for c in board.GetEnabledLayers().CuStack()],
+                net_rules=net_rules,
+                paired_nets=sorted(n for n in net_rules if paired_net(n, names)),
                 presets=[[v.m_Diameter / 1e6, v.m_Drill / 1e6]
                          for v in ds.m_ViasDimensionsList], active=active,
                 defaults=dict(diameter=ds.GetCurrentViaSize() / 1e6,
@@ -116,11 +129,63 @@ def analyze(board, identity=None):
                 limits=dict(diameter=ds.m_ViasMinSize / 1e6,
                             drill=ds.m_MinThroughDrill / 1e6,
                             annulus=ds.m_ViasMinAnnularWidth / 1e6,
-                            width=ds.m_TrackMinWidth / 1e6))
+                            width=ds.m_TrackMinWidth / 1e6,
+                            clearance=ds.m_MinClearance / 1e6))
 
 
 def mmvec(point):
     return pcbnew.VECTOR2I(round(point[0] * 1e6), round(point[1] * 1e6))
+
+
+def clear_escape_route(route, layer, width, gap, edge, board_poly, zones,
+                       obstacles, reserved, reserved_routes, ds, net):
+    """Check every proposed segment against copper, holes, zones and board edges."""
+    segments = []
+    for start, finish in zip(route, route[1:]):
+        a, b = mmvec(start), mmvec(finish)
+        if a == b:
+            continue
+        shape = pcbnew.SHAPE_SEGMENT(a, b, round(width * 1e6))
+        limit = round(width * 5e5 + edge)
+        if not fits(board_poly, a, limit) or not fits(board_poly, b, limit):
+            return None
+        if any(ring.CSegment(k).Distance(pcbnew.SEG(a, b)) < limit
+               for i in range(board_poly.OutlineCount())
+               for ring in [board_poly.Outline(i)] +
+               [board_poly.Hole(i, j) for j in range(board_poly.HoleCount(i))]
+               for k in range(ring.SegmentCount())):
+            return None
+        bbox = shape.BBox()
+        for zone in zones:
+            if zone.GetIsRuleArea():
+                if zone.GetDoNotAllowTracks() and zone.IsOnLayer(layer) and (
+                        zone.Outline().Collide(shape)):
+                    return None
+            elif zone.GetNetname() != net and zone.IsOnLayer(layer):
+                if zone.NeedRefill() or not zone.IsFilled():
+                    raise ValueError('Refill copper zones before previewing BGA escape.')
+                if zone.GetFilledPolysList(layer).Collide(shape, gap):
+                    return None
+        for _, box, shapes, other_gap, hole in obstacles:
+            clearance = max(gap, other_gap, ds.m_HoleClearance)
+            if (box.GetRight() + clearance < bbox.GetX() or
+                    box.GetX() - clearance > bbox.GetRight() or
+                    box.GetBottom() + clearance < bbox.GetY() or
+                    box.GetY() - clearance > bbox.GetBottom()):
+                continue
+            if shapes.get(layer) and shapes[layer].Collide(shape, clearance):
+                return None
+            if hole and pcbnew.SHAPE.Collide(hole, shape, ds.m_HoleClearance):
+                return None
+        for old_circle, _, old_gap, old_drill in reserved:
+            if (pcbnew.SHAPE.Collide(old_circle, shape, max(gap, old_gap)) or
+                    pcbnew.SHAPE.Collide(old_drill, shape, ds.m_HoleClearance)):
+                return None
+        for old_segment, old_gap in reserved_routes:
+            if pcbnew.SHAPE.Collide(old_segment, shape, max(gap, old_gap)):
+                return None
+        segments.append(shape)
+    return segments or None
 
 
 def plan(board, request):
@@ -141,6 +206,21 @@ def plan(board, request):
             values.update(diameter=ds.GetCurrentViaSize() / 1e6,
                           drill=ds.GetCurrentViaDrill() / 1e6)
     values = validate(values)
+    escape_layer = None
+    if values['mode'] == 'auto-escape':
+        if 'escape_layer' not in values:
+            values['escape_layer'] = ('B.Cu' if data['layer'] == 'F.Cu' else 'F.Cu')
+        escape_layer = next((c for c in board.GetEnabledLayers().CuStack()
+                             if pcbnew.LayerName(c) == values['escape_layer']), None)
+        if escape_layer is None or values['escape_layer'] == data['layer']:
+            raise ValueError('Choose an enabled copper escape layer opposite the BGA pads.')
+        eligible = [p for p in data['pads'] if p['net'] and
+                    p['net'] not in data['paired_nets'] and
+                    matches(p['net'], values.get('include', '*'), values.get('exclude', '')) and
+                    matches(p['number'], values.get('pads', '*'))]
+        if len(eligible) > 256:
+            raise ValueError('Auto escape is limited to 256 selected pads per preview. '
+                             'Filter nets or pad numbers to run another batch.')
     if len({p['number'] for p in data['pads']}) != len(data['pads']):
         raise ValueError('Duplicate pad numbers are not supported for BGA fanout.')
     if values['width'] * 1e6 < ds.m_TrackMinWidth:
@@ -182,6 +262,7 @@ def plan(board, request):
         obstacles.append((uid(item), box, shapes, clearance, hole))
     zones = list(board.Zones())
     accepted, skipped, rejected, reserved = [], [], [], []
+    breakout_only, already_routed, reserved_routes = [], [], []
     grid = data['grid']
     # Inner balls first, with deterministic ordering and outward-preferred sites.
     ordered = sorted(data['pads'], key=lambda p: (
@@ -194,6 +275,8 @@ def plan(board, request):
         reason = None
         if not net or net.startswith('unconnected-'):
             reason = 'unconnected pad'
+        elif values['mode'] == 'auto-escape' and net in data['paired_nets']:
+            reason = 'differential pair: use a coupled escape method'
         elif not matches(net, values.get('include', '*'), values.get('exclude', '')):
             reason = 'net filter'
         elif not matches(pad['number'], values.get('pads', '*')):
@@ -207,8 +290,9 @@ def plan(board, request):
         if (connected.GetConnectedTracks(live_pad) or
             any(isinstance(t, pcbnew.PCB_VIA) and t.GetNetname() == net and
                 t.GetPosition() == live_pad.GetPosition() for t in board.GetTracks())):
-            skipped.append(dict(pad=pad['number'], position=pad['position'],
-                                reason='already routed'))
+            destination = already_routed if values['mode'] == 'auto-escape' else skipped
+            destination.append(dict(pad=pad['number'], position=pad['position'],
+                                    reason='already routed; existing escape not verified'))
             continue
         nc = ds.m_NetSettings.GetEffectiveNetClass(net)
         diameter, drill = values['diameter'], values['drill']
@@ -225,6 +309,7 @@ def plan(board, request):
         locations = ([pad['local']] if values.get('mode') == 'via-in-pad' else
                      candidates(pad, grid, values['offset_x'], values['offset_y']))
         failures = []
+        fallback = None
         for location in locations:
             end = mmvec(world(location, data['position'], data['angle']))
             radius = round(diameter * 5e5)
@@ -300,17 +385,42 @@ def plan(board, request):
             if why:
                 failures.append(why)
                 continue
-            accepted.append(dict(pad=pad['number'], id=pad['id'], net=net,
+            row = dict(pad=pad['number'], id=pad['id'], net=net,
                                  start=pad['position'], end=point_mm(end),
-                                 diameter=diameter, drill=drill, width=width))
+                                 diameter=diameter, drill=drill, width=width)
+            route_shapes = []
+            if escape_layer is not None:
+                fallback = row
+                for local_path in edge_paths(location, grid):
+                    route = [world(p, data['position'], data['angle']) for p in local_path]
+                    route_shapes = clear_escape_route(
+                        route, escape_layer, width, gap, edge, board_poly, zones,
+                        obstacles, reserved, reserved_routes, ds, net)
+                    if route_shapes:
+                        row.update(route=route, edge_endpoint=route[-1],
+                                   escape_layer=values['escape_layer'], status='escaped')
+                        break
+                if not route_shapes:
+                    failures.append('no clear route to BGA pad-field edge')
+                    continue
+            else:
+                row['status'] = 'breakout only'
+            accepted.append(row)
             reserved.append((circle, segment, gap, drill_circle))
+            reserved_routes.extend((shape, gap) for shape in route_shapes)
             break
         else:
-            rejected.append(dict(pad=pad['number'], position=pad['position'],
-                                 reason=Counter(failures).most_common(1)[0][0]))
+            if fallback is not None:
+                breakout_only.append(dict(fallback, reason='Breakout fits, but no clear '
+                                          'route reaches the BGA pad-field edge.'))
+            else:
+                rejected.append(dict(pad=pad['number'], position=pad['position'],
+                                     reason=Counter(failures).most_common(1)[0][0]))
     return dict(footprint=data['id'], settings=values, data=data, accepted=accepted,
-                skipped=skipped, rejected=rejected,
-                reasons=dict(Counter(p['reason'] for p in rejected + skipped)))
+                skipped=skipped, rejected=rejected, breakout_only=breakout_only,
+                already_routed=already_routed,
+                reasons=dict(Counter(p['reason'] for p in
+                                     rejected + skipped + breakout_only)))
 
 
 def suggest(board, request):
@@ -358,7 +468,9 @@ def suggest(board, request):
             break
         result = plan(board, dict(footprint=data['id'], settings=candidate))
         results.append(dict(settings=candidate, accepted=len(result['accepted']),
-                            blocked=len(result['rejected']), skipped=len(result['skipped']),
+                            blocked=len(result['rejected']) + len(result['breakout_only']),
+                            breakout_only=len(result['breakout_only']),
+                            skipped=len(result['skipped']),
                             reasons=result['reasons']))
     results.sort(key=lambda r: (r['accepted'], -r['blocked'], r['settings']['drill'],
                                 r['settings']['width']), reverse=True)
@@ -411,9 +523,9 @@ def dispatch(board, operation, payload):
     if any(current[k] != old[k] for k in ('settings', 'data', 'accepted')):
         raise ValueError('Board, footprint or settings changed. Preview fanout again.')
     if not current['accepted']:
-        raise ValueError('No accepted pad-to-via breakouts to apply.')
+        raise ValueError('No accepted fanout routes to apply.')
 
-    created, source_pairs = [], []
+    created, source_pairs, escape_pairs = [], [], []
     layer = pcbnew.B_Cu if current['data']['layer'] == 'B.Cu' else pcbnew.F_Cu
     fp = selected_footprint(board, current['footprint'])
     pads = {uid(p): p for p in fp.Pads()}
@@ -435,8 +547,21 @@ def dispatch(board, operation, payload):
             track.SetWidth(round(row['width'] * 1e6))
             track.SetNetCode(via.GetNetCode())
             created.append(track)
+        route_tracks = []
+        if row.get('route'):
+            route_layer = next(c for c in board.GetEnabledLayers().CuStack()
+                               if pcbnew.LayerName(c) == row['escape_layer'])
+            for start, finish in zip(row['route'], row['route'][1:]):
+                route_track = pcbnew.PCB_TRACK(board)
+                route_track.SetLayer(route_layer)
+                route_track.SetStart(mmvec(start))
+                route_track.SetEnd(mmvec(finish))
+                route_track.SetWidth(round(row['width'] * 1e6))
+                route_track.SetNetCode(via.GetNetCode())
+                created.append(route_track)
+                route_tracks.append(route_track)
+            escape_pairs.append((via, route_tracks, mmvec(row['edge_endpoint'])))
         source_pairs.append((pads[row['id']], via))
-    journal(board, current['footprint'], created, current['settings'])
 
     def apply(live):
         for item in created:
@@ -446,7 +571,17 @@ def dispatch(board, operation, payload):
         if any(not any(uid(item) == uid(via) for item in conn.GetConnectedItems(pad))
                for pad, via in source_pairs):
             raise RuntimeError('Fanout connectivity validation failed after placement.')
+        for via, route_tracks, endpoint in escape_pairs:
+            if not route_tracks or route_tracks[0].GetStart() != via.GetPosition() or (
+                    route_tracks[-1].GetEnd() != endpoint) or any(
+                    previous.GetEnd() != following.GetStart()
+                    for previous, following in zip(route_tracks, route_tracks[1:])):
+                raise RuntimeError('BGA edge route lost continuity before commit.')
+            connected = {uid(item) for item in conn.GetConnectedItems(via)}
+            if uid(route_tracks[0]) not in connected:
+                raise RuntimeError('BGA edge route is not connected to its via.')
+        journal(live, current['footprint'], created, current['settings'])
         return dict(pads=len(current['accepted']), items=len(created),
-                    rejected=len(current['rejected']))
+                    escaped=len(escape_pairs), rejected=len(current['rejected']))
 
     return transaction(board, apply)

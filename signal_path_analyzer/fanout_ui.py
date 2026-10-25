@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import wx
 
-from .fanout import validate
+from .fanout import fit_guidance, validate
 
 
 class FanoutPreview(wx.Panel):
@@ -25,8 +25,10 @@ class FanoutPreview(wx.Panel):
             dc.DrawText('Select a BGA in KiCad, then Analyze selection.', 12, 12)
             return
         pads = self.data['pads']
-        rows = (self.preview or {}).get('accepted', [])
-        points = [p['position'] for p in pads] + [p['end'] for p in rows]
+        rows = ((self.preview or {}).get('accepted', []) +
+                (self.preview or {}).get('breakout_only', []))
+        points = ([p['position'] for p in pads] + [p['end'] for p in rows] +
+                  [point for row in rows for point in row.get('route', [])])
         xs, ys = zip(*points)
         left, top = min(xs) - 1, min(ys) - 1
         scale = min(max(self.GetClientSize().width - 24, 1) / (max(xs) - left + 1),
@@ -47,9 +49,13 @@ class FanoutPreview(wx.Panel):
                 p = pixel(pad['position'])
                 dc.DrawText(pad['number'], p.x + 3, p.y + 3)
         for row in rows:
-            dc.SetPen(wx.Pen(host.colors['ok'], max(1, round(row['width'] * scale))))
+            color = host.colors['warning'] if 'reason' in row else host.colors['ok']
+            dc.SetPen(wx.Pen(color, max(1, round(row['width'] * scale))))
             dc.DrawLine(pixel(row['start']), pixel(row['end']))
-            dc.SetPen(wx.Pen(host.colors['ok'], 1))
+            dc.SetPen(wx.Pen(host.colors['routed'], max(1, round(row['width'] * scale))))
+            for a, b in zip(row.get('route', []), row.get('route', [])[1:]):
+                dc.DrawLine(pixel(a), pixel(b))
+            dc.SetPen(wx.Pen(color, 1))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
             dc.DrawCircle(pixel(row['end']), max(2, round(row['diameter'] * scale / 2)))
 
@@ -70,13 +76,20 @@ class FanoutPanel(wx.Panel):
                                      'or its pads in PCB Editor.')
         top.Add(self.summary, 1, wx.ALIGN_CENTER_VERTICAL)
         outer.Add(top, 0, wx.EXPAND | wx.ALL, 8)
+        self.fit = wx.StaticText(self, label='Fit guidance appears after Analyze selection.')
+        outer.Add(self.fit, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         body = wx.BoxSizer(wx.HORIZONTAL)
         form = wx.FlexGridSizer(cols=2, vgap=6, hgap=8)
-        self.mode = wx.Choice(self, choices=['Dogbone via in adjacent gap', 'Via-in-pad'])
+        self.mode = wx.Choice(self, choices=['Dogbone via in adjacent gap',
+                                             'Via-in-pad', 'Auto escape to BGA edge'])
         self.mode.SetSelection(0)
         self.source = wx.Choice(self, choices=['Active board preset', 'Netclass per net', 'Custom'])
         self.source.SetSelection(0)
-        for label, control in (('Method', self.mode), ('Via size source', self.source)):
+        self.escape_layer = wx.Choice(self, choices=['B.Cu'])
+        self.escape_layer.SetSelection(0)
+        self.escape_layer.Disable()
+        for label, control in (('Method', self.mode), ('Via size source', self.source),
+                               ('Auto escape layer', self.escape_layer)):
             form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
             form.Add(control, 1, wx.EXPAND)
         self.fields = {}
@@ -94,7 +107,7 @@ class FanoutPanel(wx.Panel):
             self.fields[key] = control
             form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
             form.Add(control, 1, wx.EXPAND)
-            control.Bind(wx.EVT_TEXT, self.invalidate)
+            control.Bind(wx.EVT_TEXT, self.settings_changed)
         form.AddGrowableCol(1)
         left = wx.BoxSizer(wx.VERTICAL)
         left.Add(form, 0, wx.EXPAND)
@@ -128,14 +141,15 @@ class FanoutPanel(wx.Panel):
                                            ('Status / reason', 340), ('Via / drill mm', 140))):
             self.rows.InsertColumn(i, label, width=width)
         outer.Add(self.rows, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
-        self.status = wx.StaticText(self, label='Pad-to-via breakout only. Through vias span all '
-                                    'copper layers. No full escape routing or pair matching.')
+        self.status = wx.StaticText(self, label='Dogbone/via-in-pad breakouts or bounded '
+                                    'single-ended escape to the BGA edge. No pair matching.')
         outer.Add(self.status, 0, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(outer)
         for control in (self.mode, self.source):
             control.Bind(wx.EVT_CHOICE, self.changed)
+        self.escape_layer.Bind(wx.EVT_CHOICE, self.settings_changed)
         for control in (self.netclass_width, self.allow_via_in_pad):
-            control.Bind(wx.EVT_CHECKBOX, self.invalidate)
+            control.Bind(wx.EVT_CHECKBOX, self.settings_changed)
         if host.dark:
             self.rows.SetBackgroundColour('#19212D')
             self.rows.SetForegroundColour('#E5EDF8')
@@ -143,6 +157,7 @@ class FanoutPanel(wx.Panel):
                 if isinstance(child, (wx.StaticText, wx.CheckBox)):
                     child.SetForegroundColour('#E5EDF8')
         self.update_size()
+        self.allow_via_in_pad.Disable()
 
     def message(self, text, state='pending'):
         self.status.SetForegroundColour(self.host.colors[state])
@@ -185,7 +200,37 @@ class FanoutPanel(wx.Panel):
 
     def changed(self, event):
         self.update_size()
+        self.escape_layer.Enable(self.mode.GetSelection() == 2)
+        self.allow_via_in_pad.Enable(self.mode.GetSelection() == 1)
+        self.apply.SetLabel('Apply escaped routes' if self.mode.GetSelection() == 2 else
+                            'Apply accepted breakouts')
+        self.settings_changed(event)
+
+    def settings_changed(self, event):
         self.invalidate(event)
+        self.update_fit()
+
+    def update_fit(self):
+        if not self.data:
+            return
+        try:
+            fit = fit_guidance(self.data, self.values())
+        except ValueError as exc:
+            self.fit.SetLabel(f'Fit: {exc}')
+            self.fit.SetForegroundColour(self.host.colors['warning'])
+            return
+        if fit['reasons']:
+            self.fit.SetLabel('Fit review: ' + '\n'.join(fit['reasons'][:3]) +
+                              '\nPreview checks actual copper, zones and board edges.')
+            self.fit.SetForegroundColour(self.host.colors['warning'])
+        else:
+            self.fit.SetLabel(
+                f'Nominal fit: {fit["selected"]} selected pads; '
+                f'{fit["channel_width"]:.3f} mm straight channel, '
+                f'{fit["via_gap_limit"]:.3f} mm diagonal via limit. '
+                'Preview checks actual obstacles.')
+            self.fit.SetForegroundColour(self.host.colors['ok'])
+        self.Layout()
 
     def on_refresh(self, event=None):
         self.task(lambda: self.native('fanout_analyze'), self.accept_data)
@@ -194,6 +239,12 @@ class FanoutPanel(wx.Panel):
         self.invalidate()
         first = self.data is None
         self.data = self.canvas.data = data
+        choices = [layer for layer in data['copper_layers'] if layer != data['layer']]
+        old_layer = self.escape_layer.GetStringSelection()
+        self.escape_layer.Set(choices)
+        default_layer = 'B.Cu' if data['layer'] == 'F.Cu' else 'F.Cu'
+        self.escape_layer.SetStringSelection(old_layer if old_layer in choices else default_layer)
+        self.escape_layer.Enable(self.mode.GetSelection() == 2)
         self.remove.Enable(bool(data.get('managed_items')))
         old = self.source.GetSelection()
         self.source.Set(['Active board preset', 'Netclass per net', 'Custom'] +
@@ -209,14 +260,17 @@ class FanoutPanel(wx.Panel):
                               f"{grid['columns']} × {grid['rows']}; pitch "
                               f"{grid['pitch_x']:.3f} × {grid['pitch_y']:.3f} mm; {data['layer']}")
         self.canvas.Refresh()
+        self.update_fit()
         self.message('Review fabrication limits and sizes, then Preview. '
                      f"{data.get('managed_items', 0)} removable generated items; "
                      f"{data.get('modified_items', 0)} edited/locked items preserved.")
 
     def values(self):
+        mode = ('dogbone', 'via-in-pad', 'auto-escape')[self.mode.GetSelection()]
         return validate(dict(**{k: c.GetValue() for k, c in self.fields.items()},
                              preset=self.preset(),
-                             mode='via-in-pad' if self.mode.GetSelection() else 'dogbone',
+                             mode=mode,
+                             escape_layer=self.escape_layer.GetStringSelection(),
                              allow_via_in_pad=self.allow_via_in_pad.GetValue(),
                              netclass_width=self.netclass_width.GetValue()))
 
@@ -235,22 +289,26 @@ class FanoutPanel(wx.Panel):
     def accept_preview(self, result):
         self.preview = self.canvas.preview = result
         self.rows.DeleteAllItems()
-        for key, state in (('accepted', 'ok'), ('rejected', 'warning'), ('skipped', 'pending')):
+        for key, state in (('accepted', 'ok'), ('breakout_only', 'warning'),
+                           ('rejected', 'warning'), ('already_routed', 'routed'),
+                           ('skipped', 'pending')):
             for row in result[key]:
                 i = self.rows.InsertItem(self.rows.GetItemCount(), row['pad'])
                 net = row.get('net') or next((p['net'] for p in self.data['pads']
                                                if p['number'] == row['pad']), '')
                 self.rows.SetItem(i, 1, net)
-                self.rows.SetItem(i, 2, row.get('reason', 'Accepted pad-to-via breakout'))
-                if key == 'accepted':
+                self.rows.SetItem(i, 2, row.get('reason', row.get('status',
+                                                               'Accepted pad-to-via breakout')))
+                if key in ('accepted', 'breakout_only'):
                     self.rows.SetItem(i, 3, f"{row['diameter']:.3f} / {row['drill']:.3f}")
                 self.rows.SetItemTextColour(i, self.host.colors[state])
         count = len(result['accepted'])
         self.apply.Enable(bool(count))
         self.canvas.Refresh()
-        self.message(f"{count} accepted; {len(result['rejected'])} blocked; "
-                     f"{len(result['skipped'])} skipped. Inspect rows before applying. "
-                     'These breakouts do not escape all balls to the package boundary.',
+        self.message(f"{count} accepted; {len(result['breakout_only'])} breakout-only; "
+                     f"{len(result['rejected'])} blocked; "
+                     f"{len(result['already_routed'])} already routed; "
+                     f"{len(result['skipped'])} skipped. Inspect rows before applying.",
                      'ok' if count else 'warning')
 
     def clear_preview(self, event=None):
@@ -261,9 +319,9 @@ class FanoutPanel(wx.Panel):
         if not self.preview:
             return
         token = self.preview['token']
-        rejected = len(self.preview['rejected'])
-        if rejected and wx.MessageBox(f'{rejected} pads cannot fan out with these settings.\n'
-                                      'Place the accepted breakouts only?', 'Partial fanout',
+        rejected = len(self.preview['rejected']) + len(self.preview['breakout_only'])
+        if rejected and wx.MessageBox(f'{rejected} pads are blocked or only break out.\n'
+                                      'Place the accepted routes only?', 'Partial fanout',
                                       wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
                                       parent=self) != wx.YES:
             return
@@ -277,7 +335,8 @@ class FanoutPanel(wx.Panel):
         def done(result):
             placed, data = result
             self.accept_data(data)
-            self.message(f"Placed {placed['pads']} pad-to-via breakouts. "
+            unit = 'escaped routes' if placed['escaped'] else 'pad-to-via breakouts'
+            self.message(f"Placed {placed['pads']} {unit}. "
                          'Undo is available in KiCad. '
                          'Run KiCad DRC and save normally.', 'ok')
 
@@ -331,7 +390,8 @@ class FanoutPanel(wx.Panel):
                 return
             labels = [f"{c['accepted']} accepted / {c['blocked']} blocked — "
                       f"via {c['settings']['diameter']:.3f}/{c['settings']['drill']:.3f} mm, "
-                      f"track {c['settings']['width']:.3f} mm" for c in choices]
+                      f"track {c['settings']['width']:.3f} mm; "
+                      f"{next(iter(c['reasons']), 'no blocked pads')}" for c in choices]
             dialog = wx.SingleChoiceDialog(self, result['note'] + '\nChoose settings to load; '
                                            'nothing will be placed.', 'Fanout suggestions', labels)
             try:
