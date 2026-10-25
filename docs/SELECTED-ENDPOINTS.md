@@ -1,5 +1,14 @@
 # Detect a signal path from selected vias or pads
 
+You can also use the **Signal Chain Editor** directly: select two pads/vias in PCB
+Editor, then click either **Use KiCad selection** button or **Detect path from 2
+selected pads / vias**. The editor previews the highlighted path and crossed parts,
+selects any existing matching rows, and stages new chains for **Apply & save**.
+Detection runs in a worker without blocking the dialog. Invalid selections show an
+error instead of silently clearing the component reference field. Selecting source
+or destination footprints still fills references for the component-search workflow.
+With both component fields empty, **Find chains** also uses endpoint detection.
+
 1. In PCB Editor select exactly **two vias or pads on one signal**. Do not select a
    whole track, footprint, or the two opposite legs at one end of a differential pair.
 2. Open TraceForge's **Signals / xSignals** tab and click **Detect between selected

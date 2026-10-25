@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 import wx
@@ -16,7 +17,14 @@ import wx.dataview as dv
 import wx.grid as gridlib
 
 from .chains import Config, GroupDef
-from .pathfinder import DEFAULT_LIMITS, FoundChain, GroupSuggestion, _group_for, merge_into
+from .pathfinder import (
+    DEFAULT_LIMITS,
+    FoundChain,
+    GroupSuggestion,
+    _group_for,
+    merge_into,
+    name_and_group,
+)
 
 COLS = ("Keep", "Chain", "Group", "Pair", "Path (driver → receiver)", "Series")
 
@@ -36,10 +44,13 @@ def chains_from_config(config: Optional[Config]) -> list[FoundChain]:
 class ChainEditor(wx.Dialog):
     def __init__(self, parent: Optional[wx.Window], config: Optional[Config],
                  find: Callable[[list[str], list[str], float, bool], list[FoundChain]],
-                 selection: Callable[[], list[str]]):
+                 selection: Callable[[], list[str]], detect_selected=None):
         super().__init__(parent, title="TraceForge · Signal Chain Editor", size=(1100, 720),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.find, self.selection = find, selection
+        self.detect_selected = detect_selected
+        self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='chain-editor')
+        self.working, self.closed = False, False
         self.chains: list[FoundChain] = chains_from_config(config)
         self.limits: dict[str, tuple] = {g.name: (g.skew_ps, g.pair_skew_ps, g.stub_max_ps)
                                          for g in (config.groups if config else [])}
@@ -53,7 +64,7 @@ class ChainEditor(wx.Dialog):
             top.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
             top.Add(field, 1, wx.EXPAND)
             btn = wx.Button(self, label="Use KiCad selection")
-            btn.Bind(wx.EVT_BUTTON, lambda _e, f=field: f.SetValue(", ".join(self.selection())))
+            btn.Bind(wx.EVT_BUTTON, lambda _e, f=field: self.use_selection(f))
             top.Add(btn)
             top.Add((0, 0))
         opts = wx.BoxSizer(wx.HORIZONTAL)
@@ -66,6 +77,17 @@ class ChainEditor(wx.Dialog):
         opts.Add(self.ohms, 0, wx.RIGHT, 12)
         opts.Add(self.caps, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
         opts.Add(find_btn)
+        self.include_pair = wx.CheckBox(self, label='Include differential partner')
+        self.include_pair.SetValue(True)
+        opts.Add(self.include_pair, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 12)
+        endpoint_button = wx.Button(self, label='Detect path from 2 selected pads / vias')
+        endpoint_button.Enable(detect_selected is not None)
+        endpoint_button.Bind(wx.EVT_BUTTON, lambda event: self.detect_endpoints())
+        self.path_preview = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY,
+                                       size=(-1, 75))
+        self.path_preview.ChangeValue('Select two pads/vias in PCB Editor, then click '
+                                     'Use KiCad selection or Detect path. For component searches, '
+                                     'pick source and destination footprints separately.')
 
         # ---- chain list
         self.list = dv.DataViewListCtrl(self, style=dv.DV_ROW_LINES | dv.DV_MULTIPLE)
@@ -100,6 +122,8 @@ class ChainEditor(wx.Dialog):
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(top, 0, wx.ALL, 8)
         box.Add(opts, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        box.Add(endpoint_button, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        box.Add(self.path_preview, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
         box.Add(wx.StaticText(self, label="Group limits (blank = not checked)"), 0, wx.ALL, 8)
         self.grid.SetMinSize((-1, 190))  # fixed height; scrolls, leaving the chain list room
@@ -109,6 +133,134 @@ class ChainEditor(wx.Dialog):
         box.Add(buttons, 0, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(box)
         self.refresh()
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.Bind(wx.EVT_BUTTON, self.on_cancel, id=wx.ID_CANCEL)
+
+    def on_close(self, event):
+        if self.working:
+            event.Veto()
+        else:
+            event.Skip()
+
+    def on_cancel(self, event):
+        if not self.working:
+            self.EndModal(wx.ID_CANCEL)
+
+    def task(self, fn, done):
+        if self.working:
+            return
+        self.working = True
+        self.Enable(False)
+        self.status.SetLabel('Reading PCB selection and detecting path...')
+
+        def finish(value, error):
+            if self.closed:
+                return
+            self.working = False
+            self.Enable(True)
+            if error:
+                self.status.SetLabel(f'Detection failed: {error}')
+                self.path_preview.ChangeValue(str(error))
+            else:
+                try:
+                    done(value)
+                except Exception as exc:
+                    self.status.SetLabel(f'Detection failed: {exc}')
+
+        def work():
+            try:
+                value, error = fn(), None
+            except Exception as exc:
+                value, error = None, exc
+            wx.CallAfter(finish, value, error)
+        self.worker.submit(work)
+
+    def use_selection(self, field):
+        # The old callback returns component references only. Pads/vias have no refs;
+        # do not silently replace the text field with an empty string in that case.
+        options = self.endpoint_options()
+        def work():
+            refs = self.selection()
+            if refs:
+                return refs, None
+            if self.detect_selected:
+                return None, self.detect_selected(**options)
+            raise ValueError('No footprints selected. Select source/destination footprints '
+                             'or reopen TraceForge for pad/via endpoint detection.')
+        def done(result):
+            refs, path = result
+            if refs:
+                field.SetValue(', '.join(dict.fromkeys(refs)))
+                self.status.SetLabel('Component references filled. Set the other endpoint, '
+                                     'then Find chains. Select two pads/vias for routed detection.')
+            else:
+                self.accept_endpoints(path)
+        self.task(work, done)
+
+    def endpoint_options(self):
+        return dict(max_ohms=self.ohms.GetValue(), capacitors=self.caps.GetValue(),
+                    include_pair=self.include_pair.GetValue())
+
+    def detect_endpoints(self):
+        if self.detect_selected:
+            options = self.endpoint_options()
+            self.task(lambda: self.detect_selected(**options), self.accept_endpoints)
+
+    def accept_endpoints(self, result):
+        paths = [p for p in (result['primary'], result['partner']) if p]
+        details = []
+        for path in paths:
+            details.append(' -> '.join(e['label'] for e in path['endpoints']) + ': ' +
+                           ' -> '.join(path['nets']))
+            details.append('Series: ' + (', '.join(f"{c['reference']} ({c['value']})"
+                                                  for c in path['components']) or 'none'))
+        if result['pair_note']:
+            details.append(result['pair_note'])
+        details.append('Preview: routed endpoint path. Saved chain: whole nets and branches.')
+        self.path_preview.ChangeValue('\n'.join(details))
+        if result['pair_note'] and not result['partner']:
+            self.status.SetLabel('Path highlighted. Resolve partner or disable Include '
+                                 'differential partner and detect again before adding.')
+            return
+        found = [FoundChain('', tuple(p['nets']), tuple(p['series']),
+                            p['endpoints'][0]['label'], p['endpoints'][1]['label']) for p in paths]
+        name_and_group(found)
+        existing = [next((c for c in self.chains if set(p['nets']) <= set(c.nets) and
+                         set(p['series']) <= set(c.series)), None) for p in paths]
+        groups = {c.group for c in existing if c}
+        if len(groups) == 1:
+            for chain in found:
+                chain.group = next(iter(groups))
+        names = {c.name for c in self.chains}
+        members, added = [], 0
+        for candidate, previous in zip(found, existing):
+            if previous:
+                members.append(previous)
+                continue
+            base, suffix = candidate.name, 2
+            while candidate.name in names:
+                candidate.name, suffix = f'{base}_{suffix}', suffix + 1
+            names.add(candidate.name)
+            candidate.pair = None
+            self.limits.setdefault(candidate.group, (None, None, None))
+            self.chains.append(candidate)
+            members.append(candidate)
+            added += 1
+        if len(members) == 2:
+            a, b = members
+            if a.group == b.group and a.pair in (None, b.name) and b.pair in (None, a.name):
+                a.pair, b.pair = b.name, a.name
+        self.refresh()
+        self.list.UnselectAll()
+        for member in members:
+            row = self.chains.index(member)
+            self.list.SelectRow(row)
+        if members:
+            self.list.EnsureVisible(self.list.RowToItem(self.chains.index(members[0])))
+        labels = ', '.join(f'{c.group}/{c.name}' for c in members)
+        self.status.SetLabel(f'Path highlighted and zoomed. {added} new chain(s) staged; '
+                             f'{len(members) - added} already in list: {labels}. '
+                             'Apply & save to keep changes.')
 
     # ------------------------------------------------------------------ list <-> model
     def refresh(self) -> None:
@@ -178,6 +330,9 @@ class ChainEditor(wx.Dialog):
     def on_find(self, _event) -> None:
         split = lambda s: [x.strip() for x in s.replace(";", ",").split(",") if x.strip()]  # noqa
         src, dst = split(self.src.GetValue()), split(self.dst.GetValue())
+        if not src and not dst and self.detect_selected:
+            self.detect_endpoints()
+            return
         if not src or not dst:
             self.status.SetLabel("enter source and destination references (e.g. U6 → U12, U16)")
             return
@@ -213,11 +368,13 @@ class ChainEditor(wx.Dialog):
 
 
 def edit_chains(parent: Optional[wx.Window], config: Optional[Config], find, selection,
-                save: Callable[[Config], str]) -> str:
-    dlg = ChainEditor(parent, config, find, selection)
+                save: Callable[[Config], str], detect_selected=None) -> str:
+    dlg = ChainEditor(parent, config, find, selection, detect_selected=detect_selected)
     try:
         if dlg.ShowModal() == wx.ID_OK:
             return save(dlg.result())
         return "chain editor closed without changes"
     finally:
+        dlg.closed = True
+        dlg.worker.shutdown(wait=False, cancel_futures=True)
         dlg.Destroy()

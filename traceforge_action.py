@@ -89,6 +89,7 @@ def build_tools(session: Session):
 
     def edit(parent) -> str:
         from signal_path_analyzer.chain_editor import edit_chains
+        from signal_path_analyzer.endpoint_service import EndpointService
 
         def apply(cfg) -> str:
             path = session.save_config(cfg)
@@ -97,7 +98,8 @@ def build_tools(session: Session):
         def refs():
             return [i['ref'] for i in native.call('selection') if 'ref' in i]
 
-        return edit_chains(parent, session.config, session.find_between, refs, apply)
+        return edit_chains(parent, session.config, session.find_between, refs, apply,
+                           detect_selected=EndpointService(session).detect)
 
     clear = lambda: native.call('clear')  # noqa: E731
     return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,
