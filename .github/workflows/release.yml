@@ -46,3 +46,18 @@ jobs:
               --draft --verify-tag --title "TraceForge $VERSION" \
               --notes-file "docs/RELEASE-NOTES-$VERSION.md"
           fi
+      - name: Record draft verification for SSH-only maintainers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          VERSION=$(python -c 'import importlib.metadata; print(importlib.metadata.version("kicad-pcb-automation-toolkit"))')
+          gh release view "v$VERSION" --json url,isDraft,tagName,assets > release-status.json
+          gh api "repos/$GH_REPO" --jq '{private: .private}' > repository-status.json
+          python -c 'import json; from pathlib import Path; p=Path("release-status.json"); d=json.loads(p.read_text()); d.update(json.loads(Path("repository-status.json").read_text())); assert d["isDraft"] and d["private"], "Expected a private draft release"; p.write_text(json.dumps(d, indent=2)+"\n")'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin refs/notes/release-status:refs/notes/release-status || true
+          git notes --ref=release-status add -f -F release-status.json "$GITHUB_SHA"
+          git push origin refs/notes/release-status

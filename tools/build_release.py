@@ -43,6 +43,7 @@ def main():
             info = zipfile.ZipInfo(f'{folder}/{path.relative_to(ROOT).as_posix()}',
                                    date_time=(2026, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
             info.external_attr = 0o100644 << 16
             bundle.writestr(info, path.read_bytes())
     with zipfile.ZipFile(archive) as bundle:
