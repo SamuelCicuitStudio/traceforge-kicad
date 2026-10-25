@@ -16,10 +16,11 @@ def release_files():
         'signal_path_analyzer_action.py', 'net_chain_monitor_action.py',
         'tools/install_native_bridge.ps1', 'docs/NATIVE-BOARD-ACCESS.md',
         'docs/VIA-STITCHING-TESTING.md', 'docs/FEATURE-SCOPE.md',
-        'docs/RELEASE-NOTES-0.7.0.md',
+        'docs/BGA-FANOUT.md',
     )]
     for directory in ('signal_path_analyzer', 'native_bridge'):
         paths.extend((ROOT / directory).glob('*.py'))
+    paths.extend((ROOT / 'docs').glob('RELEASE-NOTES-*.md'))
     paths.extend((ROOT / 'icons').glob('*.png'))
     for path in paths:
         if not path.is_file() or path.is_symlink():

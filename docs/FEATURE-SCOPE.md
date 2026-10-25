@@ -5,12 +5,13 @@ prevents similarly named PCB features from being implemented with the wrong mode
 
 ## TraceForge feature tabs
 
-The agreed layout is one window with **Signals / xSignals** as the first tab and
-**Via Stitching** as the second. Keep net/chain analysis, timing, highlighting,
-chain editing, DRC targets and exports together in Signals. The stitching tab owns
+The layout is one window with **Signals / xSignals** as the first tab,
+**Via Stitching** as the second, and **BGA Fanout** as the third. Keep net/chain analysis,
+timing, highlighting, chain editing, DRC targets and exports together in Signals. The stitching tab owns
 regions, via settings, preview and management of generated stitching sets. Tab changes
-preserve state and do not trigger board refreshes. See [native board access](NATIVE-BOARD-ACCESS.md) for implementation limits and
-[via stitching testing](VIA-STITCHING-TESTING.md) for the current workflow.
+preserve state and do not trigger board refreshes. See [native board access](NATIVE-BOARD-ACCESS.md),
+[via stitching testing](VIA-STITCHING-TESTING.md), and [BGA Fanout](BGA-FANOUT.md)
+for the implemented workflows and limits.
 
 ## Signal Path Analyzer
 
@@ -57,6 +58,10 @@ and column spacing, draw a rectangle or select a copper region, and automaticall
 avoid placements that would cause DRC errors.
 
 ## Interactive Parallel Multi-Routing
+
+This requires live routing on KiCad's PCB canvas: select multiple tracks or starting
+pads, move the bundle with the cursor and click to place bends/finish. An overview
+guide editor does not satisfy this interaction. It is planned and not implemented.
 
 This feature is interactive bus routing, not automatic routing and not differential-
 pair routing.

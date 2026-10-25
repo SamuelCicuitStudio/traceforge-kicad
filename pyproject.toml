@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kicad-pcb-automation-toolkit"
-version = "0.7.0"
-description = "TraceForge for KiCad 10: signal-chain timing and managed via stitching"
+version = "0.8.0"
+description = "TraceForge for KiCad 10: signal chains, via stitching and BGA breakout"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

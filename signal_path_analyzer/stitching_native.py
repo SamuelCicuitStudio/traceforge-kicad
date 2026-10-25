@@ -9,7 +9,17 @@ from collections import Counter, defaultdict
 import pcbnew
 import wx
 
-from .stitching import grid, inside, load_store, polygon, save_store, settings
+from .stitching import (
+    MAX_CANDIDATES,
+    fence_gaps,
+    grid,
+    inside,
+    load_store,
+    perimeter_points,
+    polygon,
+    save_store,
+    settings,
+)
 
 COMMIT_LABEL = 'TraceForge: Apply Stitching Changes'
 PREFIX = 'TraceForge stitching: '
@@ -190,13 +200,44 @@ def plan(board, request):
     points = ([p for ring in rings for p in ring[0]] if region['kind'] == 'board'
               else polygon(region['points']))
     xs, ys = zip(*points)
-    candidates = grid((min(xs), min(ys), max(xs), max(ys)), values)
     radius = round(values['diameter'] * 5e5)
     ds = board.GetDesignSettings()
     clearance = max(ds.m_MinClearance,
                     ds.m_NetSettings.GetEffectiveNetClass(net.GetNetname()).GetClearance())
     boundary = round(values['boundary'] * 1e6)
     board_edge = max(round(values['edge'] * 1e6), ds.m_CopperEdgeClearance)
+    candidate_paths, path_lengths = [], []
+    fence = values['pattern'] == 'fence'
+    if fence:
+        if region['kind'] == 'board':
+            source = board_poly
+            inset = radius + max(boundary, board_edge) + 2000
+        elif region['kind'] == 'zone':
+            source = region_item(board, region['uuid']).Outline()
+            inset = radius + boundary + 2000
+        else:
+            source = pcbnew.SHAPE_POLY_SET()
+            source.NewOutline()
+            for x, y in points:
+                source.Append(round(x * 1e6), round(y * 1e6))
+            inset = radius + boundary + 2000
+        contour = pcbnew.SHAPE_POLY_SET(source)
+        contour.Inflate(-inset, pcbnew.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000)
+        if not contour.OutlineCount():
+            raise ValueError('The fence inset consumes this region; reduce setback/diameter.')
+        candidates = []
+        for loops in contours(contour):
+            # Include cutout/hole boundaries, offset toward the permitted copper side.
+            for loop in loops:
+                locations, length = perimeter_points(loop, values['pitch_x'])
+                path_id = len(path_lengths)
+                path_lengths.append(length)
+                candidates.extend(p for p, _ in locations)
+                candidate_paths.extend((path_id, distance) for _, distance in locations)
+                if len(candidates) > MAX_CANDIDATES:
+                    raise ValueError('Fence exceeds the candidate limit. Increase spacing.')
+    else:
+        candidates = grid((min(xs), min(ys), max(xs), max(ys)), values)
     layers = list(board.GetEnabledLayers().CuStack())
     zones, keepouts, foreign = [], [], []
     for zone in board.Zones():
@@ -267,7 +308,8 @@ def plan(board, request):
                 buckets[ix, iy].extend(shapes)
     accepted, rejected = [], []
     strict = values.get('connection', 'two') == 'all'
-    for x, y in candidates:
+    accepted_paths = defaultdict(list)
+    for candidate_index, (x, y) in enumerate(candidates):
         if time.monotonic() - started > 12:
             raise ValueError('Preview exceeded its time budget; increase spacing '
                              'or narrow the region.')
@@ -286,6 +328,11 @@ def plan(board, request):
         elif any(shape.Collide(circle, gap)
                  for shape, gap in buckets[point.x // cell, point.y // cell]):
             reason = 'pad / track / via clearance'
+        elif fence and any((x - px) ** 2 + (y - py) ** 2 <
+                           (max(values['diameter'] + clearance / 1e6,
+                                values['drill'] + ds.m_HoleToHoleMin / 1e6)) ** 2
+                           for px, py in accepted):
+            reason = 'fence corner / via spacing'
         else:
             contacts = {layer for layer, poly, _ in zones if fits(poly, point, radius + boundary)}
             in_selected = region['kind'] != 'zone' or any(
@@ -297,9 +344,16 @@ def plan(board, request):
             rejected.append([x, y, reason])
         else:
             accepted.append([x, y])
+            if fence:
+                path_id, distance = candidate_paths[candidate_index]
+                accepted_paths[path_id].append(distance)
     return dict(settings=values, region=region, accepted=accepted, rejected=rejected,
                 reasons=dict(Counter(p[2] for p in rejected)), clearance_mm=clearance / 1e6,
-                replace=request.get('replace'), name=request.get('name') or 'Ground stitching')
+                replace=request.get('replace'), name=request.get('name') or 'Ground stitching',
+                fence=(dict(spacing_mm=values['pitch_x'], contours=len(path_lengths),
+                            largest_gap_mm=max(fence_gaps(length, accepted_paths[i])
+                                               for i, length in enumerate(path_lengths)))
+                       if fence else None))
 
 
 def menu_item(menu, label):
@@ -321,12 +375,12 @@ def editor_frame():
 def transaction(board, job):
     global _pending
     if _pending is not None:
-        raise RuntimeError('Another stitching transaction is in progress.')
+        raise RuntimeError('Another board-edit transaction is in progress.')
     frame = editor_frame()
     item = next((found for menu, _ in frame.GetMenuBar().GetMenus()
                  if (found := menu_item(menu, COMMIT_LABEL))), None) if frame else None
     if item is None:
-        raise RuntimeError('Restart PCB Editor to load the native stitching commit action.')
+        raise RuntimeError('Restart PCB Editor to load the native board-edit commit action.')
     _pending = dict(board=board.GetFileName(), job=job)
     try:
         event = wx.CommandEvent(wx.EVT_MENU.typeId, item.GetId())
@@ -337,11 +391,11 @@ def transaction(board, job):
                               if (found := menu_item(menu, wx.GetTranslation('Undo')))), None)
             undo = wx.CommandEvent(wx.EVT_MENU.typeId, undo_item.GetId()) if undo_item else None
             if undo is None or not frame.GetEventHandler().ProcessEvent(undo):
-                raise RuntimeError('Stitching failed; use Edit > Undo before proceeding: '
+                raise RuntimeError('Board edit failed; use Edit > Undo before proceeding: '
                                    + _pending['error'])
-            raise RuntimeError('Stitching failed and was undone: ' + _pending['error'])
+            raise RuntimeError('Board edit failed and was undone: ' + _pending['error'])
         if not _pending.get('ran'):
-            raise RuntimeError('KiCad did not execute the stitching action.')
+            raise RuntimeError('KiCad did not execute the board-edit action.')
         return _pending['result']
     finally:
         _pending = None

@@ -27,6 +27,7 @@ dist/
 *.kicad_sch-bak
 *.traceforge.json
 *.traceforge-stitching.json
+*.traceforge-fanout.json
 xsignals.json
 *.log
 *.bak

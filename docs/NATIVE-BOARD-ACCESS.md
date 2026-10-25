@@ -52,6 +52,12 @@ Native geometry/refill may briefly occupy the editor's GUI thread.
 
 ## Compatibility and diagnostics
 
+In 0.8, `fanout_*` commands provide BGA pad-to-via breakout using the same native
+undo transaction path. A third tab shares the existing worker/guard and performs no
+automatic polling. Preview tokens are single-use and revalidated against current
+footprint and geometry before Apply. See [BGA Fanout](BGA-FANOUT.md) for method,
+fabrication and routing limitations.
+
 This release targets KiCad 10 on Windows. Legacy pcbnew bindings are planned for removal
 in KiCad 11. TraceForge does not modify KiCad's official API implementation.
 Logs are at `%APPDATA%/TraceForge/traceforge.log`. Review private board paths before

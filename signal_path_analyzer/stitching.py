@@ -81,8 +81,8 @@ def settings(values):
     if not result.get('net'):
         raise ValueError('Choose a stitching net.')
     result['pattern'] = values.get('pattern', 'symmetric')
-    if result['pattern'] not in ('symmetric', 'staggered'):
-        raise ValueError('Choose Symmetric or Staggered placement.')
+    if result['pattern'] not in ('symmetric', 'staggered', 'fence'):
+        raise ValueError('Choose Symmetric, Staggered or Perimeter fence placement.')
     return result
 
 
@@ -104,6 +104,42 @@ def grid(bounds, values):
                              'or use a smaller region.')
         result.extend((i * sx + ox + shift, j * sy + oy) for i in range(ix0, ix1 + 1))
     return result
+
+
+def perimeter_points(points, pitch):
+    """Uniform arc-length sampling of a closed fence; no duplicate endpoint.
+
+    Return points and their distance along the contour so rejected sites can be
+    reported as actual gaps rather than implying a continuous shielding fence.
+    """
+    if not math.isfinite(pitch) or pitch <= 0:
+        raise ValueError('Fence spacing must be a positive finite length.')
+    poly = polygon(points)
+    segments = [(a, b, math.dist(a, b)) for a, b in edges(poly)]
+    length = sum(segment[2] for segment in segments)
+    count = max(3, math.ceil(length / pitch))
+    if count > MAX_CANDIDATES:
+        raise ValueError('Fence exceeds the candidate limit; increase spacing '
+                         'or narrow the region.')
+    result, segment, consumed = [], 0, 0.0
+    for i in range(count):
+        distance = length * i / count
+        while segment < len(segments) - 1 and distance > consumed + segments[segment][2]:
+            consumed += segments[segment][2]
+            segment += 1
+        a, b, size = segments[segment]
+        factor = (distance - consumed) / size
+        result.append(([a[0] + (b[0] - a[0]) * factor,
+                        a[1] + (b[1] - a[1]) * factor], distance))
+    return result, length
+
+
+def fence_gaps(length, distances):
+    if not distances:
+        return length
+    ordered = sorted(distances)
+    return max([b - a for a, b in zip(ordered, ordered[1:])] +
+               [length - ordered[-1] + ordered[0]])
 
 
 def store_path(board_file):

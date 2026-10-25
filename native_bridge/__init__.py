@@ -81,7 +81,7 @@ class StitchingCommit(pcbnew.ActionPlugin):
     def defaults(self):
         self.name = 'TraceForge: Apply Stitching Changes'
         self.category = 'TraceForge'
-        self.description = 'Internal undoable stitching transaction; use the Via Stitching tab'
+        self.description = 'Internal undoable board transaction; use the TraceForge panel'
         self.show_toolbar_button = False
 
     def Run(self):

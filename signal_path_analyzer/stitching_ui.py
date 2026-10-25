@@ -169,7 +169,8 @@ class StitchingPanel(wx.Panel):
                                                   'Every copper layer'])
         self.connection.SetSelection(0)
         self.pattern = wx.Choice(self, choices=['Symmetric (aligned rows)',
-                                               'Staggered (alternate rows offset)'])
+                                               'Staggered (alternate rows offset)',
+                                               'Perimeter fence'])
         self.pattern.SetSelection(0)
         for label, control in (('Set name', self.name), ('Net', self.net),
                                ('Via size source', self.source),
@@ -274,7 +275,15 @@ class StitchingPanel(wx.Panel):
 
     def changed(self, event):
         self.update_sizes()
+        self.update_pattern()
         self.invalidate(event)
+
+    def update_pattern(self):
+        fence = self.pattern.GetSelection() == 2
+        for key in ('pitch_y', 'offset_x', 'offset_y'):
+            self.fields[key].Enable(not fence)
+        self.fields['pitch_x'].SetToolTip('Fence: maximum distance along the inset perimeter. '
+                                        'Grid: horizontal center-to-center spacing.')
 
     def size_source(self):
         i = self.source.GetSelection()
@@ -296,10 +305,14 @@ class StitchingPanel(wx.Panel):
             self.fields[key].ChangeValue(f'{value:g}')
 
     def collect(self):
+        values = {k: v.GetValue() for k, v in self.fields.items()}
+        pattern = ('symmetric', 'staggered', 'fence')[self.pattern.GetSelection()]
+        if pattern == 'fence':
+            values.update(pitch_y=values['pitch_x'], offset_x='0', offset_y='0')
         return settings(dict(net=self.net.GetValue(), size_source=self.size_source(),
-                             pattern='staggered' if self.pattern.GetSelection() else 'symmetric',
+                             pattern=pattern,
                              connection='all' if self.connection.GetSelection() else 'two',
-                             **{k: v.GetValue() for k, v in self.fields.items()}))
+                             **values))
 
     def set_region(self, region):
         self.region = region
@@ -355,7 +368,9 @@ class StitchingPanel(wx.Panel):
                 index = min(int(source.split(':')[1]) + 2, self.source.GetCount() - 1)
             self.source.SetSelection(index)
             self.connection.SetSelection(int(values.get('connection') == 'all'))
-            self.pattern.SetSelection(int(values.get('pattern') == 'staggered'))
+            self.pattern.SetSelection({'symmetric': 0, 'staggered': 1, 'fence': 2}.get(
+                values.get('pattern'), 0))
+            self.update_pattern()
             for key, control in self.fields.items():
                 if key in values:
                     control.ChangeValue(str(values[key]))
@@ -417,8 +432,12 @@ class StitchingPanel(wx.Panel):
         reasons = '; '.join(f'{key}: {value}' for key, value in result['reasons'].items())
         self.counts.SetLabel(f"Accepted: {count}   Skipped: {len(result['rejected'])}")
         self.apply.Enable(bool(count))
-        self.message(f"{count} accepted. {reasons or 'No rejected locations.'}",
-                     'ok' if count else 'warning')
+        fence = result.get('fence')
+        gap = (f" Largest fence gap: {fence['largest_gap_mm']:.3f} mm; requested "
+               f"{fence['spacing_mm']:.3f} mm." if fence else '')
+        broken = fence and fence['largest_gap_mm'] > fence['spacing_mm'] * 1.01
+        self.message(f"{count} accepted. {reasons or 'No rejected locations.'}{gap}",
+                     'ok' if count and not broken else 'warning')
 
     def clear_preview(self, event=None):
         self.invalidate()

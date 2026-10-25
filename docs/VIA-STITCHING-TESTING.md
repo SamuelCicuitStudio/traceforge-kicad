@@ -9,6 +9,10 @@ The first tab retains all existing Signals / xSignals functionality.
    Try a listed preset and Custom; all dimensions and center-to-center spacing are mm.
 3. Compare Symmetric and Staggered previews. Alternate staggered rows shift by half
    the horizontal pitch, with row parity anchored to the board coordinate grid.
+   Also test Perimeter fence: X is the maximum along-contour spacing; Y/grid offsets
+   are disabled. Boundary/edge setbacks determine the inset. Check board cutout loops
+   and the reported largest gap after obstacles reject locations. This is geometric
+   placement, not an automatic RF shielding design or a guaranteed gap-free fence.
 4. Draw a rectangle on the tab's board overview by dragging. For a polygon, click
    vertices and press Enter/right-click to finish. Esc cancels. This version draws
    in the overview, not directly on the PCB canvas. Whole board and Use PCB selection

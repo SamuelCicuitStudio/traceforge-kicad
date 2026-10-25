@@ -165,6 +165,13 @@ def dispatch(board, operation, payload):
             result.append(fp)
         return result
 
+    if operation.startswith('fanout_'):
+        from signal_path_analyzer.fanout_native import dispatch as fanout_dispatch
+
+        if operation in ('fanout_apply', 'fanout_remove'):
+            _highlights.clear(board, board_items(board))
+        return fanout_dispatch(board, operation, payload)
+
     if operation.startswith('stitch_'):
         from signal_path_analyzer.stitching_native import dispatch as stitch_dispatch
 
@@ -286,7 +293,8 @@ class Server:
                     done = threading.Event()
                     state = {'cancelled': False}
                     wx.CallAfter(self.execute, request, state, done)
-                    timeout = 120 if request.get('operation', '').startswith('stitch_') else 5
+                    timeout = 120 if request.get('operation', '').startswith(
+                        ('stitch_', 'fanout_')) else 5
                     if not done.wait(timeout):
                         state['cancelled'] = True
                         reply = {'error': 'PCB Editor did not service the native request in time'}

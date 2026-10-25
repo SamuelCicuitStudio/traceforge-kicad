@@ -279,6 +279,10 @@ class TraceForgePanel(wx.Frame):
         self.notebook.AddPage(root, 'Signals / xSignals')
         self.stitching = StitchingPanel(self.notebook, self, stitching)
         self.notebook.AddPage(self.stitching, 'Via Stitching')
+        from .fanout_ui import FanoutPanel
+
+        self.fanout = FanoutPanel(self.notebook, self, stitching)
+        self.notebook.AddPage(self.fanout, 'BGA Fanout')
         if self.dark:
             self.stitching.SetBackgroundColour('#222C3A')
             self.stitching.SetForegroundColour('#E5EDF8')
@@ -294,6 +298,9 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 2:
+            self.fanout.on_refresh()
+            return
         if self.notebook.GetSelection() == 1:
             self.stitching.on_refresh()
             return
@@ -524,14 +531,14 @@ class TraceForgePanel(wx.Frame):
                 try:
                     done(result)
                 except Exception as exc:
-                    logging.exception('Stitching UI completion failed')
+                    logging.exception('Board tool UI completion failed')
                     page.message(str(exc), 'error')
 
         def work():
             try:
                 result, error = self.api.call(fn, retries=0), None
             except Exception as exc:
-                logging.exception('Stitching operation failed')
+                logging.exception('Board tool operation failed')
                 result, error = None, exc
             if not self.closing:
                 wx.CallAfter(finished, result, error)
