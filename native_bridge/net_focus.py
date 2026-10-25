@@ -20,8 +20,13 @@ def shortcut(action):
                 value = fields[1] if len(fields) > 1 else ''
                 break
     if not value:
-        raise ValueError('Run the updated TraceForge installer, then restart PCB Editor '
-                         'to enable native net focus. Highlight Selected Nets needs a shortcut.')
+        label = ('Highlight Net (selected nets)' if name == 'highlightNetSelection'
+                 else 'Clear Net Highlighting')
+        raise ValueError(f'KiCad shortcut is unassigned: {label}. '
+                         'The TraceForge helper is loaded. Close all KiCad windows, '
+                         'including KiCad Manager, run tools/install_native_bridge.ps1 '
+                         'from the TraceForge folder, then reopen PCB Editor. '
+                         f'Or assign this action in KiCad Preferences > Hotkeys. File: {path}')
     return value
 
 

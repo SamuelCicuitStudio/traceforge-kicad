@@ -18,7 +18,7 @@ are accepted preview locations; placement requires Apply.*
 1. Download the **TraceForge KiCad10 Windows ZIP** from this repository's Releases
    page. Extract it completely into a permanent folder, for example
    `C:\Tools\TraceForge`. Do not run the plugin from inside the ZIP.
-2. Save your work and close every PCB Editor window.
+2. Save your work and close all KiCad windows, including KiCad Manager.
 3. Open the extracted folder, right-click inside it and choose **Open in Terminal**.
    In PowerShell run:
 
@@ -48,7 +48,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\install_native_b
 
 This switches the plugin junction and preserves the previous installation folder.
 The installer refuses to replace an ordinary folder. Restart PCB Editor afterward.
-For a Git checkout already linked by the installer, pull updates and restart it.
+For a Git checkout already linked by the installer, pull updates, rerun the
+installer with all KiCad windows closed, and restart PCB Editor.
 
 To uninstall, close PCB Editor and remove **only the junction** at the plugin path
 above; keep your board files and TraceForge sidecars. Removing the installation
@@ -93,7 +94,8 @@ Clear, Esc or a changed native selection releases the effect; panning/zooming ke
 
 *Actual PCB Editor result on a synthetic board with native net focus enabled.*
 
-Rerun the installer with PCB Editor closed, then restart it to load the required
+Rerun the installer with all KiCad windows closed, including KiCad Manager,
+then restart PCB Editor to load the required
 native highlight shortcut.
 The installer assigns **Ctrl+Alt+Shift+F12** to KiCad's **Highlight Net (selected
 nets)** action only if it is unassigned and that shortcut is unused. Existing

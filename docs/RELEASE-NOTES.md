@@ -6,7 +6,8 @@ The Signals checkbox has been removed. Clear, Esc or a changed native selection
 releases focus; panning and zooming retain it. All branches on highlighted nets
 remain bright.
 
-Close PCB Editor, run `tools/install_native_bridge.ps1`, then restart PCB Editor.
+Close all KiCad windows, including KiCad Manager, run
+`tools/install_native_bridge.ps1`, then restart PCB Editor.
 The installer configures the required native highlight shortcut while preserving
 existing custom bindings. This step is required when updating from older versions.
 
