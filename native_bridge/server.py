@@ -224,6 +224,11 @@ def dispatch(board, operation, payload):
                 if geo is not None and pad.GetPadToDieLength():
                     geo['die_mm'].append(pad.GetPadToDieLength() / 1e6)
         return geometry
+    if operation == 'revision':
+        from .revision import signature
+
+        return dict(board=board_path(board), revision=signature(board),
+                    selection=sorted(it.m_Uuid.AsString() for it in pcbnew.GetCurrentSelection()))
     if operation == 'selection':
         selected = {it.m_Uuid.AsString(): it for it in pcbnew.GetCurrentSelection()
                     if it.IsSelected()}

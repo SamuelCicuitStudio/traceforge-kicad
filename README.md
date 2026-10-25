@@ -64,7 +64,10 @@ The native toolbar supports light and dark TraceForge icons.
 All board operations run through the native helper on KiCad's GUI thread. The panel accepts
 one operation at a time and does not poll or automatically retry failed operations.
 The window has **Signals / xSignals**, **Via Stitching**, **BGA Fanout** and **Via Fencing** tabs.
-Switching tabs retains their state without reading the board. F5 refreshes only the active tab.
+Opening a tab loads its data automatically. Returning from PCB Editor checks the
+board revision and geometry signature; only stale tabs refresh. Unchanged tabs retain
+their views. There is no periodic board polling. F5 forces a refresh of the active tab.
+Region drawing is not interrupted; failed automatic checks do not retry in a loop.
 
 ## Via stitching
 

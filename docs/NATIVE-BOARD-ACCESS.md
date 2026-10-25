@@ -18,8 +18,10 @@ contain session credentials: do not share or commit them.
 
 Requests accept predefined operations, verify board identity and have size/deadline
 limits. Board access executes on KiCad's GUI thread. The socket worker does not access
-pcbnew objects. Both tabs share one worker and busy guard, use manual refresh, and do
-not automatically replay failed commands.
+pcbnew objects. Tabs share one worker and busy guard. Opening a tab or returning to
+TraceForge checks the revision and geometry signature once, refreshing stale data.
+No periodic board polling or automatic replay of failed commands occurs. F5 remains
+available to force a read. Region drawing is not interrupted by automatic checks.
 
 ## Signals
 

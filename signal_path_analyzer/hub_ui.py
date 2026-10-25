@@ -183,6 +183,13 @@ class TraceForgePanel(wx.Frame):
         super().__init__(None, title="TraceForge", size=(1160, 520), style=style)
         self.tools, self.results = tools, []
         self.endpoints = endpoints
+        from .refresh_policy import RefreshPolicy
+
+        self.refresh_policy = RefreshPolicy()
+        self.native_call = stitching
+        self.change_check_pending = False
+        self.auto_refresh_later = None
+        self.auto_check_deferred = False
         self.busy, self.open_groups = False, set()
         self.api = ApiAccess()
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="traceforge-api")
@@ -221,7 +228,8 @@ class TraceForgePanel(wx.Frame):
             btn.Bind(wx.EVT_BUTTON, handler)
             bar.Add(btn, 0, wx.RIGHT, 4)
         self.refresh = wx.Button(root, label="Refresh (F5)", style=wx.BU_EXACTFIT)
-        self.refresh.SetToolTip("Read current timing from KiCad. No automatic polling.")
+        self.refresh.SetToolTip('Force refresh. Tabs also refresh when opened or revisited '
+                               'after a board change. No continuous polling.')
         self.refresh.Bind(wx.EVT_BUTTON, self.on_refresh)
         bar.AddStretchSpacer()
         bar.Add(self.refresh)
@@ -304,6 +312,69 @@ class TraceForgePanel(wx.Frame):
         self.Bind(wx.EVT_HOTKEY, self.on_hotkey)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.register_shortcuts(load_shortcuts())
+        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_tab_open)
+        self.Bind(wx.EVT_ACTIVATE, self.on_activate)
+        wx.CallAfter(self.schedule_auto_refresh)
+
+    def on_tab_open(self, event):
+        event.Skip()
+        self.schedule_auto_refresh()
+
+    def on_activate(self, event):
+        event.Skip()
+        if event.GetActive():
+            self.schedule_auto_refresh()
+
+    def schedule_auto_refresh(self):
+        if not self.native_call or self.closing:
+            return
+        if self.auto_refresh_later:
+            self.auto_refresh_later.Stop()
+        self.auto_refresh_later = wx.CallLater(350, self.check_board_revision)
+
+    def check_board_revision(self):
+        # Triggered by opening a tab or returning from PCB Editor, never a polling timer.
+        if self.closing or wx.GetActiveWindow() not in (None, self):
+            return
+        if self.busy or self.actions_pending or self.change_check_pending:
+            self.auto_check_deferred = True
+            return
+        self.auto_check_deferred = False
+        tab = self.notebook.GetSelection()
+        page = (None, self.stitching, self.fanout, self.trace_fence)[tab]
+        if page and getattr(page, 'canvas', None) and getattr(page.canvas, 'mode', None):
+            return  # Never interrupt drawing a region.
+        self.change_check_pending = True
+
+        def done(state, error):
+            self.change_check_pending = False
+            if self.closing or error:
+                if error and not self.closing:
+                    self.snapshot.SetLabel('Automatic change check unavailable. Use Refresh (F5).')
+                return  # No automatic retry after a busy/closed/old helper.
+            self.resume_auto_check()
+            if (self.notebook.GetSelection() != tab or self.busy or self.actions_pending):
+                return
+            if self.refresh_policy.needs_refresh(tab, state):
+                if tab == 2 and not state['selection']:
+                    self.fanout.message('Select a BGA in PCB Editor, then return here '
+                                        'to analyze it.')
+                    return
+                self.on_refresh()
+
+        def work():
+            try:
+                state, error = self.api.call(lambda: self.native_call('revision')), None
+            except Exception as exc:
+                state, error = None, exc
+            if not self.closing:
+                wx.CallAfter(done, state, error)
+        self.worker.submit(work)
+
+    def resume_auto_check(self):
+        if self.auto_check_deferred:
+            self.auto_check_deferred = False
+            self.schedule_auto_refresh()
 
     def on_endpoints(self, event):
         if self.busy or self.actions_pending or self.closing:
@@ -345,6 +416,7 @@ class TraceForgePanel(wx.Frame):
 
     def _apply(self, results, error) -> None:
         self.busy = False
+        self.resume_auto_check()
         if self.closing:
             return
         self.refresh.Enable(not self.actions_pending)
@@ -358,7 +430,8 @@ class TraceForgePanel(wx.Frame):
         self.render()
         source = self.tools.source()
         when = wx.DateTime.Now().FormatTime()
-        self.snapshot.SetLabel(f"Snapshot: {when}. Click Refresh after changing routes.")
+        self.snapshot.SetLabel(f"Snapshot: {when}. Checks for changes when you return "
+                               'to TraceForge.')
         if not results:
             self.status.SetLabel(f"{when} · no signal chains found (no xsignals.json and no series "
                                  "parts between tuning-profile netclasses)")
@@ -511,6 +584,7 @@ class TraceForgePanel(wx.Frame):
         self.worker.submit(work)
 
     def _action_done(self, message, error, decrement=True) -> None:
+        self.resume_auto_check()
         if decrement:
             self.actions_pending -= 1
         if self.closing:
@@ -525,7 +599,7 @@ class TraceForgePanel(wx.Frame):
             self.status.SetLabel(message)
 
     def submit_stitching(self, fn, done, page):
-        """Use the same worker/guard as Signals; tab switching never submits work."""
+        """Serialize board operations and coalesce deferred tab checks."""
         if self.closing:
             return
         if self.busy or self.actions_pending:
@@ -540,6 +614,7 @@ class TraceForgePanel(wx.Frame):
 
         def finished(result, error):
             self.actions_pending -= 1
+            self.resume_auto_check()
             if self.closing:
                 return
             page.Enable(True)
@@ -598,6 +673,8 @@ class TraceForgePanel(wx.Frame):
         if self.busy or self.actions_pending or self.closing:
             return
         self._run(lambda: self.tools.edit_chains(self), background=False)
+        self.refresh_policy.invalidate(0)
+        self.schedule_auto_refresh()
         self.snapshot.SetLabel("Chain editor closed. Click Refresh to update the timing table.")
 
     def on_overlay(self, _event) -> None:
@@ -659,6 +736,8 @@ class TraceForgePanel(wx.Frame):
 
     def on_close(self, event) -> None:
         self.closing = True
+        if self.auto_refresh_later:
+            self.auto_refresh_later.Stop()
         self.overlay.Stop()
         self.worker.shutdown(wait=False, cancel_futures=True)
         for hid in list(self.hotkey_ids):

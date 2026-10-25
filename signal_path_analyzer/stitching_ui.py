@@ -418,6 +418,8 @@ class StitchingPanel(wx.Panel):
             self.filling = False
 
     def accept_scene(self, scene):
+        selected = set(self.selected_ids()) if self.scene else set()
+        top = self.sets.GetTopItem()
         self.invalidate()
         self.scene = self.canvas.scene = scene
         previous = self.net.GetValue()
@@ -438,6 +440,10 @@ class StitchingPanel(wx.Panel):
                                         if group['extra'] else '')), 1):
                 self.sets.SetItem(row, col, text)
             self.identities.append(group['id'])
+            if group['id'] in selected:
+                self.sets.Select(row)
+        if self.sets.GetItemCount() and top >= 0:
+            self.sets.EnsureVisible(min(top, self.sets.GetItemCount() - 1))
         if not self.loaded:
             self.fill(scene.get('last', {}))
             self.loaded = True

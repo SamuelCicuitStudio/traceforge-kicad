@@ -10,7 +10,9 @@ The layout is one window with **Signals / xSignals** as the first tab,
 as the fourth. Keep net/chain analysis,
 timing, highlighting, chain editing, DRC targets and exports together in Signals. The stitching tab owns
 regions, via settings, preview and management of generated stitching sets. Tab changes
-preserve state and do not trigger board refreshes. See [native board access](NATIVE-BOARD-ACCESS.md),
+preserve state; first use loads data, and later visits refresh only when board data
+changed. Returning from PCB Editor also checks for changes, without continuous
+polling. See [native board access](NATIVE-BOARD-ACCESS.md),
 [via stitching testing](VIA-STITCHING-TESTING.md), and [BGA Fanout](BGA-FANOUT.md)
 for the implemented workflows and limits.
 
