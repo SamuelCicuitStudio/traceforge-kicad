@@ -44,8 +44,8 @@ The native toolbar supports light and dark TraceForge icons.
   Native zoom uses the editor's zoom presets and focus controls, without official API calls.
   After the initial fit, automatic selection preserves magnification for nearby or shorter
   chains and zooms out only when more room is needed. **Zoom selection** explicitly refits.
-- Highlights clear on the next click or key action in PCB Editor. Only Forge-owned flags
-  are restored; unrelated selection flags are preserved.
+- Highlights stay visible during panning, zooming and navigation. A changed PCB
+  selection or Esc clears the Forge highlight, preserving the user's new selection.
 - Stable table refresh preserves scroll, row selection and collapsed groups.
 - Highlight group, clear highlight, explicit zoom, CSV export and DRC target generation.
 - Signal Chain Editor: find paths between ICs/connectors through series parts, review

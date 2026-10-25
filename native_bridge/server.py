@@ -27,21 +27,24 @@ class TransientHighlight:
     def __init__(self):
         self.board = None
         self.previous = {}
+        self.selection = set()
 
-    def clear(self, board, items):
+    def clear(self, board, items, restore_selection=True):
         if self.board == board_path(board):
             for item in items:
                 old = self.previous.get(item.m_Uuid.AsString())
                 if old is not None:
-                    if old[0]:
-                        item.SetSelected()
-                    else:
-                        item.ClearSelected()
+                    if restore_selection:
+                        if old[0]:
+                            item.SetSelected()
+                        else:
+                            item.ClearSelected()
                     if old[1]:
                         item.SetBrightened()
                     else:
                         item.ClearBrightened()
         self.board, self.previous = None, {}
+        self.selection = set()
 
     def apply(self, board, items, nets, refs, identities=None):
         self.clear(board, items)
@@ -56,6 +59,7 @@ class TransientHighlight:
                 item.SetSelected()
                 item.SetBrightened()
                 chosen.append(item)
+        self.selection = {item.m_Uuid.AsString() for item in items if item.IsSelected()}
         return chosen
 
 
@@ -72,22 +76,53 @@ def board_items(board):
 
 
 class CanvasInteractionFilter(wx.EventFilter):
+    def __init__(self):
+        super().__init__()
+        self.left_start = None
+
     def FilterEvent(self, event):
         from .picker import observe
 
         observe(event)
-        kinds = (wx.EVT_LEFT_DOWN.typeId, wx.EVT_RIGHT_DOWN.typeId, wx.EVT_MIDDLE_DOWN.typeId,
-                 wx.EVT_KEY_DOWN.typeId)
-        if _highlights.previous and event.GetEventType() in kinds:
+        kinds = (wx.EVT_LEFT_DOWN.typeId, wx.EVT_LEFT_UP.typeId, wx.EVT_KEY_UP.typeId)
+        kind = event.GetEventType()
+        if _highlights.previous and kind in kinds:
             window = event.GetEventObject()
             if isinstance(window, wx.Window):
                 frame = wx.GetTopLevelParent(window)
                 if isinstance(frame, wx.Frame) and frame.GetTitle().endswith('PCB Editor'):
-                    board = pcbnew.GetBoard()
-                    if board is not None:
-                        _highlights.clear(board, board_items(board))
-                        pcbnew.Refresh()
+                    if kind == wx.EVT_LEFT_DOWN.typeId:
+                        self.left_start = event.GetPosition()
+                    else:
+                        dragged = False
+                        escape = False
+                        if kind == wx.EVT_LEFT_UP.typeId:
+                            p, start = event.GetPosition(), self.left_start
+                            dragged = start is not None and (
+                                abs(p.x - start.x) > 4 or abs(p.y - start.y) > 4)
+                            self.left_start = None
+                        else:
+                            escape = event.GetKeyCode() == wx.WXK_ESCAPE
+                        # Let KiCad process selection first; navigation alone must not clear it.
+                        wx.CallLater(100, self.after_interaction, _highlights.previous,
+                                     dragged, escape)
         return wx.EventFilter.Event_Skip
+
+    def after_interaction(self, generation, dragged, escape):
+        if not generation or _highlights.previous is not generation:
+            return
+        board = pcbnew.GetBoard()
+        if board is None or board_path(board) != _highlights.board:
+            return
+        current = {it.m_Uuid.AsString() for it in pcbnew.GetCurrentSelection()}
+        if dragged and not escape and (not current or current == _highlights.selection):
+            _highlights.selection = current
+            return
+        if escape or current != _highlights.selection:
+            # Native selection is authoritative. Do not restore the original selection
+            # over the user's new one; only release the visual flags owned by Forge.
+            _highlights.clear(board, board_items(board), restore_selection=False)
+            pcbnew.Refresh()
 
 
 def zoom_to_items(board, chosen, force=False):

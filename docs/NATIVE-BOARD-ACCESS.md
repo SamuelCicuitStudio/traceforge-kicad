@@ -27,8 +27,10 @@ available to force a read. Region drawing is not interrupted by automatic checks
 
 Snapshots read live unsaved routing/tuning geometry. Timing profiles and stackup settings
 are read from project files. Refresh never reloads or saves the PCB. Highlight cleanup
-records UUIDs and prior flags, not item pointers. Forge-owned highlights clear on the
-next PCB click/key action.
+records UUIDs and prior flags, not item pointers. Mouse-down, navigation drags, wheel
+zoom and navigation keys preserve the highlight. After a click or key action, a
+deferred check clears Forge's visual flags if native selection changed, or Esc was
+pressed. Cleanup preserves the user's new native selection. It does not poll.
 
 Automatic zoom retains magnification for nearby or shorter chains after the initial
 fit and zooms out when a larger chain needs room. Explicit Zoom selection refits.
