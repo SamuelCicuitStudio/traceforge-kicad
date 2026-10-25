@@ -43,12 +43,13 @@ class TransientHighlight:
                         item.ClearBrightened()
         self.board, self.previous = None, {}
 
-    def apply(self, board, items, nets, refs):
+    def apply(self, board, items, nets, refs, identities=None):
         self.clear(board, items)
         self.board = board_path(board)
         chosen = []
         for item in items:
-            match = (item.GetReference() in refs if isinstance(item, pcbnew.FOOTPRINT) else
+            match = (item.m_Uuid.AsString() in identities if identities is not None else
+                     item.GetReference() in refs if isinstance(item, pcbnew.FOOTPRINT) else
                      item.GetNetname().replace('{slash}', '/') in nets)
             if match:
                 self.previous[item.m_Uuid.AsString()] = (item.IsSelected(), item.IsBrightened())
@@ -163,6 +164,16 @@ def dispatch(board, operation, payload):
         for fp in footprints():
             result.extend(fp.Pads())
             result.append(fp)
+        return result
+
+    if operation == 'endpoint_detect':
+        from signal_path_analyzer.endpoint_path_native import detect
+
+        result = detect(board, payload)
+        chosen = _highlights.apply(board, board_items(board), set(), set(), set(result['ids']))
+        pcbnew.Refresh()
+        result['highlighted'] = len(chosen)
+        result['zoomed'] = zoom_to_items(board, chosen, force=True)
         return result
 
     if operation.startswith('fanout_'):
@@ -297,7 +308,7 @@ class Server:
                     state = {'cancelled': False}
                     wx.CallAfter(self.execute, request, state, done)
                     timeout = 120 if request.get('operation', '').startswith(
-                        ('stitch_', 'fanout_', 'tracefence_')) else 5
+                        ('stitch_', 'fanout_', 'tracefence_', 'endpoint_')) else 5
                     if not done.wait(timeout):
                         state['cancelled'] = True
                         reply = {'error': 'PCB Editor did not service the native request in time'}

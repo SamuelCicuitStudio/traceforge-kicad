@@ -26,6 +26,33 @@ remains a separate optional pattern in the Via Stitching tab.
 8. Apply. Select, remove or edit/regenerate the fence from this tab's set list.
    Operations are undoable and preserve source signal traces. Save normally.
 
+## RF spacing helper
+
+**Copper gap to signal trace** is the edge-to-edge distance between signal copper
+and via annulus. **Spacing along trace** is the maximum center-to-center distance
+along each offset path. These controls are independent.
+
+Open **RF spacing helper** to enter the highest frequency of interest and dielectric
+permittivity. You can select a dielectric from the **last saved** board stackup;
+the helper does not assume which dielectric or copper plane is appropriate. With
+no saved stackup, enter the value manually; 4.2 is labeled as an assumed default.
+Thickness is displayed as context and is not used in the wavelength formula.
+
+The estimate is `wavelength_mm = 299792.458 / (frequency_MHz * sqrt(permittivity))`.
+Choose wavelength/10 or the tighter wavelength/20 option. This uses laminate
+permittivity as a bulk-dielectric estimate; a solver-derived effective permittivity
+can be entered for a guided-mode estimate. **Use suggested spacing** copies only
+spacing, then Preview validates physical clearances. Obstacles can leave larger
+gaps; inspect the reported actual gaps. A suggestion smaller than manufacturable
+via spacing requires a design change rather than overriding clearances.
+
+The wavelength/10 starting guideline is described in Analog Devices'
+[UG-1828, PCB layout recommendations, page 306](https://www.analog.com/media/en/technical-documentation/user-guides/adrv9001-ug1828.pdf).
+Wavelength/20 is an optional tighter choice, not a claimed universal requirement.
+The helper does not calculate antenna matching or coplanar impedance, choose the
+lateral copper gap, or verify shielding performance. Accurate fence placement and
+return geometry require the appropriate RF/EM analysis.
+
 ## Persistence and changes
 
 Trace fences share `<board>.traceforge-stitching.json` ownership storage with ordinary

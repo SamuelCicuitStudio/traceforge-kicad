@@ -178,10 +178,11 @@ class ShortcutDialog(wx.Dialog):
 class TraceForgePanel(wx.Frame):
     """Floating TraceForge window: timing snapshots refreshed on demand."""
 
-    def __init__(self, tools: Tools, stitching=None):
+    def __init__(self, tools: Tools, stitching=None, endpoints=None):
         style = wx.DEFAULT_FRAME_STYLE | wx.FRAME_TOOL_WINDOW
         super().__init__(None, title="TraceForge", size=(1160, 520), style=style)
         self.tools, self.results = tools, []
+        self.endpoints = endpoints
         self.busy, self.open_groups = False, set()
         self.api = ApiAccess()
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="traceforge-api")
@@ -259,6 +260,10 @@ class TraceForgePanel(wx.Frame):
 
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
+        detect = wx.Button(root, label='Detect between selected vias / pads...')
+        detect.Enable(endpoints is not None)
+        detect.Bind(wx.EVT_BUTTON, self.on_endpoints)
+        box.Add(detect, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
         legend = wx.BoxSizer(wx.HORIZONTAL)
         self.summary = {}
         for key, label in (("ok", "OK"), ("warning", "Warning"), ("error", "Error"),
@@ -299,6 +304,15 @@ class TraceForgePanel(wx.Frame):
         self.Bind(wx.EVT_HOTKEY, self.on_hotkey)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.register_shortcuts(load_shortcuts())
+
+    def on_endpoints(self, event):
+        if self.busy or self.actions_pending or self.closing:
+            return
+        from .endpoint_ui import EndpointDialog
+
+        with EndpointDialog(self, self.endpoints) as dialog:
+            wx.CallAfter(dialog.detect)
+            dialog.ShowModal()
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
@@ -653,11 +667,12 @@ class TraceForgePanel(wx.Frame):
         event.Skip()
 
 
-def run(tools: Tools, single_instance_port: Optional[int] = None, stitching=None) -> None:
+def run(tools: Tools, single_instance_port: Optional[int] = None, stitching=None,
+        endpoints=None) -> None:
     app = wx.App(False)
     if kicad_dark_theme() and hasattr(app, "MSWEnableDarkMode"):
         app.MSWEnableDarkMode(1)  # wxWidgets 3.3 DarkMode_Always, matching KiCad's dark theme
-    panel = TraceForgePanel(tools, stitching=stitching)
+    panel = TraceForgePanel(tools, stitching=stitching, endpoints=endpoints)
     panel.Show()
     listener = None
     if single_instance_port is not None:

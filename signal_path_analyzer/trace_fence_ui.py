@@ -1,6 +1,8 @@
 """Dedicated RF trace-following fencing tab, sharing validated via lifecycle operations."""
 from __future__ import annotations
 
+import wx
+
 from .stitching import settings
 from .stitching_ui import StitchingPanel
 
@@ -16,6 +18,23 @@ class TraceFencePanel(StitchingPanel):
         column = self.sets.GetColumn(0)
         column.SetText('Trace fence set')
         self.sets.SetColumn(0, column)
+        helper = wx.Button(self, label='RF spacing helper...')
+        helper.Bind(wx.EVT_BUTTON, self.on_rf_helper)
+        self.GetSizer().Insert(1, helper, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        self.fields['trace_gap'].SetToolTip(
+            'Edge-to-edge gap from signal copper to via annulus, not centerline offset. '
+            'Centerline offset = gap + half trace width + half via diameter.')
+
+    def on_rf_helper(self, event):
+        def show(dielectrics):
+            from .rf_guidance_ui import RFGuideDialog
+
+            with RFGuideDialog(self, dielectrics) as dialog:
+                if dialog.ShowModal() == wx.ID_OK and dialog.value is not None:
+                    self.fields['pitch_x'].SetValue(f'{dialog.value:.6g}')
+                    self.message('RF spacing copied. Preview to validate physical clearances. '
+                                 'Copper gap was not changed.', 'routed')
+        self.task(lambda: self.native('stitch_stackup'), show)
 
     def update_pattern(self):
         for key in ('pitch_y', 'offset_x', 'offset_y'):

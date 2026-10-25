@@ -123,9 +123,11 @@ def main() -> int:
     _log_to_file()
     try:
         from signal_path_analyzer import hub_ui
+        from signal_path_analyzer.endpoint_service import EndpointService
 
         session = Session.open()
-        hub_ui.run(build_tools(session), single_instance_port=PORT, stitching=session.native.call)
+        hub_ui.run(build_tools(session), single_instance_port=PORT, stitching=session.native.call,
+                   endpoints=EndpointService(session))
         print("panel closed normally")
     except Exception:
         traceback.print_exc()

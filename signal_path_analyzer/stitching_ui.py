@@ -226,7 +226,8 @@ class StitchingPanel(wx.Panel):
         right = wx.BoxSizer(wx.VERTICAL)
         self.region_label = wx.StaticText(self, label='Region: Whole board')
         right.Add(self.region_label, 0, wx.BOTTOM, 4)
-        instructions = ('Blue: selected signal path. Start marks the direction for left/right.'
+        instructions = ('Blue: signal path. Both sides places a via row along each side. '
+                        'Start marks left/right.'
                         if trace_mode else 'Board overview: drag a rectangle; click polygon '
                         'vertices, then Enter/right-click. Esc cancels.')
         right.Add(wx.StaticText(self, label=instructions), 0, wx.BOTTOM, 4)

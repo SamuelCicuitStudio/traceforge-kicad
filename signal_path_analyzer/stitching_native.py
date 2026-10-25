@@ -487,6 +487,10 @@ def remove_members(board, chosen):
 
 def dispatch(board, operation, payload):
     global _preview
+    if operation == 'stitch_stackup':
+        from .rf_guidance import saved_dielectrics
+
+        return saved_dielectrics(board.GetFileName())
     if operation == 'stitch_scene':
         return scene(board, payload.get('trace_mode', False))
     if operation == 'stitch_preview':

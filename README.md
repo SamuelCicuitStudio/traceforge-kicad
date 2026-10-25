@@ -50,6 +50,12 @@ The native toolbar supports light and dark TraceForge icons.
 - Highlight group, clear highlight, explicit zoom, CSV export and DRC target generation.
 - Signal Chain Editor: find paths between ICs/connectors through series parts, review
   groups and timing limits, and save the board-specific configuration.
+- Select two vias/pads, then **Detect between selected vias / pads** to highlight and fit
+  the routed copper between them. Review crossed resistors/capacitors, differential
+  partners and existing-chain status before adding. See [selected endpoints](docs/SELECTED-ENDPOINTS.md).
+- Via Fencing includes an **RF spacing helper** using frequency and saved stackup
+  dielectric data, with wavelength/10 or wavelength/20 spacing suggestions. Copper gap
+  remains a separate setting; this is a spacing estimate, not an impedance solver.
 - Configurable keyboard shortcuts in the PCB canvas while the panel is open.
 
 All board operations run through the native helper on KiCad's GUI thread. The panel accepts
