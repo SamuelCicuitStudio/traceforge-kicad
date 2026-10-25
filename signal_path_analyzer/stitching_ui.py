@@ -178,7 +178,7 @@ class StitchingPanel(wx.Panel):
         body = wx.BoxSizer(wx.HORIZONTAL)
         form = wx.FlexGridSizer(cols=2, vgap=5, hgap=8)
         self.name = wx.TextCtrl(self, value='RF trace fence' if trace_mode else 'Ground stitching')
-        self.net = wx.ComboBox(self, style=wx.CB_READONLY)
+        self.net = wx.ComboBox(self, style=wx.CB_DROPDOWN if trace_mode else wx.CB_READONLY)
         self.source = wx.Choice(self, choices=['Active board preset', 'Netclass', 'Custom'])
         self.source.SetSelection(0)
         self.connection = wx.Choice(self, choices=['At least two copper layers',
@@ -280,7 +280,8 @@ class StitchingPanel(wx.Panel):
                 if isinstance(child, wx.StaticText) and child is not self.status:
                     child.SetForegroundColour('#E5EDF8')
         for control in (self.name, self.net, self.source, self.connection, self.pattern):
-            control.Bind(wx.EVT_TEXT if control is self.name else wx.EVT_CHOICE
+            control.Bind(wx.EVT_TEXT if control is self.name or
+                         (trace_mode and control is self.net) else wx.EVT_CHOICE
                          if control in (self.source, self.connection, self.pattern)
                          else wx.EVT_COMBOBOX,
                          self.changed)

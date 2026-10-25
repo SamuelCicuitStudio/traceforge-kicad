@@ -27,6 +27,9 @@ class EndpointService:
                     pairs.update(zip(chain.nets, mate.nets))
         return self.session.native.call('endpoint_detect', pair_nets=pairs, **payload)
 
+    def pick(self, prompt):
+        return self.session.native.call('pick_item', mode='endpoint', prompt=prompt)
+
     def statuses(self, result):
         paths = [p for p in (result['primary'], result['partner']) if p]
         return [covered(self.session.config, path) for path in paths]

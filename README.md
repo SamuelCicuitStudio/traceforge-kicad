@@ -57,6 +57,8 @@ The native toolbar supports light and dark TraceForge icons.
 - Via Fencing includes an **RF spacing helper** using frequency and saved stackup
   dielectric data, with wavelength/10 or wavelength/20 spacing suggestions. Copper gap
   remains a separate setting; this is a spacing estimate, not an impedance solver.
+- Type or pick the fencing via net and source signal net directly in Via Fencing.
+  For path detection, **Pick first, then second** guides two sequential PCB clicks.
 - Configurable keyboard shortcuts in the PCB canvas while the panel is open.
 
 All board operations run through the native helper on KiCad's GUI thread. The panel accepts

@@ -311,7 +311,6 @@ class TraceForgePanel(wx.Frame):
         from .endpoint_ui import EndpointDialog
 
         with EndpointDialog(self, self.endpoints) as dialog:
-            wx.CallAfter(dialog.detect)
             dialog.ShowModal()
 
     # ----------------------------------------------------------- manual refresh (worker thread)

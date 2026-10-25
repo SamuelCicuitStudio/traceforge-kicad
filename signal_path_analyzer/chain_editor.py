@@ -44,12 +44,14 @@ def chains_from_config(config: Optional[Config]) -> list[FoundChain]:
 class ChainEditor(wx.Dialog):
     def __init__(self, parent: Optional[wx.Window], config: Optional[Config],
                  find: Callable[[list[str], list[str], float, bool], list[FoundChain]],
-                 selection: Callable[[], list[str]], detect_selected=None, selection_items=None):
+                 selection: Callable[[], list[str]], detect_selected=None, selection_items=None,
+                 pick_endpoint=None):
         super().__init__(parent, title="TraceForge · Signal Chain Editor", size=(1100, 720),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.find, self.selection = find, selection
         self.detect_selected = detect_selected
         self.selection_items = selection_items
+        self.pick_endpoint = pick_endpoint
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='chain-editor')
         self.working, self.closed = False, False
         self.chains: list[FoundChain] = chains_from_config(config)
@@ -85,6 +87,9 @@ class ChainEditor(wx.Dialog):
         endpoint_button = wx.Button(self, label='Detect path from 2 selected PCB items')
         endpoint_button.Enable(detect_selected is not None)
         endpoint_button.Bind(wx.EVT_BUTTON, lambda event: self.detect_endpoints())
+        pick_button = wx.Button(self, label='Pick first, then second endpoint in PCB...')
+        pick_button.Enable(pick_endpoint is not None)
+        pick_button.Bind(wx.EVT_BUTTON, self.pick_path)
         self.path_preview = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY,
                                        size=(-1, 75))
         self.path_preview.ChangeValue('Select two pads, vias, tracks or components, then click '
@@ -125,6 +130,7 @@ class ChainEditor(wx.Dialog):
         box.Add(top, 0, wx.ALL, 8)
         box.Add(opts, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(endpoint_button, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        box.Add(pick_button, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.path_preview, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
         box.Add(wx.StaticText(self, label="Group limits (blank = not checked)"), 0, wx.ALL, 8)
@@ -208,6 +214,19 @@ class ChainEditor(wx.Dialog):
     def endpoint_options(self):
         return dict(max_ohms=self.ohms.GetValue(), capacitors=self.caps.GetValue(),
                     include_pair=self.include_pair.GetValue())
+
+    def pick_path(self, event):
+        if not self.pick_endpoint:
+            return
+        options = self.endpoint_options()
+        def work():
+            wx.CallAfter(self.status.SetLabel, 'Click FIRST endpoint in PCB Editor. Esc cancels.')
+            first = self.pick_endpoint('TraceForge: click FIRST path endpoint. Esc cancels.')
+            wx.CallAfter(self.status.SetLabel,
+                         f"First: {first['label']}. Click SECOND endpoint in PCB Editor.")
+            second = self.pick_endpoint('TraceForge: click SECOND path endpoint. Esc cancels.')
+            return self.detect_selected(endpoints=[first['id'], second['id']], **options)
+        self.task(work, self.accept_endpoints)
 
     def detect_endpoints(self):
         if self.detect_selected:
@@ -390,9 +409,10 @@ class ChainEditor(wx.Dialog):
 
 
 def edit_chains(parent: Optional[wx.Window], config: Optional[Config], find, selection,
-                save: Callable[[Config], str], detect_selected=None, selection_items=None) -> str:
+                save: Callable[[Config], str], detect_selected=None, selection_items=None,
+                pick_endpoint=None) -> str:
     dlg = ChainEditor(parent, config, find, selection, detect_selected=detect_selected,
-                      selection_items=selection_items)
+                      selection_items=selection_items, pick_endpoint=pick_endpoint)
     try:
         if dlg.ShowModal() == wx.ID_OK:
             return save(dlg.result())

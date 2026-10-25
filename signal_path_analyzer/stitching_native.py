@@ -487,6 +487,19 @@ def remove_members(board, chosen):
 
 def dispatch(board, operation, payload):
     global _preview
+    if operation == 'stitch_net_path':
+        from .trace_fence_native import read_trace
+
+        name = str(payload.get('net', '')).strip()
+        tracks = [uid(t) for t in board.GetTracks() if not isinstance(t, pcbnew.PCB_VIA) and
+                  t.GetNetname().replace('{slash}', '/') == name]
+        if not tracks:
+            raise ValueError('No routed tracks found for that signal net. Check the exact name.')
+        try:
+            return read_trace(board, tracks)
+        except ValueError as exc:
+            raise ValueError(f'{exc} Select the intended same-layer trace section in PCB Editor '
+                             'and use Use selected trace instead.') from exc
     if operation == 'stitch_stackup':
         from .rf_guidance import saved_dielectrics
 

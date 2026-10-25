@@ -61,6 +61,7 @@ class RoutedGraph:
                 self.parts[ref] = dict(reference=ref, value=value, type='R' if
                                        ref.upper().startswith('R') else 'C', id=identity(fp))
         self.all_items = {identity(item): item for item in self.raw}
+        self.all_items.update({identity(fp): fp for fp in board.GetFootprints()})
         self.by_net = defaultdict(list)
         for item in self.raw:
             if net_name(item):

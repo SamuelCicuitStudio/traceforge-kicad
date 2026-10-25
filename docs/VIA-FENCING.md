@@ -26,6 +26,24 @@ remains a separate optional pattern in the Via Stitching tab.
 8. Apply. Select, remove or edit/regenerate the fence from this tab's set list.
    Operations are undoable and preserve source signal traces. Save normally.
 
+## Type or pick a net
+
+The **Net** field accepts an existing board net name typed directly. This is the
+net assigned to the fencing vias, normally GND. Alternatively click **Pick fence
+net in PCB**, then click one pad, via or track on that net in PCB Editor. The field
+updates automatically. Press Esc in PCB Editor to cancel.
+
+The separate **Signal net to fence** field identifies the routed signal. Type its
+exact name and click **Use signal net**, or click **Pick signal net in PCB** and
+click the signal. TraceForge loads its routed tracks automatically when they form
+one open, connected, single-layer route. Branched, disconnected or multilayer nets
+require selecting the intended trace section and using **Use selected trace**.
+Neither input creates a new electrical net. Preview remains required before Apply.
+
+Picking clears the old selection and waits for one fresh canvas click. It does not
+poll the editor. Esc cancels; an unanswered pick expires after 90 seconds. Restart
+PCB Editor after installing this helper update.
+
 ## RF spacing helper
 
 **Copper gap to signal trace** is the edge-to-edge distance between signal copper

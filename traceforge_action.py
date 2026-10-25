@@ -100,7 +100,8 @@ def build_tools(session: Session):
 
         return edit_chains(parent, session.config, session.find_between, refs, apply,
                            detect_selected=EndpointService(session).detect,
-                           selection_items=lambda: native.call('selection'))
+                           selection_items=lambda: native.call('selection'),
+                           pick_endpoint=EndpointService(session).pick)
 
     clear = lambda: native.call('clear')  # noqa: E731
     return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,

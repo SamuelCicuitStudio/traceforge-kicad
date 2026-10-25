@@ -73,6 +73,9 @@ def board_items(board):
 
 class CanvasInteractionFilter(wx.EventFilter):
     def FilterEvent(self, event):
+        from .picker import observe
+
+        observe(event)
         kinds = (wx.EVT_LEFT_DOWN.typeId, wx.EVT_RIGHT_DOWN.typeId, wx.EVT_MIDDLE_DOWN.typeId,
                  wx.EVT_KEY_DOWN.typeId)
         if _highlights.previous and event.GetEventType() in kinds:
@@ -310,7 +313,7 @@ class Server:
                     state = {'cancelled': False}
                     wx.CallAfter(self.execute, request, state, done)
                     timeout = 120 if request.get('operation', '').startswith(
-                        ('stitch_', 'fanout_', 'tracefence_', 'endpoint_')) else 5
+                        ('stitch_', 'fanout_', 'tracefence_', 'endpoint_', 'pick_')) else 5
                     if not done.wait(timeout):
                         state['cancelled'] = True
                         reply = {'error': 'PCB Editor did not service the native request in time'}
@@ -331,6 +334,16 @@ class Server:
                     os.path.abspath(request['board'])):
                 state['reply'] = {'wrong_board': True}
             else:
+                if request['operation'] == 'pick_item':
+                    from .picker import begin
+
+                    def reply(result):
+                        if not state['cancelled']:
+                            state['reply'] = result
+                            done.set()
+                    _highlights.clear(board, board_items(board))
+                    begin(board, request.get('payload', {}), reply)
+                    return
                 state['reply'] = {'result': dispatch(board, request['operation'],
                                                      request.get('payload', {}))}
         except Exception as exc:

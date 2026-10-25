@@ -25,7 +25,8 @@ class EndpointDialog(wx.Dialog):
         box.Add(row, 0, wx.ALL, 10)
         row = wx.BoxSizer(wx.HORIZONTAL)
         for label, handler in [('Detect / update path', self.detect),
-                               ('Use new PCB endpoints', self.new_endpoints)]:
+                               ('Use new PCB endpoints', self.new_endpoints),
+                               ('Pick first, then second...', self.pick_path)]:
             button = wx.Button(self, label=label)
             button.Bind(wx.EVT_BUTTON, handler)
             row.Add(button, 0, wx.RIGHT, 8)
@@ -88,6 +89,19 @@ class EndpointDialog(wx.Dialog):
     def new_endpoints(self, event):
         self.endpoints = None
         self.detect()
+
+    def pick_path(self, event):
+        options = dict(max_ohms=self.ohms.GetValue(), capacitors=self.caps.GetValue(),
+                       include_pair=self.pair.GetValue())
+        self.invalidate()
+        def work():
+            wx.CallAfter(self.message, 'Click FIRST endpoint in PCB Editor. Esc cancels.', 'routed')
+            first = self.service.pick('TraceForge: click FIRST path endpoint. Esc cancels.')
+            wx.CallAfter(self.message, f"First: {first['label']}. Click SECOND endpoint in PCB.",
+                         'routed')
+            second = self.service.pick('TraceForge: click SECOND path endpoint. Esc cancels.')
+            return self.service.detect(endpoints=[first['id'], second['id']], **options)
+        self.host.submit_stitching(work, self.accept, self)
 
     def detect(self, event=None):
         payload = dict(max_ohms=self.ohms.GetValue(), capacitors=self.caps.GetValue(),

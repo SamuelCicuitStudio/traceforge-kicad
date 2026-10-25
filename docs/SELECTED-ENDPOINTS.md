@@ -1,5 +1,14 @@
 # Detect a signal path from selected PCB items
 
+For guided selection, click **Pick first, then second endpoint in PCB** in Chain
+Editor (or **Pick first, then second** in the endpoint dialog). TraceForge prompts
+you to click the first pad, via, track or component in PCB Editor, remembers that
+item, then prompts for the second. Detection runs automatically after the second
+click. The clicked items supply both their nets and physical endpoints, so the
+tool can trace between two points even when both belong to the same net. You do
+not need to Shift-select both together. Esc in PCB Editor cancels a pending pick;
+an unanswered pick expires after 90 seconds. No selection polling is used.
+
 You can also use the **Signal Chain Editor** directly: select two pads, vias, tracks
 or components, then click either **Use KiCad selection** button or **Detect path
 from 2 selected PCB items**. The editor previews the highlighted path and crossed parts,
