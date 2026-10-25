@@ -1,7 +1,8 @@
 # TraceForge fanout: focused next step
 
-Status: focused first implementation is in the BGA Fanout tab. Live editor Undo/Redo,
-fabricator-specific rules and more difficult blocked-pad layouts remain to validate.
+Status: focused first implementation is in the BGA Fanout tab. Live editor Apply,
+Undo/Redo and managed removal passed on a disposable 4 by 4 board with 16 routes.
+Fabricator-specific rules and more difficult blocked-pad layouts remain to validate.
 
 ## Goal
 

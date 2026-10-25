@@ -125,8 +125,12 @@ Synthetic integration checks cover 16 independent dogbones and edge routes, rota
 and back-side footprints, blocked-pad reporting, exact native connectivity,
 managed removal after manual edits, and single-use apply tokens. KiCad DRC on
 the disposable edge-route board found zero new errors; its open endpoints produced
-expected dangling-track warnings. Live editor Undo/Redo still needs interactive
-confirmation for the new mode.
+expected dangling-track warnings. In the live KiCad 10 PCB Editor, a disposable
+4 by 4 BGA board produced 16 escaped routes (16 vias and 32 track segments).
+KiCad Undo removed them, Redo restored them, and TraceForge managed removal
+returned the board to zero tracks and vias. Managed removal also passed native
+Undo and Redo. The management switch board was used only for read-only interface
+captures; it has no BGA footprint.
 Fixtures and local tests remain ignored and are not included in releases.
 
 The external [KiCadRoutingTools BGA fanout documentation](https://github.com/drandyhaas/KiCadRoutingTools/tree/main/py_router/bga_fanout)

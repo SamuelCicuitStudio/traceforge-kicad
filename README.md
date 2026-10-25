@@ -8,10 +8,10 @@ TraceForge puts five PCB tools in one colored panel. It reads the open board thr
 KiCad's native `pcbnew` bindings, including unsaved routing changes. No official
 IPC API setup, API token, or pip runtime dependencies are needed.
 
-![TraceForge Via Fencing: ground-via rows following an RF trace](docs/screenshots/via-fencing.png)
+![TraceForge Signals tab over the management switch PCB in KiCad](docs/screenshots/signals-xsignals.png)
 
-*Actual TraceForge interface using a synthetic demonstration board. Green points
-are accepted preview locations; placement requires Apply.*
+*Current TraceForge in PCB Editor on the 03-MANAGEMENT-SWITCH-BOARD project. The
+selected signal path is highlighted on the board.*
 
 ## Install
 
@@ -65,15 +65,12 @@ folder while the junction exists leaves a broken plugin link.
 | **Via Stitching** | Preview symmetric or staggered via grids in a whole board, selected zone, rectangle or polygon; select, regenerate or remove managed sets. |
 | **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
 | **Via Fencing** | Place managed ground-via rows on either or both sides of a routed RF trace; control copper gap, spacing and via size. |
-
 | **Trace Cleanup** | Preview redundant copper and native dangling-end findings, remove reviewed tracks with Undo, then recheck Signals. |
 
 ### Signals and path detection
 
-![TraceForge Signals / xSignals: timing, differential-pair skew and chain lengths](docs/screenshots/signals-xsignals.png)
-
-*Synthetic example chains evaluated by TraceForge's timing engine. The sample
-6 ps/mm propagation profile illustrates the interface, not manufacturing guidance.*
+The screenshot above shows the current Signals / xSignals tab on the management
+switch board, including chain timing, pair status, and the PCB highlight.
 
 Select two pads, vias, tracks or components, then use **Detect path between 2 selected
 PCB items**. Alternatively choose **Pick first, then second** and click each endpoint
@@ -94,10 +91,6 @@ unrelated copper. This also applies to endpoint detection and both
 differential legs. Other branches belonging to those same nets remain bright.
 Clear, Esc or a changed native selection releases the effect; panning/zooming keeps it.
 
-![Native net focus: RF trace bright while surrounding copper is dimmed](docs/screenshots/net-focus.png)
-
-*Actual PCB Editor result on a synthetic board with native net focus enabled.*
-
 Rerun the installer with all KiCad windows closed, including KiCad Manager,
 then restart PCB Editor to load the required
 native highlight shortcut.
@@ -117,7 +110,10 @@ orientation and limits before writing DRC targets.
 
 ### Via stitching
 
-![TraceForge Via Stitching: staggered grid preview](docs/screenshots/via-stitching.png)
+![Current Via Stitching tab on the management switch PCB](docs/screenshots/via-stitching.png)
+
+*The management board is loaded with the whole-board region selected. This capture
+precedes Preview; no stitching vias were added to the project.*
 
 Choose the net, via preset/netclass/custom size, spacing and setbacks. Choose the
 whole board, a PCB zone/drawing, or draw a rectangle/polygon in the tab's overview.
@@ -128,6 +124,11 @@ Select, edit/regenerate or remove tool-created sets from the list. Changes suppo
 KiCad Undo/Redo. Read [stitching usage and checks](docs/VIA-STITCHING-TESTING.md).
 
 ### Via fencing
+
+![Current Via Fencing tab on the management switch PCB](docs/screenshots/via-fencing.png)
+
+*Current fencing controls over the management board before a signal trace is chosen.
+No fence was applied to the project.*
 
 Type the **Signal net to fence** or use **Pick signal net in PCB**. For a specific
 section, select connected track segments/arcs and click **Use selected trace**.
@@ -141,10 +142,16 @@ See [RF fencing](docs/VIA-FENCING.md).
 
 ### BGA fanout
 
-![TraceForge BGA Fanout: dogbone breakout preview for a 4 by 4 ball grid](docs/screenshots/bga-fanout.png)
+![Current BGA Fanout Auto escape preview and per-pad results in PCB Editor](docs/screenshots/bga-fanout.png)
 
-*Native geometry-checked preview on a synthetic 4 by 4, 1 mm-pitch BGA: 16 accepted
-pad-to-via breakouts. This preview has not been applied to a user board.*
+*Live PCB Editor preview on a disposable 4 by 4 BGA test board: 16 pads escaped
+to the field edge. The management board has no BGA footprint.*
+
+![The same BGA test board after applying 16 escaped routes](docs/screenshots/bga-fanout-applied.png)
+
+*Apply added 16 vias and 32 track segments. KiCad Undo removed them, Redo restored
+them, and Remove generated fanout returned the test board to zero tracks and vias.
+The removal itself also passed Undo and Redo.*
 
 Select a BGA footprint and open **BGA Fanout**. Review detected pitch, fabrication
 limits, offsets and filters. Fit guidance explains board-rule floors and nominal
@@ -160,14 +167,10 @@ See [BGA fanout](docs/BGA-FANOUT.md).
 
 ### Trace cleanup
 
-![TraceForge Trace Cleanup: B.Cu overlap fusion shown with per-layer counts](docs/screenshots/trace-cleanup.png)
+![Current Trace Cleanup tab showing all six copper layers on the management switch PCB](docs/screenshots/trace-cleanup.png)
 
-*Actual fifth-tab preview on a synthetic board; no board edits were applied.*
-
-![TraceForge Trace Cleanup: hidden inner layer in a complete six-layer scan](docs/screenshots/trace-cleanup-six-layers.png)
-
-*Six-layer synthetic check: all six copper layers are reported, including two
-hidden layers. In1.Cu remains available for review while hidden in PCB Editor.*
+*The real management board reports all six enabled copper layers and track counts
+before Scan / Preview. Opening the tab does not start the full scan or change copper.*
 
 Scan the whole board or an exact net to find duplicate tracks, overlapping
 collinear tracks and native dangling endpoints. Filter findings by copper layer;
