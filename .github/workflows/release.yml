@@ -56,6 +56,24 @@ jobs:
           gh release view "v$VERSION" --json url,isDraft,tagName,assets > release-status.json
           gh api "repos/$GH_REPO" --jq '{private: .private}' > repository-status.json
           python -c 'import json; from pathlib import Path; p=Path("release-status.json"); d=json.loads(p.read_text()); d.update(json.loads(Path("repository-status.json").read_text())); assert d["isDraft"] and d["private"], "Expected a private draft release"; p.write_text(json.dumps(d, indent=2)+"\n")'
+          python - <<'PY'
+          import hashlib
+          import json
+          import zipfile
+          from pathlib import Path
+          archive = next(Path('dist').glob('*.zip'))
+          with zipfile.ZipFile(archive) as bundle:
+              assert bundle.testzip() is None
+              manifest = {name: hashlib.sha256(bundle.read(name)).hexdigest()
+                          for name in bundle.namelist()}
+          status = Path('release-status.json')
+          data = json.loads(status.read_text())
+          data['archive_sha256'] = hashlib.sha256(archive.read_bytes()).hexdigest()
+          data['package_manifest'] = manifest
+          asset = next(a for a in data['assets'] if a['name'] == archive.name)
+          assert asset['digest'] == 'sha256:' + data['archive_sha256']
+          status.write_text(json.dumps(data, indent=2) + '\n')
+          PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin refs/notes/release-status:refs/notes/release-status || true
