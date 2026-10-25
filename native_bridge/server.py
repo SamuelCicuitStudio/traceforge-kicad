@@ -278,7 +278,7 @@ def dispatch(board, operation, payload):
         from signal_path_analyzer import trace_cleanup_native
 
         if operation == 'cleanup_highlight':
-            identities = trace_cleanup_native.validate(board, payload)
+            identities = trace_cleanup_native.focus_ids(board, payload)
             chosen = _highlights.apply(board, board_items(board), set(), set(), identities)
             pcbnew.Refresh()
             return dict(highlighted=len(chosen), zoomed=zoom_to_items(board, chosen))

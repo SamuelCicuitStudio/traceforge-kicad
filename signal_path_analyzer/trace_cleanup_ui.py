@@ -26,6 +26,16 @@ class TraceCleanupPanel(wx.Panel):
         scan.Bind(wx.EVT_BUTTON, self.on_refresh)
         top.Add(scan)
         box.Add(top, 0, wx.EXPAND | wx.ALL, 10)
+        filter_row = wx.BoxSizer(wx.HORIZONTAL)
+        filter_row.Add(wx.StaticText(self, label='Show layer'), 0,
+                       wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        self.layer = wx.Choice(self, choices=['All copper layers'])
+        self.layer.SetSelection(0)
+        self.layer.Bind(wx.EVT_CHOICE, self.on_layer)
+        filter_row.Add(self.layer, 0, wx.RIGHT, 10)
+        self.layer_summary = wx.StaticText(self, label='Scan to see counts by copper layer.')
+        filter_row.Add(self.layer_summary, 1, wx.ALIGN_CENTER_VERTICAL)
+        box.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.table = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self.table.SetBackgroundColour('#19212D' if host.dark else '#FFFFFF')
         self.table.SetForegroundColour('#E5EDF8' if host.dark else '#18212E')
@@ -36,7 +46,7 @@ class TraceCleanupPanel(wx.Panel):
         self.table.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_select)
         box.Add(self.table, 1, wx.EXPAND | wx.ALL, 10)
         bottom = wx.BoxSizer(wx.HORIZONTAL)
-        self.remove = wx.Button(self, label='Remove checked tracks')
+        self.remove = wx.Button(self, label='Apply checked cleanup')
         self.remove.Bind(wx.EVT_BUTTON, self.on_remove)
         self.remove.Disable()
         bottom.Add(self.remove, 0, wx.RIGHT, 10)
@@ -69,24 +79,51 @@ class TraceCleanupPanel(wx.Panel):
         def done(result):
             self.invalidate()
             self.preview = result
-            for row in result['redundant'] + result['dangling']:
-                index = self.table.InsertItem(self.table.GetItemCount(), '')
-                for column, value in enumerate([row['net'], row['layer'],
-                                                f"{row['length_mm']:.6f}", row['reason']], 1):
-                    self.table.SetItem(index, column, value)
-                self.table.SetItemTextColour(index, self.host.colors['warning'])
-                self.table.CheckItem(index, index < len(result['redundant']))
-            self.remove.Enable(bool(result['redundant'] or result['dangling']))
+            old_layer = self.layer.GetStringSelection()
+            choices = ['All copper layers', *result['layers']]
+            self.layer.SetItems(choices)
+            self.layer.SetStringSelection(old_layer if old_layer in choices else choices[0])
+            self.fill_rows()
+            counts = {layer: sum(row['layer'] == layer for row in
+                                result['redundant'] + result['fusions'] + result['dangling'])
+                      for layer in result['layers']}
+            self.layer_summary.SetLabel(' | '.join(f'{layer}: {count}'
+                                                    for layer, count in counts.items()))
             self.message(f"{len(result['redundant'])} redundant tracks; "
                          f"{result['removed_length_mm']:.6f} mm extra counted length. "
+                         f"{len(result['fusions'])} overlap groups to fuse; "
                          f"{len(result['dangling'])} dangling tracks (unchecked); "
                          f"{len(result['partial'])} retained overlaps.", 'ok')
         self.host.submit_stitching(lambda: self.native('cleanup_scan', net=net), done, self)
 
+    def on_layer(self, event):
+        self.fill_rows()
+
+    def fill_rows(self):
+        self.table.DeleteAllItems()
+        self.visible_rows = []
+        if self.preview is None:
+            return
+        layer = self.layer.GetStringSelection()
+        rows = (self.preview['redundant'] + self.preview['fusions'] +
+                self.preview['dangling'])
+        for row in rows:
+            if layer != 'All copper layers' and row['layer'] != layer:
+                continue
+            index = self.table.InsertItem(self.table.GetItemCount(), '')
+            for column, value in enumerate([row['net'], row['layer'],
+                                            f"{row['length_mm']:.6f}", row['reason']], 1):
+                self.table.SetItem(index, column, value)
+            state = 'warning' if row in self.preview['dangling'] else 'ok'
+            self.table.SetItemTextColour(index, self.host.colors[state])
+            self.table.CheckItem(index, row not in self.preview['dangling'])
+            self.visible_rows.append(row)
+        self.remove.Enable(bool(self.visible_rows))
+
     def on_select(self, event):
         if not self.preview:
             return
-        row = (self.preview['redundant'] + self.preview['dangling'])[event.GetIndex()]
+        row = self.visible_rows[event.GetIndex()]
         token = self.preview['token']
         self.host.submit_stitching(lambda: self.native('cleanup_highlight', token=token,
                                                       ids=[row['id']]),
@@ -96,8 +133,7 @@ class TraceCleanupPanel(wx.Panel):
     def on_remove(self, event):
         if not self.preview:
             return
-        rows = self.preview['redundant'] + self.preview['dangling']
-        ids = [row['id'] for i, row in enumerate(rows)
+        ids = [row['id'] for i, row in enumerate(self.visible_rows)
                if self.table.IsItemChecked(i)]
         if not ids:
             self.message('Check the tracks to remove.', 'warning')
@@ -113,7 +149,8 @@ class TraceCleanupPanel(wx.Panel):
         def done(result):
             self.invalidate()
             self.host.refresh_policy.invalidate()
-            self.message(f"Removed {result['removed']} checked tracks. "
+            self.message(f"Removed {result['removed']} checked tracks; "
+                         f"fused {result['fused']} overlap groups. "
                          'KiCad Undo is available. Refresh Signals to update lengths.', 'ok')
         self.host.submit_stitching(lambda: self.native('cleanup_remove', token=token, ids=ids),
                                    done, self)

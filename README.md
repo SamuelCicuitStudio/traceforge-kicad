@@ -155,14 +155,15 @@ See [BGA fanout](docs/BGA-FANOUT.md).
 
 ### Trace cleanup
 
-![TraceForge Trace Cleanup: checked duplicate copper and an unchecked dangling track](docs/screenshots/trace-cleanup.png)
+![TraceForge Trace Cleanup: B.Cu overlap fusion shown with per-layer counts](docs/screenshots/trace-cleanup.png)
 
 *Actual fifth-tab preview on a synthetic board; no board edits were applied.*
 
-Scan the whole board or an exact net to find duplicate tracks, fully covered
-collinear tracks and native dangling endpoints. Preview rows highlight in PCB
+Scan the whole board or an exact net to find duplicate tracks, overlapping
+collinear tracks and native dangling endpoints. Filter findings by copper layer;
+partially overlapping same-net segments can be fused into one continuous track. Preview rows highlight in PCB
 Editor. Redundant copper starts checked; dangling tracks require review and start
-unchecked. Removal is undoable. **Recheck length matching** returns to Signals and
+unchecked. Cleanup is undoable. **Recheck length matching** returns to Signals and
 refreshes the measurements. Partial overlaps, vias, locked and grouped copper are
 preserved. See [trace cleanup](docs/TRACE-CLEANUP.md).
 

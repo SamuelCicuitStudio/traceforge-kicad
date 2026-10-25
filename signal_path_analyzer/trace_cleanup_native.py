@@ -54,10 +54,20 @@ def validate(board, payload):
     if digest != _preview['digest']:
         raise ValueError('Tracks changed after the preview. Scan again; nothing was removed.')
     identities = set(payload.get('ids', []))
-    allowed = {row['id'] for row in _preview['redundant'] + _preview['dangling']}
+    allowed = {row['id'] for row in _preview['redundant'] + _preview['dangling'] +
+               _preview['fusions']}
     if not identities or not identities <= allowed:
         raise ValueError('Choose tracks from the current cleanup preview.')
     return identities
+
+
+def focus_ids(board, payload):
+    identities = validate(board, payload)
+    expanded = set()
+    for item in _preview['fusions']:
+        if item['id'] in identities:
+            expanded.update(item['ids'])
+    return expanded | {identity for identity in identities if not identity.startswith('fuse:')}
 
 
 def dispatch(board, operation, payload):
@@ -69,20 +79,28 @@ def dispatch(board, operation, payload):
             raise ValueError('Net name was not found in this board. Use the exact net name.')
         rows, digest = snapshot(board, net)
         analysis = analyze(rows)
+        for group in analysis['fusions']:
+            group['id'] = 'fuse:' + hashlib.sha256(
+                '|'.join(group['ids']).encode()).hexdigest()[:20]
+            group['reason'] = f"Fuse {len(group['ids'])} overlapping tracks"
+            start, end = group['start'], group['end']
+            group['length_mm'] = ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** .5 / 1e6
+        fused = {identity for group in analysis['fusions'] for identity in group['ids']}
         redundant = {row['id'] for row in analysis['redundant']}
         by_id = {item.m_Uuid.AsString(): item for item in board.GetTracks()}
         board.BuildConnectivity()
         connectivity = board.GetConnectivity()
         dangling = []
         for row in rows:
-            if row['protected'] or row['net'] <= 0 or row['id'] in redundant:
+            if row['protected'] or row['net'] <= 0 or row['id'] in redundant | fused:
                 continue
             if connectivity.TestTrackEndpointDangling(by_id[row['id']], False):
                 dangling.append(dict(id=row['id'], net=row['name'], layer=row['layer'],
                                      length_mm=row['length_mm'], keep=[],
                                      reason='Dangling endpoint: review before removal'))
         _preview = dict(analysis, dangling=dangling, token=secrets.token_hex(16), net=net,
-                        board=board.GetFileName(), digest=digest, scanned=len(rows))
+                        board=board.GetFileName(), digest=digest, scanned=len(rows),
+                        layers=sorted({row['layer'] for row in rows}))
         return _preview
     if operation != 'cleanup_remove':
         raise ValueError('Unknown trace cleanup operation.')
@@ -92,8 +110,15 @@ def dispatch(board, operation, payload):
     def remove(live):
         # Validate a second time inside the native undo wrapper before any deletion.
         validate(live, payload)
-        items = [item for item in live.GetTracks() if item.m_Uuid.AsString() in identities]
-        if len(items) != len(identities):
+        groups = [group for group in _preview['fusions'] if group['id'] in identities]
+        ordinary = {identity for identity in identities if not identity.startswith('fuse:')}
+        members = {identity for group in groups for identity in group['ids']}
+        chosen = ordinary | members
+        if len(chosen) != len(ordinary) + sum(len(group['ids']) for group in groups):
+            raise ValueError('Overlapping cleanup choices require a new preview.')
+        live_items = {item.m_Uuid.AsString(): item for item in live.GetTracks()}
+        items = [live_items[identity] for identity in chosen if identity in live_items]
+        if len(items) != len(chosen):
             raise ValueError('Preview tracks are no longer present. Scan again.')
         dangling_ids = {row['id'] for row in _preview['dangling']}
         live.BuildConnectivity()
@@ -102,11 +127,25 @@ def dispatch(board, operation, payload):
             if item.m_Uuid.AsString() in dangling_ids and not (
                     connectivity.TestTrackEndpointDangling(item, False)):
                 raise ValueError('A reviewed dangling track is now connected. Scan again.')
+        replacements = []
+        for group in groups:
+            source = live_items[group['ids'][0]]
+            replacement = pcbnew.PCB_TRACK(live)
+            replacement.SetNet(source.GetNet())
+            replacement.SetLayer(source.GetLayer())
+            replacement.SetWidth(source.GetWidth())
+            replacement.SetStart(pcbnew.VECTOR2I(*group['start']))
+            replacement.SetEnd(pcbnew.VECTOR2I(*group['end']))
+            replacement.SetHasSolderMask(source.HasSolderMask())
+            replacement.SetLocalSolderMaskMargin(source.GetLocalSolderMaskMargin())
+            replacements.append(replacement)
         for item in items:
             live.RemoveNative(item)
+        for item in replacements:
+            live.Add(item)
         live.BuildConnectivity()
         pcbnew.Refresh()
-        return dict(removed=len(items))
+        return dict(removed=len(items), fused=len(groups), added=len(replacements))
     result = transaction(board, remove)
     _preview = None
     return result

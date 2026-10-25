@@ -1,6 +1,6 @@
 """Conservative redundant-copper detection using exact integer geometry."""
 from collections import defaultdict
-from math import gcd
+from math import gcd, hypot
 
 
 def analyze(rows):
@@ -27,7 +27,7 @@ def analyze(rows):
             dx, dy = -dx, -dy
         start, end = sorted((a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy))
         lines[base + (dx, dy, a[0] * dy - a[1] * dx)].append((start, end, row))
-    redundant, partial = [], []
+    redundant, partial, fusions = [], [], []
 
     def result(row, keep, reason):
         return dict(id=row['id'], net=row['name'], layer=row['layer'],
@@ -39,7 +39,7 @@ def analyze(rows):
         for row in group[1:]:
             if not row['protected']:
                 redundant.append(result(row, [keeper['id']], 'Duplicate arc'))
-    for intervals in lines.values():
+    for key, intervals in lines.items():
         if len(intervals) > 2000:
             raise ValueError('Too many collinear tracks for one cleanup preview. '
                              'Narrow the scan to an individual net.')
@@ -68,5 +68,40 @@ def analyze(rows):
                     break
                 if min(end, right) > max(start, left):
                     partial.append(result(row, [other['id']], 'Retained overlap: review'))
-    return dict(redundant=redundant, partial=partial,
+        # A component with a genuine partial overlap can be represented by one
+        # continuous segment. Exact duplicates/containment use deletion above.
+        ordered = sorted(intervals, key=lambda entry: (entry[0], entry[1]))
+        components, component, edge = [], [], None
+        for entry in ordered:
+            if component and entry[0] >= edge:
+                components.append(component)
+                component = []
+            component.append(entry)
+            edge = max(edge, entry[1]) if edge is not None and len(component) > 1 else entry[1]
+        if component:
+            components.append(component)
+        for component in components:
+            if len(component) < 2 or any(row['protected'] for _, _, row in component):
+                continue
+            partial_overlap = any(
+                a < c < b < d for a, b, _ in component for c, d, _ in component)
+            if not partial_overlap:
+                continue
+            first = min(component, key=lambda entry: entry[0])
+            last = max(component, key=lambda entry: entry[1])
+            dx, dy = key[4:6]
+            def at(entry, value, dx=dx, dy=dy):
+                row = entry[2]
+                return (row['start'] if row['start'][0] * dx + row['start'][1] * dy == value
+                        else row['end'])
+            begin, finish = at(first, first[0]), at(last, last[1])
+            fusions.append(dict(ids=sorted(row['id'] for _, _, row in component),
+                                net=first[2]['name'], layer=first[2]['layer'],
+                                start=begin, end=finish,
+                                saved_mm=sum(row['length_mm'] for _, _, row in component)
+                                - hypot(finish[0]-begin[0],finish[1]-begin[1]) / 1e6))
+    fused = {identity for item in fusions for identity in item['ids']}
+    redundant = [row for row in redundant if row['id'] not in fused]
+    partial = [row for row in partial if row['id'] not in fused]
+    return dict(redundant=redundant, partial=partial, fusions=fusions,
                 removed_length_mm=sum(row['length_mm'] for row in redundant))
