@@ -62,7 +62,8 @@ def require_native():
     link = connect(os.environ.get('TRACEFORGE_BOARD_FILE'),
                    os.environ.get('TRACEFORGE_NATIVE_ENDPOINT'))
     if link is None:
-        raise RuntimeError('TraceForge native helper is not available. Install it with '
-                           'tools/install_native_bridge.ps1, restart PCB Editor, then use '
-                           'the TraceForge native toolbar button. No IPC fallback is used.')
+        raise RuntimeError('TraceForge native helper is not available. Restart PCB Editor '
+                           'after installation, then use its TraceForge toolbar button. '
+                           'For a standalone ZIP, run tools/install_native_bridge.ps1 '
+                           'with all KiCad windows closed. No IPC fallback is used.')
     return link

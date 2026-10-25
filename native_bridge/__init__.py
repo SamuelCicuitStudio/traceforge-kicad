@@ -9,7 +9,10 @@ from pathlib import Path
 import pcbnew
 import wx
 
-ROOT = Path(__file__).resolve().parents[1]
+# A manual installation links this package's native_bridge directory into KiCad.
+# PCM instead installs these modules directly in its package's plugins directory.
+HERE = Path(__file__).resolve().parent
+ROOT = HERE if (HERE / 'signal_path_analyzer').is_dir() else HERE.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -20,6 +23,19 @@ def launch(script):
     board = pcbnew.GetBoard()
     if board is None or not board.GetFileName():
         wx.MessageBox('Open and save a board before launching TraceForge.', 'TraceForge')
+        return
+    from .net_focus import prepare_shortcut
+
+    try:
+        needs_restart = prepare_shortcut()
+    except (OSError, ValueError) as exc:
+        wx.MessageBox(str(exc), 'TraceForge')
+        return
+    if needs_restart:
+        wx.MessageBox('TraceForge assigned Ctrl+Alt+Shift+F12 to KiCad\'s '
+                      'Highlight Net (selected nets) action. Restart PCB Editor '
+                      'once to load the shortcut, then open TraceForge again. '
+                      'Any existing user.hotkeys was backed up.', 'TraceForge')
         return
     server = start()
     python = Path(pcbnew.__file__).resolve().parents[2] / ('python.exe' if os.name == 'nt'

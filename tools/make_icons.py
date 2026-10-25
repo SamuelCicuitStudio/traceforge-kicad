@@ -1,4 +1,4 @@
-"""Generate TraceForge action icons (PNG, 24 and 48 px, light and dark themes).
+"""Generate TraceForge action icons and the 64 px PCM catalog icon.
 
 All icons share one style: a rounded badge so they read on KiCad's light and dark toolbars, a white
 trace, an amber series part / accent and a green timing mark. Drawn at 8x and downsampled with
@@ -77,9 +77,9 @@ def main() -> None:
         for theme, colors in THEMES.items():
             img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
             draw(ImageDraw.Draw(img), colors)
-            for px in (24, 48):
+            for px in ((24, 48, 64) if name == 'traceforge' else (24, 48)):
                 img.resize((px, px), Image.LANCZOS).save(OUT / f"{name}-{theme}-{px}.png")
-    print(f"wrote {len(ICONS) * len(THEMES) * 2} icons to {OUT}")
+    print(f"wrote {len(ICONS) * len(THEMES) * 2 + len(THEMES)} icons to {OUT}")
 
 
 if __name__ == "__main__":

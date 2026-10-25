@@ -6,10 +6,16 @@ and kicad-python SDK are not required or used as a fallback.
 
 ## Installation and connection
 
-Extract the release to a permanent directory and run `tools/install_native_bridge.ps1`.
-The installer creates a junction at
+For a PCM installation, use KiCad Manager > Plugin and Content Manager > Install
+from file with the `TraceForge-*-KiCad10-PCM.zip` archive. PCM installs the plugin
+in KiCad's managed third-party directory. Restart PCB Editor, open a saved board
+and use the TraceForge toolbar button. On first launch, TraceForge may assign the
+unused native net-focus shortcut; restart PCB Editor again when prompted.
+
+For a standalone installation, extract the Windows ZIP to a permanent directory
+and run `tools/install_native_bridge.ps1`. This creates a junction at
 `%APPDATA%/kicad/10.0/scripting/plugins/traceforge_native_bridge`.
-Restart PCB Editor, open a saved board and use the native TraceForge toolbar button.
+Restart PCB Editor after installing.
 
 Each editor registers an authenticated localhost endpoint under
 `%LOCALAPPDATA%/TraceForge/native-bridge/`. The launcher passes its endpoint and board
@@ -51,9 +57,10 @@ highlight for all selected copper nets. Board highlight flags alone do not updat
 the canvas renderer, so the helper uses targeted wx key events for the configured
 `pcbnew.EditorControl.highlightNetSelection` and `clearHighlight` actions. Events
 target the visible drawing canvas; no global key simulation, internal action-ID
-guessing, or selection polling is used. The installer supplies an unused default
-shortcut for an unbound selection action, preserving existing custom bindings.
-Restart PCB Editor after installer changes. Clearing releases the native focus.
+guessing, or selection polling is used. The PCM launcher or standalone installer
+assigns an unused default shortcut for an unbound selection action, preserving
+existing custom bindings. Restart PCB Editor after a shortcut change. Clearing
+releases the native focus.
 Net focus includes same-net branches outside the chosen endpoint path.
 Lengths and delays are aggregate estimates, not replicas of KiCad's point-to-point tuner.
 

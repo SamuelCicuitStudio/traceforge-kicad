@@ -1,6 +1,17 @@
 # Changelog
 
-Historical release notes. Current release: [0.10.2](docs/RELEASE-NOTES.md).
+Historical release notes. Current release: [0.11.0](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.11.0
+
+- Add BGA fit guidance and a bounded Auto escape to BGA edge mode for selected
+  single-ended pads, with per-pad accepted and blocked results.
+- Apply accepted routes in one KiCad undoable operation. Live PCB Editor testing
+  confirmed Apply, Undo, Redo and managed removal on a disposable 4 by 4 BGA.
+- Add a KiCad 10 Windows Plugin and Content Manager package and official-repository
+  submission metadata alongside the standalone Windows ZIP.
+- Replace demonstration screenshots in the README with current PCB Editor captures
+  on the management board and the BGA test board.
 
 ## TraceForge 0.10.1
 

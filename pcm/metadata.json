@@ -1,0 +1,31 @@
+{
+  "$schema": "https://go.kicad.org/pcm/schemas/v2",
+  "name": "TraceForge",
+  "description": "Signal paths, trace cleanup, via stitching, RF fencing and BGA fanout in KiCad PCB Editor",
+  "description_full": "TraceForge combines signal path timing and highlighting, trace cleanup, managed via stitching, RF via fencing, and BGA fanout in one PCB Editor panel. It reads the live board through KiCad 10's pcbnew Python bindings, including unsaved routing. The BGA escape tool previews routes before applying them. Supports Windows and KiCad 10 only. See the project homepage for documentation and known limits.",
+  "identifier": "com.github.samuelcicuitstudio.traceforge-kicad",
+  "type": "plugin",
+  "author": {
+    "name": "Samuel Circuit Studio",
+    "contact": {
+      "web": "https://github.com/SamuelCicuitStudio/traceforge-kicad"
+    }
+  },
+  "license": "MIT",
+  "resources": {
+    "homepage": "https://github.com/SamuelCicuitStudio/traceforge-kicad",
+    "documentation": "https://github.com/SamuelCicuitStudio/traceforge-kicad#readme",
+    "bugtracker": "https://github.com/SamuelCicuitStudio/traceforge-kicad/issues"
+  },
+  "tags": ["pcb", "routing", "signal-integrity", "via-stitching", "bga-fanout"],
+  "versions": [
+    {
+      "version": "0.11.0",
+      "status": "testing",
+      "kicad_version": "10.0",
+      "kicad_version_max": "10.0",
+      "platforms": ["windows"],
+      "runtime": "swig"
+    }
+  ]
+}

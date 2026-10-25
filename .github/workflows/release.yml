@@ -61,17 +61,21 @@ jobs:
           import json
           import zipfile
           from pathlib import Path
-          archive = next(Path('dist').glob('*.zip'))
-          with zipfile.ZipFile(archive) as bundle:
-              assert bundle.testzip() is None
-              manifest = {name: hashlib.sha256(bundle.read(name)).hexdigest()
-                          for name in bundle.namelist()}
+          archives = sorted(Path('dist').glob('TraceForge-*.zip'))
+          assert len(archives) == 2, 'Expected standalone and PCM archives'
           status = Path('release-status.json')
           data = json.loads(status.read_text())
-          data['archive_sha256'] = hashlib.sha256(archive.read_bytes()).hexdigest()
-          data['package_manifest'] = manifest
-          asset = next(a for a in data['assets'] if a['name'] == archive.name)
-          assert asset['digest'] == 'sha256:' + data['archive_sha256']
+          data['archives'] = {}
+          for archive in archives:
+              with zipfile.ZipFile(archive) as bundle:
+                  assert bundle.testzip() is None
+                  manifest = {name: hashlib.sha256(bundle.read(name)).hexdigest()
+                              for name in bundle.namelist()}
+              digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+              asset = next(a for a in data['assets'] if a['name'] == archive.name)
+              assert asset['digest'] == 'sha256:' + digest
+              data['archives'][archive.name] = {'sha256': digest,
+                                                'package_manifest': manifest}
           status.write_text(json.dumps(data, indent=2) + '\n')
           PY
           git config user.name 'github-actions[bot]'

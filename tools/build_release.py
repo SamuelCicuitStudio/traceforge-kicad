@@ -6,6 +6,8 @@ import re
 import zipfile
 from pathlib import Path
 
+from build_pcm import main as build_pcm
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -55,9 +57,12 @@ def main():
         expected = {f'{folder}/{path.relative_to(ROOT).as_posix()}' for path in files}
         if set(bundle.namelist()) != expected:
             raise ValueError('Release archive differs from its allowlist.')
+    pcm_archive = build_pcm()
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    pcm_digest = hashlib.sha256(pcm_archive.read_bytes()).hexdigest()
     checksum = output / 'SHA256SUMS.txt'
-    checksum.write_text(f'{digest}  {archive.name}\n', encoding='utf-8')
+    checksum.write_text(f'{digest}  {archive.name}\n'
+                        f'{pcm_digest}  {pcm_archive.name}\n', encoding='utf-8')
     print(f'Built {archive.name}: {len(files)} public files, {archive.stat().st_size} bytes')
     print(f'SHA256 {digest}')
 

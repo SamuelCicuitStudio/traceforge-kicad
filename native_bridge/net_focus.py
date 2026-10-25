@@ -1,18 +1,47 @@
 """Targeted native highlight actions using KiCad's configured shortcuts."""
 import os
+import shutil
 from pathlib import Path
 
 import pcbnew
 import wx
 
 
-def shortcut(action):
-    name = {'highlightNet': 'highlightNetSelection', 'clearHighlight': 'clearHighlight'}[action]
-    value = '~' if name == 'clearHighlight' else ''
+def hotkeys_path():
     manager = pcbnew.GetSettingsManager()
     config = (Path(manager.GetUserSettingsPath()) if manager else
               Path(os.environ.get('APPDATA', Path.home())) / 'kicad/10.0')
-    path = config / 'user.hotkeys'
+    return config / 'user.hotkeys'
+
+
+def prepare_shortcut():
+    """Assign the native focus action once for PCM installs; return if restart is needed."""
+    path = hotkeys_path()
+    lines = path.read_text(encoding='utf-8-sig').splitlines() if path.exists() else []
+    action = 'pcbnew.EditorControl.highlightNetSelection'
+    shortcut_value = 'Ctrl+Alt+Shift+F12'
+    assigned = next((fields[1] for line in lines
+                     if (fields := line.split('\t'))[0] == action and len(fields) > 1), '')
+    if assigned:
+        return False
+    if any((fields := line.split('\t'))[0] != action and len(fields) > 1 and
+           fields[1] == shortcut_value for line in lines):
+        raise ValueError('Ctrl+Alt+Shift+F12 is already assigned in KiCad. Assign '
+                         'Highlight Net (selected nets) in Preferences > Hotkeys, '
+                         'then restart PCB Editor.')
+    if path.exists():
+        shutil.copy2(path, path.with_name(path.name + '.traceforge.bak'))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [line for line in lines if line.split('\t')[0] != action]
+    lines.append(f'{action}\t{shortcut_value}\t')
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    return True
+
+
+def shortcut(action):
+    name = {'highlightNet': 'highlightNetSelection', 'clearHighlight': 'clearHighlight'}[action]
+    value = '~' if name == 'clearHighlight' else ''
+    path = hotkeys_path()
     if path.exists():
         for line in path.read_text(encoding='utf-8-sig').splitlines():
             fields = line.split('\t')
@@ -23,10 +52,8 @@ def shortcut(action):
         label = ('Highlight Net (selected nets)' if name == 'highlightNetSelection'
                  else 'Clear Net Highlighting')
         raise ValueError(f'KiCad shortcut is unassigned: {label}. '
-                         'The TraceForge helper is loaded. Close all KiCad windows, '
-                         'including KiCad Manager, run tools/install_native_bridge.ps1 '
-                         'from the TraceForge folder, then reopen PCB Editor. '
-                         f'Or assign this action in KiCad Preferences > Hotkeys. File: {path}')
+                         'Assign it in Preferences > Hotkeys and restart PCB Editor. '
+                         f'File: {path}')
     return value
 
 

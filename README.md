@@ -17,6 +17,21 @@ selected signal path is highlighted on the board.*
 
 **Requirements:** Windows and KiCad 10 with its bundled Python/scripting support.
 
+### KiCad Plugin and Content Manager
+
+Download `TraceForge-0.11.0-KiCad10-PCM.zip` from the GitHub release. In KiCad
+Manager, open **Plugin and Content Manager > Install from file**, select that ZIP,
+then restart PCB Editor. Once KiCad accepts TraceForge into its official catalog,
+you can instead install or update it directly from the Manager's Repository tab.
+
+The first launch may assign KiCad's unused **Ctrl+Alt+Shift+F12** shortcut for
+native net focus. If TraceForge asks, restart PCB Editor once more. An existing
+`user.hotkeys` file is backed up as `user.hotkeys.traceforge.bak`; shortcut
+conflicts are reported without changing the existing binding. PCM installation
+does not require PowerShell or a manually created plugin junction.
+
+### Standalone Windows ZIP
+
 1. Download the **TraceForge KiCad10 Windows ZIP** from this repository's Releases
    page. Extract it completely into a permanent folder, for example
    `C:\Tools\TraceForge`. Do not run the plugin from inside the ZIP.
@@ -39,7 +54,7 @@ selected signal path is highlighted on the board.*
 Cloning this repository into a permanent folder and running the same installer
 also works. No separate Python installation is needed to use the plugin.
 
-### Update or remove
+### Update or remove a standalone installation
 
 Close PCB Editor and extract the new version. If its folder differs from the old
 installation, run the installer from the new folder with:
@@ -91,12 +106,11 @@ unrelated copper. This also applies to endpoint detection and both
 differential legs. Other branches belonging to those same nets remain bright.
 Clear, Esc or a changed native selection releases the effect; panning/zooming keeps it.
 
-Rerun the installer with all KiCad windows closed, including KiCad Manager,
-then restart PCB Editor to load the required
-native highlight shortcut.
-The installer assigns **Ctrl+Alt+Shift+F12** to KiCad's **Highlight Net (selected
-nets)** action only if it is unassigned and that shortcut is unused. Existing
-custom bindings are preserved; a changed hotkey file is backed up as
+For a PCM installation, TraceForge assigns **Ctrl+Alt+Shift+F12** to KiCad's
+**Highlight Net (selected nets)** action on first launch if the action is
+unassigned and that shortcut is unused. Restart PCB Editor when prompted. For
+a standalone installation, rerun the installer with all KiCad windows closed.
+Existing custom bindings are preserved; a changed hotkey file is backed up as
 `user.hotkeys.traceforge.bak`. A conflict is reported instead of overwritten.
 The native **Clear Net Highlighting** action also needs its shortcut enabled.
 TraceForge sends these actions directly to KiCad's visible canvas, without global
@@ -236,4 +250,6 @@ explicit public-file allowlist. Tests, fixtures, logs, caches, credentials and u
 boards are ignored. `tools/build_chains.py` is an optional offline chain builder;
 `tools/make_icons.py` regenerates icons with Pillow installed.
 
-See [release notes](docs/RELEASE-NOTES.md), [changelog](CHANGELOG.md) and [MIT license](LICENSE).
+See [PCM publishing steps](docs/PCM-PUBLISHING.md),
+[release notes](docs/RELEASE-NOTES.md), [changelog](CHANGELOG.md) and
+[MIT license](LICENSE).

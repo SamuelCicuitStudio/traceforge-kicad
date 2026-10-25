@@ -1,17 +1,18 @@
-# TraceForge 0.10.2
+# TraceForge 0.11.0 — BGA escape and KiCad PCM package
 
-Trace Cleanup now reports **every enabled copper layer on the open PCB**,
-including layers hidden in PCB Editor and layers with no tracks. The layer
-selector marks hidden layers, and the summary shows cleanup findings and scanned
-track counts for each layer. Full-board Scan / Preview does not depend on the
-active or visible layer. The selected layer filters review and checked actions.
+This version adds BGA fit guidance and **Auto escape to BGA edge**. TraceForge
+previews connected routes from selected single-ended pads to the BGA field edge,
+reports pads it cannot escape, and rechecks the board before applying reviewed
+routes. Through vias and one selected escape layer are supported. Routes end at
+the BGA edge for you to continue; this is not full-board autorouting.
 
-Verified with a six-layer synthetic PCB: F.Cu, In1.Cu, In2.Cu, In3.Cu, In4.Cu
-and B.Cu each contained duplicate and fuse candidates. In1.Cu and In3.Cu were
-hidden; both were still detected and could be selected in Trace Cleanup. The
-saved management PCB was also scanned read-only: all six layers appeared, with
-three correctly showing zero tracks/findings.
+The new KiCad Plugin and Content Manager ZIP installs TraceForge under KiCad's
+managed plugin directory on Windows. The existing standalone Windows ZIP remains
+available for manual installation. Both target KiCad 10 and its native `pcbnew`
+Python bindings. KiCad 11 is not supported.
 
-Fusion, duplicate removal, native dangling detection and KiCad Undo remain
-available. Restart PCB Editor after updating TraceForge. Run DRC after edits.
-Supports KiCad 10 on Windows.
+The README now shows the current interface on the management switch board and
+live BGA preview/apply on a disposable test board. On that 4 by 4 board, Apply
+created 16 escaped routes (16 vias and 32 segments). KiCad Undo and Redo worked;
+managed removal returned the board to zero tracks and vias and was itself undoable.
+The test suite, lint and release builds pass. Run KiCad DRC after applying routes.
