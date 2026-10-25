@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def release_files():
     paths = [ROOT / name for name in (
-        'README.md', 'LICENSE', 'pyproject.toml', 'requirements.txt',
+        'README.md', 'LICENSE', 'pyproject.toml', 'CHANGELOG.md',
         'traceforge_action.py', 'highlight_net_chain_action.py',
-        'signal_path_analyzer_action.py', 'net_chain_monitor_action.py',
+        'signal_path_analyzer_action.py',
         'tools/install_native_bridge.ps1', 'docs/NATIVE-BOARD-ACCESS.md',
         'docs/VIA-STITCHING-TESTING.md', 'docs/FEATURE-SCOPE.md',
         'docs/BGA-FANOUT.md', 'docs/VIA-FENCING.md',
@@ -21,7 +21,8 @@ def release_files():
     )]
     for directory in ('signal_path_analyzer', 'native_bridge'):
         paths.extend((ROOT / directory).glob('*.py'))
-    paths.extend((ROOT / 'docs').glob('RELEASE-NOTES-*.md'))
+    paths.append(ROOT / 'docs' / 'RELEASE-NOTES.md')
+    paths.extend((ROOT / 'docs' / 'screenshots').glob('*.png'))
     paths.extend((ROOT / 'icons').glob('*.png'))
     for path in paths:
         if not path.is_file() or path.is_symlink():

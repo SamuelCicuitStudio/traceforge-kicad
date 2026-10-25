@@ -1,1 +1,0 @@
-# Native pcbnew mode uses KiCad 10 bundled Python and wxPython; no pip dependencies.

@@ -45,16 +45,6 @@ def traceforge(d: ImageDraw.ImageDraw, c: dict) -> None:
     d.ellipse([_w(13), _w(13), _w(16), _w(16)], fill=c["trace"])
 
 
-def monitor(d: ImageDraw.ImageDraw, c: dict) -> None:
-    """Signal Timing Monitor: a digital waveform with a delta-t marker."""
-    _badge(d, c)
-    pts = [(6, 32), (13, 32), (13, 14), (24, 14), (24, 32), (31, 32), (31, 14), (42, 14)]
-    d.line([(_w(x), _w(y)) for x, y in pts], fill=c["trace"], width=_w(4), joint="curve")
-    d.line([(_w(13), _w(39)), (_w(24), _w(39))], fill=c["timing"], width=_w(3))
-    for x in (13, 24):
-        d.line([(_w(x), _w(35)), (_w(x), _w(43))], fill=c["timing"], width=_w(3))
-
-
 def highlight(d: ImageDraw.ImageDraw, c: dict) -> None:
     """Highlight Signal Chain: the same path as the TraceForge icon, highlighted end to end."""
     _badge(d, c)
@@ -77,7 +67,7 @@ def export(d: ImageDraw.ImageDraw, c: dict) -> None:
     d.polygon([(_w(43), _w(24)), (_w(35), _w(17)), (_w(35), _w(31))], fill=c["accent"])
 
 
-ICONS = {"traceforge": traceforge, "signal-timing-monitor": monitor,
+ICONS = {"traceforge": traceforge,
          "highlight-signal-chain": highlight, "export-signal-paths": export}
 
 

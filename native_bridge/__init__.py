@@ -71,12 +71,6 @@ class ExportLauncher(NativeLauncher):
                          'export-signal-paths')
 
 
-class MonitorLauncher(NativeLauncher):
-    def __init__(self):
-        super().__init__('TraceForge: Signal Timing Monitor', 'net_chain_monitor_action.py',
-                         'signal-timing-monitor')
-
-
 class StitchingCommit(pcbnew.ActionPlugin):
     def defaults(self):
         self.name = 'TraceForge: Apply Stitching Changes'
@@ -90,7 +84,7 @@ class StitchingCommit(pcbnew.ActionPlugin):
         commit_pending()
 
 
-for _plugin in (TraceForgeLauncher(), HighlightLauncher(), ExportLauncher(), MonitorLauncher(),
+for _plugin in (TraceForgeLauncher(), HighlightLauncher(), ExportLauncher(),
                 StitchingCommit()):
     _plugin.register()
 
