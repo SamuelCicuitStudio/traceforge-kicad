@@ -5,6 +5,7 @@ fanout module. In 0.11.5, **Analyze PCB selection** failed before reading the
 selected footprint with `cannot import name 'fits' from stitching_native`.
 Version 0.11.6 restores that helper and checks whether proposed vias and
 tracks remain inside the board outline and clear of its edges and cutouts.
+The BGA selection flow was also verified in PCB Editor after the fix.
 
 Install `TraceForge-0.11.6-KiCad10-PCM.zip` with KiCad's Plugin and Content
 Manager **Install from file**. Close all KiCad windows before reopening PCB
