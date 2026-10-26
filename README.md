@@ -127,7 +127,7 @@ orientation and limits before writing DRC targets.
 ![Via Stitching tab in the published 0.11.0 build on the management switch PCB](docs/screenshots/via-stitching.png)
 
 *This 0.11.0 capture precedes Preview; no stitching vias were added to the project.
-The 0.11.3 local test build has a condensed basic form.*
+The 0.11.4 local test build has a condensed basic form.*
 
 Choose the net, via preset/netclass/custom size, and center-to-center X/Y spacing.
 Choose the whole board, a PCB zone/drawing, or draw a rectangle/polygon in the

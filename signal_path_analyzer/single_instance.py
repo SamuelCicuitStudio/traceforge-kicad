@@ -11,13 +11,32 @@ import socket
 import threading
 from typing import Callable, Optional
 
+from . import __version__
+
 PORT = 47231  # localhost only
 _MAGIC = b"traceforge:front\n"
+_VERSION_MAGIC = b"traceforge:version\n"
+
+
+class ExistingPanelVersionError(RuntimeError):
+    """A running panel belongs to a different installed build."""
 
 
 def try_activate_existing(port: int = PORT) -> bool:
     """True when a panel is already running (it was asked to come to the front)."""
 
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5) as s:
+            s.sendall(_VERSION_MAGIC)
+            reply = s.recv(128)
+    except OSError:
+        return False
+    expected = f'version:{__version__}\n'.encode()
+    if reply != expected:
+        running = reply.decode(errors='replace').strip() if reply else 'an older build'
+        raise ExistingPanelVersionError(
+            f'TraceForge {__version__} found an already running panel ({running}). '
+            'Close the old TraceForge window and every KiCad window, then reopen the board.')
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.5) as s:
             s.sendall(_MAGIC)
@@ -49,7 +68,10 @@ class Listener:
             try:
                 with conn:
                     conn.settimeout(1.0)
-                    if conn.recv(64) == _MAGIC:
+                    command = conn.recv(64)
+                    if command == _VERSION_MAGIC:
+                        conn.sendall(f'version:{__version__}\n'.encode())
+                    elif command == _MAGIC:
                         conn.sendall(b"ok\n")
                         self.on_activate()
             except OSError:

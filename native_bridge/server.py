@@ -306,8 +306,12 @@ def dispatch(board, operation, payload):
         return stitch_dispatch(board, operation, payload)
 
     if operation == 'info':
+        from signal_path_analyzer import __version__
+
         return {'board': board.GetFileName(), 'protocol': 2,
-                'features': ['transient_highlight', 'native_zoom']}
+                'traceforge_version': __version__,
+                'helper_path': str(Path(__file__).resolve()),
+                'features': ['transient_highlight', 'native_zoom', 'streaming_stitch_grid']}
     if operation == 'snapshot':
         wanted = set(payload['nets'])
         geometry = {}

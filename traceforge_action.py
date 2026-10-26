@@ -16,9 +16,14 @@ from pathlib import Path
 from signal_path_analyzer import analyze_tracks
 from signal_path_analyzer.chains import selection_paths
 from signal_path_analyzer.model import TrackSample
+from signal_path_analyzer.native_client import NativeVersionError
 from signal_path_analyzer.report import write_csv
 from signal_path_analyzer.session import Session
-from signal_path_analyzer.single_instance import PORT, try_activate_existing
+from signal_path_analyzer.single_instance import (
+    PORT,
+    ExistingPanelVersionError,
+    try_activate_existing,
+)
 
 
 def build_tools(session: Session):
@@ -122,17 +127,25 @@ def _log_to_file() -> None:
 
 
 def main() -> int:
-    if try_activate_existing(PORT):
-        return 0
     _log_to_file()
     try:
+        if try_activate_existing(PORT):
+            return 0
         from signal_path_analyzer import hub_ui
         from signal_path_analyzer.endpoint_service import EndpointService
 
         session = Session.open()
         hub_ui.run(build_tools(session), single_instance_port=PORT, stitching=session.native.call,
-                   endpoints=EndpointService(session))
+                   endpoints=EndpointService(session), native_info=session.native.info)
         print("panel closed normally")
+    except (ExistingPanelVersionError, NativeVersionError) as exc:
+        traceback.print_exc()
+        import wx
+
+        app = wx.App(False)
+        wx.MessageBox(str(exc), 'TraceForge version mismatch', wx.OK | wx.ICON_ERROR)
+        app.Destroy()
+        return 1
     except Exception:
         traceback.print_exc()
         return 1

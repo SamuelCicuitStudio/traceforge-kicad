@@ -209,8 +209,8 @@ class StitchingPanel(wx.Panel):
             bar.Add(button, 0, wx.RIGHT, 5)
         outer.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
         if not trace_mode:
-            outer.Add(wx.StaticText(self, label='Spacing X and Y is measured between via centers. '
-                                    'Draw a region, then Preview and Apply.'),
+            outer.Add(wx.StaticText(self, label='X/Y spacing is the via-center grid pitch. '
+                                    'Preview skips blocked sites without changing the pitch.'),
                       0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
         body = wx.BoxSizer(wx.HORIZONTAL)
         form = wx.FlexGridSizer(cols=2, vgap=5, hgap=8)

@@ -6,11 +6,27 @@ import os
 import socket
 from pathlib import Path
 
+from . import __version__
 from .chains import NetGeometry, TrackSeg, ViaHop
 from .native_timeout import client_timeout
 
 REGISTRY = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'TraceForge' / 'native-bridge'
 LIMIT = 32 * 1024 * 1024
+
+
+class NativeVersionError(RuntimeError):
+    """The panel and PCB Editor helper were loaded from different builds."""
+
+
+def check_version(info):
+    helper = info.get('traceforge_version')
+    if helper != __version__:
+        helper_label = helper or 'an older build without version information'
+        raise NativeVersionError(
+            f'TraceForge panel {__version__} cannot use the PCB Editor helper '
+            f'{helper_label}. Close every KiCad window, including PCB Editor and KiCad '
+            'Manager, then reopen the board. Reinstall the latest PCM ZIP if the '
+            'versions still differ.')
 
 
 class NativeBridge:
@@ -44,14 +60,21 @@ class NativeBridge:
 def connect(board_file=None, endpoint_file=None):
     paths = [Path(endpoint_file)] if endpoint_file else list(REGISTRY.glob('*.json'))
     matches = []
+    incompatible = []
     for path in paths:
         try:
             link = NativeBridge(board_file, json.loads(path.read_text(encoding='utf-8')))
             info = link.call('info')
+            check_version(info)
             link.board_file = info['board']
+            link.info = info
             matches.append(link)
+        except NativeVersionError as exc:
+            incompatible.append(exc)
         except (OSError, ValueError, KeyError, RuntimeError):
             continue
+    if incompatible and not matches:
+        raise incompatible[0]
     if len(matches) > 1:
         raise RuntimeError('Multiple PCB Editors are open. Launch TraceForge from the intended '
                            "board's native toolbar button.")

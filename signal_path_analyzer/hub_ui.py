@@ -228,7 +228,7 @@ class ShortcutDialog(wx.Dialog):
 class TraceForgePanel(wx.Frame):
     """Floating TraceForge window: timing snapshots refreshed on demand."""
 
-    def __init__(self, tools: Tools, stitching=None, endpoints=None):
+    def __init__(self, tools: Tools, stitching=None, endpoints=None, native_info=None):
         style = wx.DEFAULT_FRAME_STYLE | wx.FRAME_TOOL_WINDOW
         super().__init__(None, title=f"TraceForge {__version__}", size=(1160, 520), style=style)
         self.tools, self.results = tools, []
@@ -365,8 +365,11 @@ class TraceForgePanel(wx.Frame):
             heading.SetForegroundColour('#E5EDF8')
         about_layout.Add(heading, 0, wx.ALL, 14)
         log_path = Path(os.environ.get('APPDATA', Path.home())) / 'TraceForge' / 'traceforge.log'
+        native_info = native_info or {}
         details = (f'KiCad PCB Editor extension | local PCM test build\n'
                    f'Board access: native pcbnew\n'
+                   f'PCB Editor helper: {native_info.get("traceforge_version", "unavailable")}\n'
+                   f'Helper code: {native_info.get("helper_path", "unavailable")}\n'
                    f'Loaded code: {Path(__file__).resolve()}\n'
                    f'Python: {sys.version.split()[0]}\n'
                    f'Log: {log_path}\n\n'
@@ -908,11 +911,12 @@ class TraceForgePanel(wx.Frame):
 
 
 def run(tools: Tools, single_instance_port: Optional[int] = None, stitching=None,
-        endpoints=None) -> None:
+        endpoints=None, native_info=None) -> None:
     app = wx.App(False)
     if kicad_dark_theme() and hasattr(app, "MSWEnableDarkMode"):
         app.MSWEnableDarkMode(1)  # wxWidgets 3.3 DarkMode_Always, matching KiCad's dark theme
-    panel = TraceForgePanel(tools, stitching=stitching, endpoints=endpoints)
+    panel = TraceForgePanel(tools, stitching=stitching, endpoints=endpoints,
+                            native_info=native_info)
     panel.Show()
     listener = None
     if single_instance_port is not None:

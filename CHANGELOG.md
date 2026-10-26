@@ -2,6 +2,13 @@
 
 Historical release notes. Published release: [0.11.0](docs/RELEASE-NOTES.md).
 
+## TraceForge 0.11.4 (local PCM test build)
+
+- Check that the external panel and the in-process PCB Editor helper run the same
+  version. A stale helper now produces a clear restart message before a board
+  operation, instead of the old 5,000-grid-location error.
+- Show the helper version and loaded path on the About tab.
+
 ## TraceForge 0.11.3 (local PCM test build)
 
 - Add an About tab and put the running version in the window title. The tab shows

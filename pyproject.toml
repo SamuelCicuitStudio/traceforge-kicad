@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kicad-pcb-automation-toolkit"
-version = "0.11.3"
+version = "0.11.4"
 description = "TraceForge for KiCad 10: signal paths, via stitching, RF fencing and BGA fanout"
 readme = "README.md"
 requires-python = ">=3.9"
