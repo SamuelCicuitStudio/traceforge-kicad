@@ -5,7 +5,7 @@ from collections import Counter
 
 import wx
 
-from .stitching import polygon, settings
+from .stitching import polygon, rectangle, settings
 
 
 class BoardOverview(wx.Panel):
@@ -20,6 +20,7 @@ class BoardOverview(wx.Panel):
         self.Bind(wx.EVT_SIZE, lambda event: (self.Refresh(), event.Skip()))
         self.Bind(wx.EVT_LEFT_DOWN, self.left_down)
         self.Bind(wx.EVT_LEFT_UP, self.left_up)
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.capture_lost)
         self.Bind(wx.EVT_MOTION, self.motion)
         self.Bind(wx.EVT_LEFT_DCLICK, self.finish)
         self.Bind(wx.EVT_RIGHT_DOWN, self.finish)
@@ -55,6 +56,8 @@ class BoardOverview(wx.Panel):
     def begin(self, mode):
         if not self.scene:
             return
+        if self.HasCapture():
+            self.ReleaseMouse()
         self.mode, self.vertices, self.start, self.hover = mode, [], None, None
         self.SetCursor(wx.Cursor(wx.CURSOR_CROSS))
         self.SetFocus()
@@ -67,15 +70,28 @@ class BoardOverview(wx.Panel):
         p = self.world(event.GetPosition())
         if self.mode == 'rectangle':
             self.start = p
+            if not self.HasCapture():
+                self.CaptureMouse()
         elif not self.vertices or self.vertices[-1] != p:
             self.vertices.append(p)
         self.hover = p
         self.Refresh()
 
     def left_up(self, event):
-        if self.mode == 'rectangle' and self.start:
+        if self.mode == 'rectangle' and self.start is not None:
             a, b = self.start, self.world(event.GetPosition())
-            self.complete([a, [b[0], a[1]], b, [a[0], b[1]]])
+            if self.HasCapture():
+                self.ReleaseMouse()
+            try:
+                self.complete(rectangle(a, b))
+            except ValueError as exc:
+                self.start = None
+                wx.MessageBox(str(exc), 'Stitching region', parent=self)
+
+    def capture_lost(self, event):
+        self.start = self.hover = None
+        self.Refresh()
+        event.Skip()
 
     def motion(self, event):
         if self.mode:
@@ -88,6 +104,8 @@ class BoardOverview(wx.Panel):
 
     def key(self, event):
         if event.GetKeyCode() == wx.WXK_ESCAPE:
+            if self.HasCapture():
+                self.ReleaseMouse()
             self.mode, self.vertices, self.start = None, [], None
             self.SetCursor(wx.NullCursor)
             self.Refresh()
@@ -149,7 +167,10 @@ class BoardOverview(wx.Panel):
         region = (self.region or {}).get('points', [])
         if self.mode == 'rectangle' and self.start and self.hover:
             a, b = self.start, self.hover
-            region = [a, [b[0], a[1]], b, [a[0], b[1]]]
+            try:
+                region = rectangle(a, b)
+            except ValueError:
+                region = []
         elif self.mode == 'polygon':
             region = self.vertices + ([self.hover] if self.hover else [])
         if len(region) > 1:

@@ -2,6 +2,13 @@
 
 Historical release notes. Published release: [0.11.0](docs/RELEASE-NOTES.md).
 
+## TraceForge 0.11.2 (local PCM test build)
+
+- Normalize rectangle corners for drags in either direction, both in the Via
+  Stitching overview and for rectangles selected in PCB Editor.
+- Keep the overview's mouse drag active if the pointer leaves its edge before
+  release.
+
 ## TraceForge 0.11.1 (local PCM test build)
 
 - Via Stitching now streams a whole-board grid instead of rejecting regions at

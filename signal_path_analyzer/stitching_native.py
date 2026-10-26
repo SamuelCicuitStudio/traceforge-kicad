@@ -17,6 +17,7 @@ from .stitching import (
     load_store,
     perimeter_points,
     polygon,
+    rectangle,
     save_store,
     settings,
 )
@@ -74,7 +75,7 @@ def item_region(board, item):
             raise ValueError('Choose a rectangle/polygon on a non-copper drawing layer.')
         if item.GetShape() == pcbnew.SHAPE_T_RECT:
             a, b = point_mm(item.GetStart()), point_mm(item.GetEnd())
-            points = [a, [b[0], a[1]], b, [a[0], b[1]]]
+            points = rectangle(a, b)
         elif item.GetShape() == pcbnew.SHAPE_T_POLY:
             poly = item.GetPolyShape()
             if poly.OutlineCount() != 1 or poly.HoleCount(0):

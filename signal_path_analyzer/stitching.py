@@ -62,6 +62,15 @@ def polygon(points):
     return poly
 
 
+def rectangle(a, b):
+    """Return the same region for either mouse-drag direction."""
+    x0, x1 = sorted((float(a[0]), float(b[0])))
+    y0, y1 = sorted((float(a[1]), float(b[1])))
+    if x0 == x1 or y0 == y1:
+        raise ValueError('Drag across an area to draw a rectangle.')
+    return polygon(((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
+
+
 def settings(values):
     result = dict(values)
     for key in ('diameter', 'drill', 'pitch_x', 'pitch_y', 'offset_x', 'offset_y',
