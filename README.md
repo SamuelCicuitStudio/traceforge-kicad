@@ -19,7 +19,7 @@ selected signal path is highlighted on the board.*
 
 ### KiCad Plugin and Content Manager
 
-Download `TraceForge-0.11.5-KiCad10-PCM.zip` from the GitHub release. In KiCad
+Download `TraceForge-0.11.6-KiCad10-PCM.zip` from the GitHub release. In KiCad
 Manager, open **Plugin and Content Manager > Install from file**, select that ZIP,
 then close all KiCad windows and reopen PCB Editor. Once KiCad accepts TraceForge into its official catalog,
 you can instead install or update it directly from the Manager's Repository tab.

@@ -1,3 +1,15 @@
+# TraceForge 0.11.6 — BGA selection repair
+
+This update restores the board-boundary helper required by the native BGA
+fanout module. In 0.11.5, **Analyze PCB selection** failed before reading the
+selected footprint with `cannot import name 'fits' from stitching_native`.
+Version 0.11.6 restores that helper and checks whether proposed vias and
+tracks remain inside the board outline and clear of its edges and cutouts.
+
+Install `TraceForge-0.11.6-KiCad10-PCM.zip` with KiCad's Plugin and Content
+Manager **Install from file**. Close all KiCad windows before reopening PCB
+Editor. The TraceForge title and About tab should show 0.11.6.
+
 # TraceForge 0.11.5 — Dense via stitching and clearer plugin information
 
 TraceForge 0.11.5 updates the KiCad 10 Windows plugin with practical whole-board

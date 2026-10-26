@@ -61,6 +61,19 @@ def inset_centers(poly, radius):
     return result
 
 
+def fits(poly, point, setback):
+    """Return whether a copper center is inside a polygon and clear of its edges."""
+    if not poly.Contains(point, -1, 0, True):
+        return False
+    for i in range(poly.OutlineCount()):
+        for ring in [poly.Outline(i)] + [poly.Hole(i, j)
+                                          for j in range(poly.HoleCount(i))]:
+            if any(ring.CSegment(k).Distance(point) <= setback
+                   for k in range(ring.SegmentCount())):
+                return False
+    return True
+
+
 def region_item(board, identity):
     return next((item for item in list(board.Zones()) + list(board.Drawings())
                  if uid(item) == identity), None)
