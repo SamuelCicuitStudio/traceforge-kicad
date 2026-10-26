@@ -20,6 +20,7 @@ from typing import Callable, Optional
 import wx
 import wx.lib.agw.hypertreelist as htl
 
+from . import __version__
 from .api_access import ApiAccess
 from .chains import GroupResult
 
@@ -229,7 +230,7 @@ class TraceForgePanel(wx.Frame):
 
     def __init__(self, tools: Tools, stitching=None, endpoints=None):
         style = wx.DEFAULT_FRAME_STYLE | wx.FRAME_TOOL_WINDOW
-        super().__init__(None, title="TraceForge", size=(1160, 520), style=style)
+        super().__init__(None, title=f"TraceForge {__version__}", size=(1160, 520), style=style)
         self.tools, self.results = tools, []
         self.endpoints = endpoints
         from .refresh_policy import RefreshPolicy
@@ -353,6 +354,34 @@ class TraceForgePanel(wx.Frame):
 
         self.trace_cleanup = TraceCleanupPanel(self.notebook, self, stitching)
         self.notebook.AddPage(self.trace_cleanup, 'Trace Cleanup')
+        self.about = wx.Panel(self.notebook)
+        if self.dark:
+            self.about.SetBackgroundColour('#222C3A')
+            self.about.SetForegroundColour('#E5EDF8')
+        about_layout = wx.BoxSizer(wx.VERTICAL)
+        heading = wx.StaticText(self.about, label=f'TraceForge {__version__}')
+        heading.SetFont(heading.GetFont().Scale(1.5).Bold())
+        if self.dark:
+            heading.SetForegroundColour('#E5EDF8')
+        about_layout.Add(heading, 0, wx.ALL, 14)
+        log_path = Path(os.environ.get('APPDATA', Path.home())) / 'TraceForge' / 'traceforge.log'
+        details = (f'KiCad PCB Editor extension | local PCM test build\n'
+                   f'Board access: native pcbnew\n'
+                   f'Loaded code: {Path(__file__).resolve()}\n'
+                   f'Python: {sys.version.split()[0]}\n'
+                   f'Log: {log_path}\n\n'
+                   'Whole-board via grids are streamed without a 5,000-location cap.\n'
+                   'If this version is not shown after installing a PCM ZIP, close all KiCad '
+                   'windows and reopen PCB Editor.\n\n'
+                   'Project: https://github.com/SamuelCicuitStudio/traceforge-kicad')
+        info = wx.TextCtrl(self.about, value=details,
+                           style=wx.TE_MULTILINE | wx.TE_READONLY | wx.BORDER_NONE)
+        if self.dark:
+            info.SetBackgroundColour('#222C3A')
+            info.SetForegroundColour('#E5EDF8')
+        about_layout.Add(info, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
+        self.about.SetSizer(about_layout)
+        self.notebook.AddPage(self.about, 'About')
         if self.dark:
             self.stitching.SetBackgroundColour('#222C3A')
             self.stitching.SetForegroundColour('#E5EDF8')
@@ -390,7 +419,7 @@ class TraceForgePanel(wx.Frame):
             self.schedule_auto_refresh()
 
     def schedule_auto_refresh(self):
-        if not self.native_call or self.closing:
+        if not self.native_call or self.closing or self.notebook.GetSelection() == 5:
             return
         if self.auto_refresh_later:
             self.auto_refresh_later.Stop()
@@ -405,6 +434,8 @@ class TraceForgePanel(wx.Frame):
             return
         self.auto_check_deferred = False
         tab = self.notebook.GetSelection()
+        if tab == 5:
+            return
         page = (None, self.stitching, self.fanout, self.trace_fence, self.trace_cleanup)[tab]
         if page and getattr(page, 'canvas', None) and getattr(page.canvas, 'mode', None):
             return  # Never interrupt drawing a region.
@@ -459,7 +490,7 @@ class TraceForgePanel(wx.Frame):
         tab = self.notebook.GetSelection()
         target = (self.tree.GetMainWindow() if tab == 0 else
                   self.trace_cleanup.table if tab == 4 else
-                  self.notebook.GetPage(tab).canvas)
+                  self.about if tab == 5 else self.notebook.GetPage(tab).canvas)
         bounds = target.GetScreenRect()
         center = self.ScreenToClient((bounds.x + bounds.width // 2,
                                       bounds.y + bounds.height // 2))
@@ -492,6 +523,8 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 5:
+            return
         if self.notebook.GetSelection() == 4:
             self.trace_cleanup.on_refresh()
             return

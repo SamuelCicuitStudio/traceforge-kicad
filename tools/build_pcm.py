@@ -42,6 +42,11 @@ def main():
     match = re.search(r'^version = "([0-9]+\.[0-9]+\.[0-9]+)"$', project, re.MULTILINE)
     if not match or match.group(1) != version:
         raise ValueError('PCM metadata and project versions differ')
+    runtime = (ROOT / 'signal_path_analyzer' / '__init__.py').read_text(encoding='utf-8')
+    runtime_match = re.search(r'^__version__ = "([0-9]+\.[0-9]+\.[0-9]+)"$',
+                              runtime, re.MULTILINE)
+    if not runtime_match or runtime_match.group(1) != version:
+        raise ValueError('PCM metadata and runtime versions differ')
     if 'download_url' in metadata['versions'][0] or 'download_sha256' in metadata['versions'][0]:
         raise ValueError('Download fields belong in submission metadata, not the archive')
 

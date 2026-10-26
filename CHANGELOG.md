@@ -2,6 +2,12 @@
 
 Historical release notes. Published release: [0.11.0](docs/RELEASE-NOTES.md).
 
+## TraceForge 0.11.3 (local PCM test build)
+
+- Add an About tab and put the running version in the window title. The tab shows
+  the loaded code path and log path so an older installed copy can be identified.
+- The About tab does not trigger a board scan or an automatic revision check.
+
 ## TraceForge 0.11.2 (local PCM test build)
 
 - Normalize rectangle corners for drags in either direction, both in the Via
