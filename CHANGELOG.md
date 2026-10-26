@@ -1,6 +1,17 @@
 # Changelog
 
-Historical release notes. Current release: [0.11.0](docs/RELEASE-NOTES.md).
+Historical release notes. Published release: [0.11.0](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.11.1 (local PCM test build)
+
+- Via Stitching now streams a whole-board grid instead of rejecting regions at
+  5,000 candidate locations. The preview still checks board edges, copper fills,
+  keepouts, tracks, pads and vias before offering any locations to apply.
+- Precomputed inset copper makes dense previews practical on large boards.
+- The normal Via Stitching form shows the net, via source and center-to-center
+  X/Y spacing; the other placement controls are under Advanced options.
+- Dense stitching has longer preview/apply deadlines and the board overview
+  samples display markers so it remains responsive.
 
 ## TraceForge 0.11.0
 

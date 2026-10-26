@@ -51,16 +51,13 @@ def outline(board):
     return poly
 
 
-def fits(poly, point, radius):
-    if not poly.Contains(point):
-        return False
-    for i in range(poly.OutlineCount()):
-        if poly.Outline(i).Distance(point, True) < radius:
-            return False
-        for j in range(poly.HoleCount(i)):
-            if poly.Hole(i, j).Distance(point, True) < radius:
-                return False
-    return True
+def inset_centers(poly, radius):
+    """Precompute legal via-center copper instead of scanning every contour per site."""
+    result = pcbnew.SHAPE_POLY_SET(poly)
+    if radius:
+        result.Inflate(-radius, pcbnew.CORNER_STRATEGY_ROUND_ALL_CORNERS, 1000)
+    result.BuildBBoxCaches()
+    return result
 
 
 def region_item(board, identity):
@@ -312,6 +309,9 @@ def plan(board, request):
                     foreign.append((poly, max(clearance, nc.GetClearance())))
     if len({layer for layer, _, _ in zones}) < 2:
         raise ValueError('The chosen net needs filled copper on at least two copper layers.')
+    board_centers = inset_centers(board_poly, radius + board_edge)
+    copper_centers = [(layer, inset_centers(poly, radius + boundary), key)
+                      for layer, poly, key in zones]
     excluded = set()
     if request.get('replace'):
         for _, vias in ownership(board, [request['replace']], load_store(board.GetFileName())):
@@ -364,13 +364,13 @@ def plan(board, request):
     strict = values.get('connection', 'two') == 'all'
     accepted_paths = defaultdict(list)
     for candidate_index, (x, y) in enumerate(candidates):
-        if time.monotonic() - started > 12:
+        if fence and time.monotonic() - started > 12:
             raise ValueError('Preview exceeded its time budget; increase spacing '
                              'or narrow the region.')
         point = pcbnew.VECTOR2I(round(x * 1e6), round(y * 1e6))
         circle = pcbnew.SHAPE_CIRCLE(point, radius)
         reason = None
-        if not fits(board_poly, point, radius + board_edge):
+        if not board_centers.Contains(point, -1, 0, True):
             reason = 'board edge / cutout'
         elif region['kind'] not in ('board', 'trace') and not inside((x, y), points,
                                                      (radius + boundary) / 1e6):
@@ -388,10 +388,11 @@ def plan(board, request):
                            for px, py in accepted):
             reason = 'fence corner / via spacing'
         else:
-            contacts = {layer for layer, poly, _ in zones if fits(poly, point, radius + boundary)}
+            contacts = {layer for layer, poly, _ in copper_centers
+                        if poly.Contains(point, -1, 0, True)}
             in_selected = region['kind'] != 'zone' or any(
-                key == region['uuid'] and fits(poly, point, radius + boundary)
-                for _, poly, key in zones)
+                key == region['uuid'] and poly.Contains(point, -1, 0, True)
+                for _, poly, key in copper_centers)
             if not in_selected or len(contacts) < (len(layers) if strict else 2):
                 reason = 'insufficient copper contact'
         if reason:

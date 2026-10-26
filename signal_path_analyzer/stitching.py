@@ -87,23 +87,22 @@ def settings(values):
 
 
 def grid(bounds, values):
+    """Yield a board-anchored grid without materializing rejected sites up front.
+
+    Large boards can contain many candidate sites at a useful via pitch.  The
+    native planner filters them against copper and obstacles as they are read.
+    """
     x0, y0, x1, y1 = bounds
     sx, sy = values['pitch_x'], values['pitch_y']
     ox, oy = values['offset_x'], values['offset_y']
     iy0, iy1 = math.ceil((y0 - oy) / sy), math.floor((y1 - oy) / sy)
-    if iy1 - iy0 + 1 > MAX_CANDIDATES:
-        raise ValueError('Region has too many grid rows; increase spacing or use a smaller region.')
     staggered = values.get('pattern') == 'staggered'
-    result = []
     # Row parity is anchored to the persistent board grid, not the region's first row.
     for j in range(iy0, iy1 + 1):
         shift = sx / 2 if staggered and j % 2 else 0
         ix0, ix1 = math.ceil((x0 - ox - shift) / sx), math.floor((x1 - ox - shift) / sx)
-        if len(result) + max(ix1 - ix0 + 1, 0) > MAX_CANDIDATES:
-            raise ValueError(f'Region exceeds {MAX_CANDIDATES} grid locations; increase spacing '
-                             'or use a smaller region.')
-        result.extend((i * sx + ox + shift, j * sy + oy) for i in range(ix0, ix1 + 1))
-    return result
+        for i in range(ix0, ix1 + 1):
+            yield i * sx + ox + shift, j * sy + oy
 
 
 def perimeter_points(points, pitch):

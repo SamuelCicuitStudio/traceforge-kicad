@@ -117,23 +117,35 @@ class BoardOverview(wx.Panel):
             dc.SetTextForeground(self.colors['pending'])
             dc.DrawText('Click Refresh board to load the board overview.', 12, 12)
             return
+        x0, y0, scale, ox, oy = self.transform()
+
+        def screen(point):
+            return wx.Point(round((point[0] - x0) * scale + ox),
+                            round((point[1] - y0) * scale + oy))
+
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
         dc.SetPen(wx.Pen(self.colors['pending'], 1))
         for rings in self.scene['outline']:
             for ring in rings:
                 if ring:
-                    pts = [self.screen(p) for p in ring]
+                    pts = [screen(p) for p in ring]
                     dc.DrawLines(pts + pts[:1])
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.SetBrush(wx.Brush(self.colors['routed']))
         for group in self.scene.get('sets', []):
-            for coordinates in (group.get('record') or {}).get('vias', {}).values():
-                dc.DrawCircle(self.screen(coordinates), 2)
+            coordinates_list = list((group.get('record') or {}).get('vias', {}).values())
+            stride = max(1, (len(coordinates_list) + 4999) // 5000)
+            for coordinates in coordinates_list[::stride]:
+                dc.DrawCircle(screen(coordinates), 2)
         if self.preview:
             for key, state in (('rejected', 'warning'), ('accepted', 'ok')):
                 dc.SetBrush(wx.Brush(self.colors[state]))
-                for p in self.preview[key]:
-                    dc.DrawCircle(self.screen(p), 2 if key == 'rejected' else 3)
+                points = self.preview[key]
+                # Keep the overview responsive on a dense, full-board grid. All
+                # sites remain in the preview and are checked when applying.
+                stride = max(1, (len(points) + 4999) // 5000)
+                for p in points[::stride]:
+                    dc.DrawCircle(screen(p), 2 if key == 'rejected' else 3)
         region = (self.region or {}).get('points', [])
         if self.mode == 'rectangle' and self.start and self.hover:
             a, b = self.start, self.hover
@@ -142,7 +154,7 @@ class BoardOverview(wx.Panel):
             region = self.vertices + ([self.hover] if self.hover else [])
         if len(region) > 1:
             dc.SetPen(wx.Pen(self.colors['routed'], 2))
-            pts = [self.screen(p) for p in region]
+            pts = [screen(p) for p in region]
             dc.DrawLines(pts if self.mode == 'polygon' or (self.region or {}).get(
                 'kind') == 'trace' else pts + pts[:1])
             if (self.region or {}).get('kind') == 'trace':
@@ -175,8 +187,13 @@ class StitchingPanel(wx.Panel):
             button.Bind(wx.EVT_BUTTON, handler)
             bar.Add(button, 0, wx.RIGHT, 5)
         outer.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
+        if not trace_mode:
+            outer.Add(wx.StaticText(self, label='Spacing X and Y is measured between via centers. '
+                                    'Draw a region, then Preview and Apply.'),
+                      0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
         body = wx.BoxSizer(wx.HORIZONTAL)
         form = wx.FlexGridSizer(cols=2, vgap=5, hgap=8)
+        self.advanced_rows = []
         self.name = wx.TextCtrl(self, value='RF trace fence' if trace_mode else 'Ground stitching')
         self.net = wx.ComboBox(self, style=wx.CB_DROPDOWN if trace_mode else wx.CB_READONLY)
         self.source = wx.Choice(self, choices=['Active board preset', 'Netclass', 'Custom'])
@@ -195,8 +212,11 @@ class StitchingPanel(wx.Panel):
                                ('Via size source', self.source),
                                ('Fence side' if trace_mode else 'Placement pattern', self.pattern),
                                ('Copper contact', self.connection)):
-            form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+            caption = wx.StaticText(self, label=label)
+            form.Add(caption, 0, wx.ALIGN_CENTER_VERTICAL)
             form.Add(control, 1, wx.EXPAND)
+            if not trace_mode and control in (self.name, self.pattern, self.connection):
+                self.advanced_rows.append((caption, control))
         self.fields = {}
         fields = [('diameter', 'Via diameter (mm)', '.6'),
                                   ('drill', 'Drill diameter (mm)', '.25'),
@@ -211,6 +231,8 @@ class StitchingPanel(wx.Panel):
         for key, label, value in fields:
             if trace_mode and key == 'pitch_x':
                 label = 'Spacing along trace (mm)'
+            elif not trace_mode and key in ('pitch_x', 'pitch_y'):
+                label = f"Spacing {'X' if key == 'pitch_x' else 'Y'} center-to-center (mm)"
             if trace_mode and key == 'boundary':
                 label, value = 'Copper-fill setback (mm)', '0'
             control = wx.TextCtrl(self, value=value, size=(100, -1))
@@ -218,11 +240,21 @@ class StitchingPanel(wx.Panel):
             if trace_mode and key in ('pitch_y', 'offset_x', 'offset_y'):
                 control.Hide()
             else:
-                form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+                caption = wx.StaticText(self, label=label)
+                form.Add(caption, 0, wx.ALIGN_CENTER_VERTICAL)
                 form.Add(control, 1, wx.EXPAND)
+                if not trace_mode and key in ('offset_x', 'offset_y', 'boundary', 'edge'):
+                    self.advanced_rows.append((caption, control))
             control.Bind(wx.EVT_TEXT, self.invalidate)
         form.AddGrowableCol(1)
-        body.Add(form, 0, wx.ALL, 6)
+        left = wx.BoxSizer(wx.VERTICAL)
+        left.Add(form, 0, wx.EXPAND)
+        self.advanced = None
+        if not trace_mode:
+            self.advanced = wx.CheckBox(self, label='Advanced options')
+            self.advanced.Bind(wx.EVT_CHECKBOX, self.toggle_advanced)
+            left.Add(self.advanced, 0, wx.TOP, 8)
+        body.Add(left, 0, wx.ALL, 6)
         right = wx.BoxSizer(wx.VERTICAL)
         self.region_label = wx.StaticText(self, label='Region: Whole board')
         right.Add(self.region_label, 0, wx.BOTTOM, 4)
@@ -273,6 +305,7 @@ class StitchingPanel(wx.Panel):
         self.status.SetForegroundColour(host.colors['pending'])
         outer.Add(self.status, 0, wx.EXPAND | wx.ALL, 6)
         self.SetSizer(outer)
+        self.toggle_advanced()
         if host.dark:
             self.sets.SetBackgroundColour('#19212D')
             self.sets.SetForegroundColour('#E5EDF8')
@@ -290,6 +323,16 @@ class StitchingPanel(wx.Panel):
         self.status.SetForegroundColour(self.host.colors[state])
         self.status.SetLabel(text)
         self.Layout()
+
+    def toggle_advanced(self, event=None):
+        if self.advanced is not None:
+            visible = self.advanced.GetValue()
+            for caption, control in self.advanced_rows:
+                caption.Show(visible)
+                control.Show(visible)
+            self.Layout()
+        if event:
+            event.Skip()
 
     def task(self, fn, done):
         if self.native is None:
@@ -393,10 +436,16 @@ class StitchingPanel(wx.Panel):
                              'warning')
         self.task(lambda: self.native('stitch_scene'), accept)
 
-    def fill(self, saved):
+    def fill(self, saved, restore_advanced=False):
         self.filling = True
         try:
             values = saved.get('settings', {})
+            if not restore_advanced and not self.trace_mode:
+                # Remember the everyday inputs without carrying a hidden strict
+                # contact or setback setting into a new placement.
+                values = {k: v for k, v in values.items()
+                          if k in ('net', 'size_source', 'diameter', 'drill',
+                                   'pitch_x', 'pitch_y')}
             self.name.ChangeValue(saved.get('name', 'Ground stitching'))
             self.net.SetValue(values.get('net', 'GND' if 'GND' in self.scene['nets'] else
                                          next(iter(self.scene['nets']), '')))
@@ -414,6 +463,9 @@ class StitchingPanel(wx.Panel):
                     control.ChangeValue(str(values[key]))
             self.set_region(saved.get('region', dict(kind='board')))
             self.update_sizes()
+            if self.advanced is not None:
+                self.advanced.SetValue(bool(restore_advanced))
+                self.toggle_advanced()
         finally:
             self.filling = False
 
@@ -534,7 +586,7 @@ class StitchingPanel(wx.Panel):
         if not group['record']:
             self.message('Settings metadata is missing for this set.', 'error')
             return
-        self.fill(group['record'])
+        self.fill(group['record'], restore_advanced=True)
         self.replace = ids[0]
         self.apply.SetLabel('Replace selected set')
         self.invalidate()

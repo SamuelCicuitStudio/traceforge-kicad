@@ -124,15 +124,18 @@ orientation and limits before writing DRC targets.
 
 ### Via stitching
 
-![Current Via Stitching tab on the management switch PCB](docs/screenshots/via-stitching.png)
+![Via Stitching tab in the published 0.11.0 build on the management switch PCB](docs/screenshots/via-stitching.png)
 
-*The management board is loaded with the whole-board region selected. This capture
-precedes Preview; no stitching vias were added to the project.*
+*This 0.11.0 capture precedes Preview; no stitching vias were added to the project.
+The 0.11.1 local test build has a condensed basic form.*
 
-Choose the net, via preset/netclass/custom size, spacing and setbacks. Choose the
-whole board, a PCB zone/drawing, or draw a rectangle/polygon in the tab's overview.
-Select **Symmetric**, **Staggered**, or a perimeter pattern, then **Preview** and
-**Apply stitching**. Accepted locations are green; rejected locations are amber.
+Choose the net, via preset/netclass/custom size, and center-to-center X/Y spacing.
+Choose the whole board, a PCB zone/drawing, or draw a rectangle/polygon in the
+tab's overview, then **Preview** and **Apply stitching**. Accepted locations are
+green; rejected locations are amber. Symmetric is the default placement pattern;
+staggered/perimeter patterns, copper-contact rules, grid offsets and setbacks are
+under **Advanced options**. Whole-board grids are evaluated without a fixed
+5,000-location limit; dense boards can take longer to preview and apply.
 
 Select, edit/regenerate or remove tool-created sets from the list. Changes support
 KiCad Undo/Redo. Read [stitching usage and checks](docs/VIA-STITCHING-TESTING.md).
