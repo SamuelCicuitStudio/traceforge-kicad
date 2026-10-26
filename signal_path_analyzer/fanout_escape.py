@@ -17,11 +17,9 @@ def edge_paths(start, grid, margin=None):
     """Yield short straight/dogleg paths in footprint-local millimetres."""
     px, py = grid['pitch_x'], grid['pitch_y']
     margin = margin if margin is not None else max(px, py) * .6
-    cx, cy = grid['center']
-    left = cx - (grid['columns'] - 1) * px / 2 - margin
-    right = cx + (grid['columns'] - 1) * px / 2 + margin
-    top = cy - (grid['rows'] - 1) * py / 2 - margin
-    bottom = cy + (grid['rows'] - 1) * py / 2 + margin
+    min_x, max_x, min_y, max_y = grid['bounds']
+    left, right = min_x - margin, max_x + margin
+    top, bottom = min_y - margin, max_y + margin
     x, y = start
     directions = sorted((
         (abs(x-left), 'left', left), (abs(right-x), 'right', right),

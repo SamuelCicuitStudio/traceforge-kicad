@@ -97,8 +97,8 @@ class FanoutPanel(wx.Panel):
                                   ('drill', 'Drill diameter (mm)', '.25'),
                                   ('width', 'Track width (mm)', '.15'),
                                   ('clearance', 'Minimum clearance (mm)', '.15'),
-                                  ('offset_x', 'Dogbone X offset; 0 = half pitch', '0'),
-                                  ('offset_y', 'Dogbone Y offset; 0 = half pitch', '0'),
+                                  ('offset_x', 'Dogbone X offset; 0 = local auto', '0'),
+                                  ('offset_y', 'Dogbone Y offset; 0 = local auto', '0'),
                                   ('edge', 'Board edge setback (mm)', '.5'),
                                   ('include', 'Include nets; comma-separated globs', '*'),
                                   ('exclude', 'Exclude nets; comma-separated globs', ''),
@@ -256,9 +256,13 @@ class FanoutPanel(wx.Panel):
                 self.fields[key].ChangeValue(str(value))
         self.update_size()
         grid = data['grid']
-        self.summary.SetLabel(f"{data['reference']} — {len(data['pads'])} pads; "
-                              f"{grid['columns']} × {grid['rows']}; pitch "
-                              f"{grid['pitch_x']:.3f} × {grid['pitch_y']:.3f} mm; {data['layer']}")
+        layout = (f"{grid['columns']} X / {grid['rows']} Y bands; minimum local "
+                  f"pitch {grid['pitch_x']:.3f} x {grid['pitch_y']:.3f} mm; variable spacing"
+                  if grid['variable_pitch'] else
+                  f"{grid['columns']} x {grid['rows']}; pitch "
+                  f"{grid['pitch_x']:.3f} x {grid['pitch_y']:.3f} mm")
+        self.summary.SetLabel(f"{data['reference']} - {len(data['pads'])} pads; "
+                              f"{layout}; {data['layer']}")
         self.canvas.Refresh()
         self.update_fit()
         self.message('Review fabrication limits and sizes, then Preview. '

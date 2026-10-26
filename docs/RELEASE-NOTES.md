@@ -1,3 +1,24 @@
+# TraceForge 0.11.7 — Variable-pitch BGA preview (testing)
+
+The BGA Fanout tab now recognizes rectangular pad arrays whose X/Y spacing
+changes across rows and columns, including mixed-pitch outer rings and inner
+arrays. Zero X/Y dogbone offset uses each pad's adjacent gap; the preview and
+Auto escape use the actual pad-field bounds. Staggered/perimeter patterns still
+need a separate strategy. Via, track and clearance rules remain unchanged.
+
+KiCad's TFBGA257 0.5/0.65 mm footprint was analyzed on a disposable board.
+A too-large through-via was correctly blocked by native copper clearance, while
+a second disposable uneven-pitch array produced an accepted read-only dogbone
+and Auto escape preview. The RK3566 CPU U6 in DroneLink was analyzed read-only: its mixed
+0.40/0.65 mm pads were detected, while sample dogbones were blocked by the
+board's 0.5/0.3 mm minimum through-via and nearby copper. The project board
+was not edited. The Python suite and lint checks pass. Live PCB Editor review remains
+the next step before changing this build's PCM status from testing.
+
+Install the local `TraceForge-0.11.7-KiCad10-PCM.zip` through **Plugin and
+Content Manager > Install from file**, close all KiCad windows, and reopen PCB
+Editor. The TraceForge title and About tab should show 0.11.7.
+
 # TraceForge 0.11.6 — BGA selection repair
 
 This update restores the board-boundary helper required by the native BGA

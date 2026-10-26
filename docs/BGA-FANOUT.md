@@ -11,11 +11,16 @@ The focused design and remaining scope are in [Fanout Escape Plan](FANOUT-ESCAPE
 
 1. Restart PCB Editor after updating TraceForge. Select one BGA footprint or pads
    belonging to it, open the **BGA Fanout** tab and click **Analyze PCB selection**.
-2. Review detected X/Y pitch, rows/columns, pad count and footprint side. The initial
-   version supports regular rectangular SMD grids, including missing balls, rotations
-   and back-side placements. Irregular/staggered packages require a different strategy.
+2. Review the pad count, footprint side, and detected layout. Regular rectangular
+   SMD grids and arrays with different row/column spacing are supported, including
+   missing balls, a mixed-pitch outer ring and inner array, rotations, and back-side
+   placements. For variable layouts, the displayed pitch is the smallest actual
+   spacing between pads in the same row/column; X/Y band counts are not package
+   dimensions. Staggered/perimeter packages still require a different strategy.
 3. Choose **Dogbone** for a short stub to a via in an adjacent inter-ball gap. Zero
-   X/Y offset means half the respective pitch. Custom positive offsets are supported.
+   X/Y offset uses half the adjacent gap for that pad and direction, capped across
+   large empty spans so a stub does not cross the BGA's hollow center. Custom
+   positive offsets are supported.
    The planner tries four gap directions, preferring outward sites and processing
    inner pads first. **Auto escape** uses the same breakout sites, then checks short
    straight and dogleg routes to the pad-field edge on the selected escape layer.
@@ -72,6 +77,11 @@ manufacturing limits or change project design rules to force a result.
   breakout sites and a bounded set of straight/dogleg edge routes on one user-selected
   enabled copper layer. It keeps existing copper fixed and reports pads that only
   fit a breakout. It does not route beyond the BGA pad field.
+- Mixed-pitch detection measures neighbors within each pad's own row and column.
+  Coordinate steps in the overall X/Y projection are not treated as ball pitch.
+  Extremely sparse rows or displaced pads are rejected; geometric legality is
+  decided by Preview, not by pitch detection alone. Tight inner arrays may still
+  need via-in-pad or a fabrication process outside the through-via scope here.
 - No blind/buried/microvias, differential-pair coupling, length matching, automatic
   layer assignment, obstacle rip-up or destination routing.
 - Blocked pads remain blocked in the result; a partial result is not a complete
@@ -133,7 +143,34 @@ Undo and Redo. The management switch board was used only for read-only interface
 captures; it has no BGA footprint.
 Fixtures and local tests remain ignored and are not included in releases.
 
+Variable-pitch checks used a synthetic uneven 4 by 4 array, a mixed-pitch
+outer-ring/inner-array fixture, and KiCad's installed
+`ST_TFBGA-257_10x10mm_Layout19x19_P0.5mmP0.65mm` footprint. The ST layout's
+minimum same-row/column spacing was correctly read as 0.5 mm rather than the
+misleading 0.05 mm gap between projected coordinate bands. A read-only native
+preview on a disposable board rejected its selected inner ball for actual copper
+clearance with the test through-via settings. A second disposable board with
+modified 5 by 5 pitches produced one accepted read-only dogbone preview and
+one accepted read-only Auto escape preview to the actual pad-field edge.
+The [ST package documentation](https://www.st.com/resource/en/datasheet/dm00489389.pdf)
+specifies the TFBGA257 0.5/0.65 mm pitches. The
+[TI BGA escape guide](https://www.ti.com/lit/pdf/slaa770) illustrates why
+depopulated balls, via locations and manufacturing dimensions must be checked
+as geometry rather than inferred from one pitch number.
+
+The RK3566 CPU (`U6`) in `DroneLink_RK3566.kicad_pcb` was also checked
+read-only. Its 565-pad FCCSP footprint has mixed 0.40/0.65 mm spacing; the
+detector reads approximately 0.399 mm as the smallest same-row/column gap.
+Four selected pads previewed with the board's 0.5/0.3 mm through-via minimum
+were blocked by pad/track/via clearance or source-pad overlap. For the central
+`1J10` pad, nominal guidance estimates a 0.207 mm gap-via limit, below the
+board's 0.5 mm minimum. No project copper or settings were changed. A physical
+escape for these pads needs a compatible layout and fabrication strategy; this
+feature does not relax the board rules to force a route.
+
 The external [KiCadRoutingTools BGA fanout documentation](https://github.com/drandyhaas/KiCadRoutingTools/tree/main/py_router/bga_fanout)
 was reviewed for general design considerations: pitch detection, manufacturing limits,
 site reservation, and distinguishing fanout methods. TraceForge's planner and native
 integration are original code; this feature does not import or bundle that project.
+The upstream project's [routing guidance](https://github.com/drandyhaas/KiCadRoutingTools/blob/main/.claude/skills/plan-pcb-routing/SKILL.md)
+also documents how projected axis pitch can misclassify staggered perimeter packages.

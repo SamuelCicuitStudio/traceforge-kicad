@@ -19,7 +19,7 @@ selected signal path is highlighted on the board.*
 
 ### KiCad Plugin and Content Manager
 
-Download `TraceForge-0.11.6-KiCad10-PCM.zip` from the GitHub release. In KiCad
+Download `TraceForge-<version>-KiCad10-PCM.zip` from a GitHub release. In KiCad
 Manager, open **Plugin and Content Manager > Install from file**, select that ZIP,
 then close all KiCad windows and reopen PCB Editor. Once KiCad accepts TraceForge into its official catalog,
 you can instead install or update it directly from the Manager's Repository tab.
@@ -172,8 +172,12 @@ to the field edge. The management board has no BGA footprint.*
 them, and Remove generated fanout returned the test board to zero tracks and vias.
 The removal itself also passed Undo and Redo.*
 
-Select a BGA footprint and open **BGA Fanout**. Review detected pitch, fabrication
-limits, offsets and filters. Fit guidance explains board-rule floors and nominal
+Select a BGA footprint and open **BGA Fanout**. Review the detected local pitch,
+fabrication limits, offsets and filters. Rectangular arrays may have different
+spacing in different rows and columns, including an outer ring and inner array.
+Zero X/Y offset uses that pad's adjacent gap, with a short-stub cap across
+large empty spans.
+Fit guidance explains board-rule floors and nominal
 inter-ball space; **Suggest settings** evaluates candidates without placing them.
 Choose Dogbone, Via-in-pad, or **Auto escape to BGA edge**. The escape preview shows
 which selected single-ended pads have a connected route past the pad field and which

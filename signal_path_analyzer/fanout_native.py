@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 import secrets
 import time
@@ -12,7 +11,7 @@ from pathlib import Path
 
 import pcbnew
 
-from .fanout import candidates, grid_info, matches, validate, world
+from .fanout import candidates, fit_guidance, grid_info, matches, validate, world
 from .fanout_escape import edge_paths, paired_net
 from .stitching_native import fits, outline, point_mm, refill, transaction, uid
 
@@ -439,17 +438,12 @@ def suggest(board, request):
     sizes.update(tuple(v) for v in data['presets'][1:])
     sizes.add((data['defaults']['diameter'], data['defaults']['drill']))
     widths = {values['width'], ds.m_TrackMinWidth / 1e6}
-    pad_radius = max(max(p['size']) / 2 for p in data['pads'])
     grid = data['grid']
-    diagonal = math.hypot(grid['pitch_x'] / 2, grid['pitch_y'] / 2)
-    clearance = max(values['clearance'], ds.m_MinClearance / 1e6)
-    maximum = 2 * (diagonal - pad_radius - clearance)
+    maximum = fit_guidance(data, values)['via_gap_limit']
     options = []
     for diameter, drill in sizes:
         if (diameter < minimum_via or drill < minimum_drill or
             (diameter - drill) / 2 + 1e-9 < ds.m_ViasMinAnnularWidth / 1e6):
-            continue
-        if values.get('mode') != 'via-in-pad' and diameter > maximum + .001:
             continue
         for width in widths:
             if width < ds.m_TrackMinWidth / 1e6 or width <= 0:
