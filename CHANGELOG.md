@@ -1,8 +1,8 @@
 # Changelog
 
-Historical release notes. Published release: [0.11.0](docs/RELEASE-NOTES.md).
+Release details: [0.11.4](docs/RELEASE-NOTES.md).
 
-## TraceForge 0.11.4 (local PCM test build)
+## TraceForge 0.11.4
 
 - Check that the external panel and the in-process PCB Editor helper run the same
   version. A stale helper now produces a clear restart message before a board

@@ -19,9 +19,9 @@ selected signal path is highlighted on the board.*
 
 ### KiCad Plugin and Content Manager
 
-Download `TraceForge-0.11.0-KiCad10-PCM.zip` from the GitHub release. In KiCad
+Download `TraceForge-0.11.4-KiCad10-PCM.zip` from the GitHub release. In KiCad
 Manager, open **Plugin and Content Manager > Install from file**, select that ZIP,
-then restart PCB Editor. Once KiCad accepts TraceForge into its official catalog,
+then close all KiCad windows and reopen PCB Editor. Once KiCad accepts TraceForge into its official catalog,
 you can instead install or update it directly from the Manager's Repository tab.
 
 The first launch may assign KiCad's unused **Ctrl+Alt+Shift+F12** shortcut for
@@ -126,8 +126,8 @@ orientation and limits before writing DRC targets.
 
 ![Via Stitching tab in the published 0.11.0 build on the management switch PCB](docs/screenshots/via-stitching.png)
 
-*This 0.11.0 capture precedes Preview; no stitching vias were added to the project.
-The 0.11.4 local test build has a condensed basic form.*
+*This capture precedes Preview; no stitching vias were added to the project.
+The 0.11.4 release has a condensed basic form.*
 
 Choose the net, via preset/netclass/custom size, and center-to-center X/Y spacing.
 Choose the whole board, a PCB zone/drawing, or draw a rectangle/polygon in the

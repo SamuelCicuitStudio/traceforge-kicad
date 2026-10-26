@@ -1,18 +1,41 @@
-# TraceForge 0.11.0 — BGA escape and KiCad PCM package
+# TraceForge 0.11.4 — Dense via stitching and version checks
 
-This version adds BGA fit guidance and **Auto escape to BGA edge**. TraceForge
-previews connected routes from selected single-ended pads to the BGA field edge,
-reports pads it cannot escape, and rechecks the board before applying reviewed
-routes. Through vias and one selected escape layer are supported. Routes end at
-the BGA edge for you to continue; this is not full-board autorouting.
+TraceForge 0.11.4 updates the KiCad 10 Windows plugin with practical whole-board
+via stitching at fine center-to-center spacing and clearer installation diagnostics.
 
-The new KiCad Plugin and Content Manager ZIP installs TraceForge under KiCad's
-managed plugin directory on Windows. The existing standalone Windows ZIP remains
-available for manual installation. Both target KiCad 10 and its native `pcbnew`
-Python bindings. KiCad 11 is not supported.
+## Changes since 0.11.0
 
-The README now shows the current interface on the management switch board and
-live BGA preview/apply on a disposable test board. On that 4 by 4 board, Apply
-created 16 escaped routes (16 vias and 32 segments). KiCad Undo and Redo worked;
-managed removal returned the board to zero tracks and vias and was itself undoable.
-The test suite, lint and release builds pass. Run KiCad DRC after applying routes.
+- Via Stitching previews large grids without the previous 5,000-location limit.
+  The basic form shows the net, via source, and X/Y center-to-center pitch;
+  placement pattern, offsets, and setbacks remain under Advanced options.
+- Rectangle regions work when dragged in any direction. The overview captures
+  the mouse during the drag, including when it leaves the overview boundary.
+- The window title and About tab show the running version. About also shows
+  the panel and in-process PCB Editor helper paths and versions.
+- A stale panel or PCB Editor helper now produces a version mismatch message
+  instead of repeating the old grid-limit error. Restart all KiCad windows
+  after updating the plugin.
+
+## Install
+
+For KiCad Plugin and Content Manager, download
+`TraceForge-0.11.4-KiCad10-PCM.zip` and choose **Install from file**. Close all
+KiCad windows, including Manager and PCB Editor, then reopen the board. The
+TraceForge window title and About tab should both report version 0.11.4.
+
+The `TraceForge-0.11.4-KiCad10-Windows.zip` asset is for standalone manual
+installation; follow the README's standalone instructions. `SHA256SUMS.txt`
+contains hashes for both archives.
+
+## Verification and limits
+
+On the saved 02-BACKPLANE-BOARD, a 0.45/0.2 mm via at 0.6 × 0.6 mm
+center-to-center pitch previewed 14,362 accepted locations and 54,938 skipped
+locations in 47 seconds. This was a read-only preview of the saved board, not
+a live placement test. Four rectangle drag directions, KiCad native stitching
+integration, the Python tests, and lint checks passed.
+
+TraceForge keeps the requested grid pitch and skips sites blocked by copper,
+keepouts, board edges, or other geometry. It does not enlarge the pitch to fit
+a candidate limit. Run KiCad DRC after applying vias, especially where project
+specific fabrication rules apply.

@@ -366,7 +366,7 @@ class TraceForgePanel(wx.Frame):
         about_layout.Add(heading, 0, wx.ALL, 14)
         log_path = Path(os.environ.get('APPDATA', Path.home())) / 'TraceForge' / 'traceforge.log'
         native_info = native_info or {}
-        details = (f'KiCad PCB Editor extension | local PCM test build\n'
+        details = (f'KiCad PCB Editor extension | Windows release\n'
                    f'Board access: native pcbnew\n'
                    f'PCB Editor helper: {native_info.get("traceforge_version", "unavailable")}\n'
                    f'Helper code: {native_info.get("helper_path", "unavailable")}\n'
