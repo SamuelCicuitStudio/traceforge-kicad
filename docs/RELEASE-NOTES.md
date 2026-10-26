@@ -1,6 +1,6 @@
-# TraceForge 0.11.4 — Dense via stitching and version checks
+# TraceForge 0.11.5 — Dense via stitching and clearer plugin information
 
-TraceForge 0.11.4 updates the KiCad 10 Windows plugin with practical whole-board
+TraceForge 0.11.5 updates the KiCad 10 Windows plugin with practical whole-board
 via stitching at fine center-to-center spacing and clearer installation diagnostics.
 
 ## Changes since 0.11.0
@@ -10,8 +10,9 @@ via stitching at fine center-to-center spacing and clearer installation diagnost
   placement pattern, offsets, and setbacks remain under Advanced options.
 - Rectangle regions work when dragged in any direction. The overview captures
   the mouse during the drag, including when it leaves the overview boundary.
-- The window title and About tab show the running version. About also shows
-  the panel and in-process PCB Editor helper paths and versions.
+- The window title and About tab show the running version. The redesigned About
+  page describes the tools, compatibility, license, and project links. Optional
+  diagnostics show the panel and PCB Editor helper paths and versions.
 - A stale panel or PCB Editor helper now produces a version mismatch message
   instead of repeating the old grid-limit error. Restart all KiCad windows
   after updating the plugin.
@@ -19,11 +20,11 @@ via stitching at fine center-to-center spacing and clearer installation diagnost
 ## Install
 
 For KiCad Plugin and Content Manager, download
-`TraceForge-0.11.4-KiCad10-PCM.zip` and choose **Install from file**. Close all
+`TraceForge-0.11.5-KiCad10-PCM.zip` and choose **Install from file**. Close all
 KiCad windows, including Manager and PCB Editor, then reopen the board. The
-TraceForge window title and About tab should both report version 0.11.4.
+TraceForge window title and About tab should both report version 0.11.5.
 
-The `TraceForge-0.11.4-KiCad10-Windows.zip` asset is for standalone manual
+The `TraceForge-0.11.5-KiCad10-Windows.zip` asset is for standalone manual
 installation; follow the README's standalone instructions. `SHA256SUMS.txt`
 contains hashes for both archives.
 

@@ -354,36 +354,9 @@ class TraceForgePanel(wx.Frame):
 
         self.trace_cleanup = TraceCleanupPanel(self.notebook, self, stitching)
         self.notebook.AddPage(self.trace_cleanup, 'Trace Cleanup')
-        self.about = wx.Panel(self.notebook)
-        if self.dark:
-            self.about.SetBackgroundColour('#222C3A')
-            self.about.SetForegroundColour('#E5EDF8')
-        about_layout = wx.BoxSizer(wx.VERTICAL)
-        heading = wx.StaticText(self.about, label=f'TraceForge {__version__}')
-        heading.SetFont(heading.GetFont().Scale(1.5).Bold())
-        if self.dark:
-            heading.SetForegroundColour('#E5EDF8')
-        about_layout.Add(heading, 0, wx.ALL, 14)
-        log_path = Path(os.environ.get('APPDATA', Path.home())) / 'TraceForge' / 'traceforge.log'
-        native_info = native_info or {}
-        details = (f'KiCad PCB Editor extension | Windows release\n'
-                   f'Board access: native pcbnew\n'
-                   f'PCB Editor helper: {native_info.get("traceforge_version", "unavailable")}\n'
-                   f'Helper code: {native_info.get("helper_path", "unavailable")}\n'
-                   f'Loaded code: {Path(__file__).resolve()}\n'
-                   f'Python: {sys.version.split()[0]}\n'
-                   f'Log: {log_path}\n\n'
-                   'Whole-board via grids are streamed without a 5,000-location cap.\n'
-                   'If this version is not shown after installing a PCM ZIP, close all KiCad '
-                   'windows and reopen PCB Editor.\n\n'
-                   'Project: https://github.com/SamuelCicuitStudio/traceforge-kicad')
-        info = wx.TextCtrl(self.about, value=details,
-                           style=wx.TE_MULTILINE | wx.TE_READONLY | wx.BORDER_NONE)
-        if self.dark:
-            info.SetBackgroundColour('#222C3A')
-            info.SetForegroundColour('#E5EDF8')
-        about_layout.Add(info, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
-        self.about.SetSizer(about_layout)
+        from .about_ui import AboutPanel
+
+        self.about = AboutPanel(self.notebook, self.dark, native_info)
         self.notebook.AddPage(self.about, 'About')
         if self.dark:
             self.stitching.SetBackgroundColour('#222C3A')

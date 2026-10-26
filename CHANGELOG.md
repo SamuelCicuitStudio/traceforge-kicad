@@ -1,6 +1,13 @@
 # Changelog
 
-Release details: [0.11.4](docs/RELEASE-NOTES.md).
+Release details: [0.11.5](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.11.5
+
+- Redesign About as a product overview with the plugin icon, supported KiCad
+  version, tool summaries, author, license, and links to documentation and issues.
+- Keep installation paths, helper version, and log location behind an optional
+  diagnostic section that can be copied when support is needed.
 
 ## TraceForge 0.11.4
 
