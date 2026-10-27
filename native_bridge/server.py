@@ -254,6 +254,11 @@ def zoom_to_items(board, chosen, force=False):
 
 def dispatch(board, operation, payload):
     """Called only on the editor thread; no IPC API or file reload is involved."""
+    if operation.startswith('visual_'):
+        from signal_path_analyzer.visualization_native import dispatch as visual_dispatch
+
+        return visual_dispatch(board, operation, payload)
+
     def footprints():
         return list(board.GetFootprints())
 
@@ -294,6 +299,11 @@ def dispatch(board, operation, payload):
         if operation in ('fanout_apply', 'fanout_remove'):
             _highlights.clear(board, board_items(board))
         return fanout_dispatch(board, operation, payload)
+
+    if operation.startswith('via_array_'):
+        from signal_path_analyzer.via_array_native import dispatch as via_array_dispatch
+
+        return via_array_dispatch(board, operation, payload)
 
     if operation.startswith(('stitch_', 'tracefence_')):
         from signal_path_analyzer.stitching_native import dispatch as stitch_dispatch

@@ -1,6 +1,58 @@
 # Changelog
 
-Release details: [0.11.5](docs/RELEASE-NOTES.md).
+Release details: [0.11.17](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.11.17 (local test build)
+
+- Close the TraceForge panel automatically when the PCB Editor instance that
+  launched it closes, including when KiCad is closed. Keep the existing manual
+  close behavior and single-instance cleanup.
+
+## TraceForge 0.11.16 (local test build)
+
+- Via Array Apply no longer refills zones or marks them for refill. The user
+  controls zone updates with KiCad's B shortcut.
+
+## TraceForge 0.11.15 (local test build)
+
+- Make Via Array Apply responsive by moving the selected vias and checking
+  connectivity without immediately refilling every copper zone on the board.
+- Mark zones for refill and show the KiCad B shortcut required before DRC or
+  fabrication. Undo continues to restore the via positions.
+
+## TraceForge 0.11.14 (local test build)
+
+- Judge an array move by whether each previously connected copper layer still
+  has same-net copper at the proposed position, including pads, tracks,
+  drawings and filled zones. The original item need not remain in contact.
+- Allow same-net via copper to sit close together; retain drill-to-drill
+  spacing checks for selected and nearby existing vias.
+- Validate the 15-via backplane selection as a 3 x 5 array, including a
+  successful zone refill and unchanged layer connectivity on an in-memory copy.
+
+## TraceForge 0.11.13 (local test build)
+
+- Correct Via Array clearance checks for vias on the same net. Their copper
+  clearance does not apply between selected vias; the board's drill spacing
+  still does.
+- Make an auto-detected array's blocked vias explicit in the preview and
+  explain when connected copper prevents a safe move.
+
+## TraceForge 0.11.12 (local test build)
+
+- Auto detect the selected via array's rows and columns using the layout with
+  the least total via movement. The 12-via backplane selection resolves to
+  3 rows and 4 columns without entering a count.
+- Show current via positions and the proposed grid side by side before Apply.
+  Keep manual row or column counts available as an override.
+
+## TraceForge 0.11.11 (local test build)
+
+- Add Via Array to fit selected existing vias inside their current bounding
+  rectangle using a fixed number of rows or columns. Preview attachment and
+  clearance checks before an undoable move.
+- Add live net group colors, additive component ratsnest focus, and quick access
+  to KiCad's native teardrop editor in Visualization.
 
 ## TraceForge 0.11.5
 

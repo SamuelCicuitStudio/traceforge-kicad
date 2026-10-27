@@ -2,9 +2,9 @@
 
 <img src="icons/traceforge-light-48.png" alt="TraceForge icon" width="72" height="72">
 
-**Signal paths, trace cleanup, via stitching, RF fencing and BGA fanout for KiCad 10 on Windows.**
+**Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10 on Windows.**
 
-TraceForge puts five PCB tools in one colored panel. It reads the open board through
+TraceForge puts seven PCB tools in one colored panel. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. No official
 IPC API setup, API token, or pip runtime dependencies are needed.
 
@@ -81,6 +81,50 @@ folder while the junction exists leaves a broken plugin link.
 | **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
 | **Via Fencing** | Place managed ground-via rows on either or both sides of a routed RF trace; control copper gap, spacing and via size. |
 | **Trace Cleanup** | Preview redundant copper and native dangling-end findings, remove reviewed tracks with Undo, then recheck Signals. |
+| **Visualization** | Color net groups and individual nets live, focus the ratsnest on selected components, and open KiCad's native teardrop editor. |
+| **Via Array** | Detect the selected vias' row and column layout, preview current and proposed positions, then arrange them evenly inside their current bounds with Undo. |
+
+### Via Array
+
+Select 1–64 vias of the same net, size, drill and layer pair in PCB Editor. Open
+**Via Array**, then click **Read & preview selection**. Auto detect fits the
+existing row and column layout by finding the arrangement requiring the least
+movement. The two diagrams show current positions and the proposed array.
+To override the detected shape, choose **Rows** or **Columns**, enter a fixed
+count starting at 1, and click **Preview array**. TraceForge calculates the
+other dimension and center-to-center X/Y pitch from the selected via centers'
+bounding rectangle. A partial final row or column is centered. It
+assigns each via to a target that minimizes total movement; no vias are added.
+
+The preview lists old and new centers. Apply is available only when the array
+stays inside the board, passes copper and via spacing checks, and keeps existing
+same-net copper contact on connected layers. Apply only moves the vias;
+it does not refill zones. Press **B** in PCB Editor whenever you want to
+update zone fills. Undo restores the original positions.
+This tool rearranges existing vias; **Via Stitching** creates managed new vias.
+
+### Visualization
+
+The Visualization tab assigns a single color to each group of nets. Enter exact net
+names, comma-separated glob patterns such as `DDR_DQ*`, or a KiCad net class as
+`class:DDR_BYTE0`. Groups must be disjoint. Individual net colors are available for
+nets outside groups, such as separate voltage rails. TraceForge rejects conflicting
+assignments and stores group definitions in `<board>.traceforge-visual.json`; the
+applied colors are saved in KiCad's project file. Applying a color switches KiCad's
+net-color display to **All**, which colors pads, traces, vias, and copper zones.
+**Reset all net colors to defaults** clears every net color assignment on the open
+PCB and removes TraceForge's saved group and individual color definitions.
+
+The separate **Ratsnest visibility** section offers **Show all**, **Hide all**,
+and **Add PCB selection**. Select a footprint or one of its pads in PCB Editor,
+then click Add PCB selection. The first click isolates that component's nets;
+later clicks add nets without hiding previously focused components. The focus list
+lets you remove a component while retaining nets shared with others. Show all and
+Add PCB selection also turn KiCad's global ratsnest display on if it was set to
+None. The first focus action filters the board; later additions update only newly
+included nets. A fully routed board has no ratsnest lines to show. These controls affect visibility only;
+they do not change connectivity. **Edit teardrops in KiCad** opens KiCad's native
+dialog, with its normal scope, defaults, and removal controls.
 
 ### Signals and path detection
 

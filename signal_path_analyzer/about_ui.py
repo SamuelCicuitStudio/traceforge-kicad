@@ -72,6 +72,8 @@ class AboutPanel(wx.ScrolledWindow):
             ('BGA Fanout', 'Preview and apply guided BGA escape routes.'),
             ('Via Fencing', 'Place ground vias along both sides of RF traces.'),
             ('Trace Cleanup', 'Find duplicate, overlapping, and dangling copper.'),
+            ('Visualization', 'Color net groups and control ratsnest visibility.'),
+            ('Via Array', 'Arrange selected existing vias in an evenly spaced grid.'),
         )
         for name, description in features:
             row = wx.BoxSizer(wx.HORIZONTAL)

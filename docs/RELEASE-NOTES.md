@@ -1,3 +1,92 @@
+# TraceForge 0.11.17 — Close with PCB Editor (local test build)
+
+TraceForge now tracks the PCB Editor process that launched it. Closing that
+editor, or closing KiCad, closes the TraceForge window automatically. The
+lightweight window check runs on the panel's existing timer. A temporary
+Windows wx frame was used to verify detection while visible and after close.
+
+# TraceForge 0.11.16 — Manual zone refill for Via Array (local test build)
+
+Via Array Apply now moves the vias and checks their connections without
+refilling zones or changing their refill flags. Refill remains entirely under
+the user's control through **B** in PCB Editor.
+
+# TraceForge 0.11.15 — Faster Via Array Apply (local test build)
+
+Via Array now moves the selected vias immediately, checks their existing copper
+connections, and marks zones for refill. It no longer refills the whole board
+during Apply. On the backplane's 15-via selection, the measured full zone refill
+alone took about 7.9 seconds; positioning the vias took less than 1 ms. The
+in-memory no-refill path kept all previously connected layers connected.
+
+**Press B in PCB Editor to refill zones before DRC, saving a manufacturing
+output, or continuing with another Via Array preview.** Undo still restores
+the via positions. The original backplane board was not modified by testing.
+
+# TraceForge 0.11.14 — Same-net copper-aware Via Array (local test build)
+
+Via Array now checks physical same-net copper contact on each affected layer
+at the proposed via position. A via may move within a copper area or from one
+same-net contact to another without needing to keep the exact old contact.
+Same-net via copper spacing is allowed; the drill-to-drill minimum remains
+checked for selected and nearby existing vias. Other-net clearance and board
+edge checks remain in place.
+
+The 15-via BUS_12V_PROTECTED selection on the backplane is auto detected as
+3 rows by 5 columns and now previews with zero blockers. Moving them on an
+in-memory board copy, refilling zones, and checking previous layer connections
+passed. The original project board was not changed.
+
+# TraceForge 0.11.13 — Via Array connection checks (local test build)
+
+The 15 selected vias in the backplane example are auto detected as **3 rows
+by 5 columns**. Their proposed centers have 0.780 mm row spacing. The previous
+preview incorrectly applied another-net copper clearance between these vias,
+producing false via-to-via warnings. Same-net selected vias now use KiCad's
+drill-to-drill minimum. The preview still identifies four vias whose proposed
+positions would lose existing track, pad, or copper contact. These require
+routing changes before the exact even grid can be applied safely.
+
+The preview displays blocked vias in red and states the detected grid and
+number of blocked vias. The original backplane PCB was inspected read-only.
+
+# TraceForge 0.11.12 — Via Array auto layout and visual preview (local test build)
+
+Select existing vias in PCB Editor and click **Read & preview selection**.
+TraceForge infers the existing row and column arrangement from the via centers,
+then shows side-by-side diagrams of the current positions and proposed even
+grid. It calculates X and Y center spacing within the selected vias' current
+bounds. The backplane example with 12 vias is recognized as 3 rows by 4
+columns. Rows and Columns remain available as manual overrides. Apply stays
+disabled when moving a via would lose a connection or violate clearance.
+
+The real backplane selection was previewed read-only: auto detect returned
+3 rows by 4 columns with no placement issues. The visual preview was rendered
+offscreen to confirm the same layout. KiCad DRC and Undo on a disposable copy
+remain the validation for applying vias; the original project was not edited.
+
+# TraceForge 0.11.11 — Via Array (local test build)
+
+**Via Array** rearranges 1–64 selected existing vias on the open PCB. Choose a
+fixed row or column count; TraceForge fits the remaining dimension and equal
+center spacing inside the selected via centers' bounding rectangle. Preview
+shows old and new locations. Apply uses KiCad's undoable native board edit and
+refills zones. The preview blocks lost track or pad attachments, insufficient
+same-net copper contact, keepouts, board-edge violations, and copper or via
+clearance conflicts. The tool does not create vias.
+
+The **Visualization** tab supports live net-group and individual net colors,
+additive component ratsnest focus, reset to default colors, and access to
+KiCad's native teardrop editor.
+
+The 12-via BUS_12V_PROTECTED cluster on the backplane was moved to a 3 × 4
+array on a disposable PCB. KiCad DRC after zone refill reported the same 78
+findings and zero unconnected items as the original. The original board was
+unchanged. The PCM archive is a local test build for KiCad 10 on Windows;
+install it with **Plugin and Content Manager > Install from file** after
+closing all KiCad windows. Open the Via Array tab, select vias in PCB Editor,
+and preview before applying. Run KiCad DRC after application.
+
 # TraceForge 0.11.7 — Variable-pitch BGA preview (testing)
 
 The BGA Fanout tab now recognizes rectangular pad arrays whose X/Y spacing

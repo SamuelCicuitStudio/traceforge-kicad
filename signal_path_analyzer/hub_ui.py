@@ -165,8 +165,8 @@ def kicad_dark_theme() -> bool:
     return wx.SystemSettings.GetAppearance().IsDark()
 
 
-def _kicad_pid() -> Optional[int]:
-    """Process id of the KiCad PCB editor window (Windows only)."""
+def _kicad_pid(expected: Optional[int] = None) -> Optional[int]:
+    """Process id of a visible KiCad PCB Editor window (Windows only)."""
 
     if sys.platform != "win32":
         return None
@@ -185,7 +185,8 @@ def _kicad_pid() -> Optional[int]:
             if buf.value.endswith("PCB Editor"):
                 pid = wintypes.DWORD()
                 user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-                found.append(pid.value)
+                if expected is None or pid.value == expected:
+                    found.append(pid.value)
         return True
 
     user32.EnumWindows(visit, 0)
@@ -249,7 +250,11 @@ class TraceForgePanel(wx.Frame):
         self.SetMinSize((520, 260))
         # Overlay: on top only while KiCad (or this panel) is the active application. A
         # cross-process window owner is avoided on purpose; Windows can hang or misbehave with it.
-        self.kicad_pid, self.on_top = _kicad_pid(), False
+        editor_pid = os.environ.get('TRACEFORGE_EDITOR_PID', '')
+        self.editor_pid = int(editor_pid) if editor_pid.isdecimal() else None
+        self.kicad_pid = self.editor_pid or _kicad_pid()
+        self.missing_editor_checks = 0
+        self.on_top = False
         self.overlay = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_overlay, self.overlay)
         self.overlay.Start(400)
@@ -354,6 +359,15 @@ class TraceForgePanel(wx.Frame):
 
         self.trace_cleanup = TraceCleanupPanel(self.notebook, self, stitching)
         self.notebook.AddPage(self.trace_cleanup, 'Trace Cleanup')
+        from .visualization_ui import VisualizationPanel
+
+        board_file = (native_info or {}).get('board')
+        self.visualization = VisualizationPanel(self.notebook, self, stitching, board_file)
+        self.notebook.AddPage(self.visualization, 'Visualization')
+        from .via_array_ui import ViaArrayPanel
+
+        self.via_array = ViaArrayPanel(self.notebook, self, stitching)
+        self.notebook.AddPage(self.via_array, 'Via Array')
         from .about_ui import AboutPanel
 
         self.about = AboutPanel(self.notebook, self.dark, native_info)
@@ -383,6 +397,8 @@ class TraceForgePanel(wx.Frame):
     def on_tab_open(self, event):
         event.Skip()
         self.position_activity()
+        if self.notebook.GetSelection() == 5 and not self.visualization.nets:
+            wx.CallAfter(self.visualization.on_refresh)
         self.schedule_auto_refresh()
 
     def on_resize(self, event):
@@ -395,7 +411,7 @@ class TraceForgePanel(wx.Frame):
             self.schedule_auto_refresh()
 
     def schedule_auto_refresh(self):
-        if not self.native_call or self.closing or self.notebook.GetSelection() == 5:
+        if not self.native_call or self.closing or self.notebook.GetSelection() in (5, 6, 7):
             return
         if self.auto_refresh_later:
             self.auto_refresh_later.Stop()
@@ -410,7 +426,7 @@ class TraceForgePanel(wx.Frame):
             return
         self.auto_check_deferred = False
         tab = self.notebook.GetSelection()
-        if tab == 5:
+        if tab in (5, 6, 7):
             return
         page = (None, self.stitching, self.fanout, self.trace_fence, self.trace_cleanup)[tab]
         if page and getattr(page, 'canvas', None) and getattr(page.canvas, 'mode', None):
@@ -466,7 +482,8 @@ class TraceForgePanel(wx.Frame):
         tab = self.notebook.GetSelection()
         target = (self.tree.GetMainWindow() if tab == 0 else
                   self.trace_cleanup.table if tab == 4 else
-                  self.about if tab == 5 else self.notebook.GetPage(tab).canvas)
+                  self.visualization.group_list if tab == 5 else
+                  self.via_array.table if tab == 6 else self.about)
         bounds = target.GetScreenRect()
         center = self.ScreenToClient((bounds.x + bounds.width // 2,
                                       bounds.y + bounds.height // 2))
@@ -499,7 +516,13 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 7:
+            return
+        if self.notebook.GetSelection() == 6:
+            self.via_array.on_refresh()
+            return
         if self.notebook.GetSelection() == 5:
+            self.visualization.on_refresh()
             return
         if self.notebook.GetSelection() == 4:
             self.trace_cleanup.on_refresh()
@@ -817,6 +840,13 @@ class TraceForgePanel(wx.Frame):
     def on_overlay(self, _event) -> None:
         """Stay on top while KiCad or this panel is the active application."""
 
+        if self.editor_pid is not None:
+            if _kicad_pid(self.editor_pid) is None:
+                self.missing_editor_checks += 1
+                if self.missing_editor_checks >= 3 and not self.closing:
+                    self.Close()
+                return
+            self.missing_editor_checks = 0
         if self.kicad_pid is None:
             self.kicad_pid = _kicad_pid()
         fg = _foreground_pid()

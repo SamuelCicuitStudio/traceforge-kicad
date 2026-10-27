@@ -46,6 +46,7 @@ def launch(script):
     env = dict(os.environ)
     env['TRACEFORGE_NATIVE_ENDPOINT'] = str(server.file)
     env['TRACEFORGE_BOARD_FILE'] = board.GetFileName()
+    env['TRACEFORGE_EDITOR_PID'] = str(os.getpid())
     for key in ('KICAD_API_SOCKET', 'KICAD_API_TOKEN', 'KICAD_API_CLIENT_NAME'):
         env.pop(key, None)
     subprocess.Popen([str(python), str(ROOT / script)], env=env,
