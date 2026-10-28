@@ -1,3 +1,22 @@
+# TraceForge 0.12.1 — Stable KiCad 10 Windows release
+
+TraceForge 0.12.1 publishes the 0.12 feature set as **stable** for Windows and
+KiCad 10. There are no routing or user-interface behavior changes from 0.12.0.
+The existing 0.12.0 testing archive remains available. Use the 0.12.1 PCM ZIP
+for KiCad's Plugin and Content Manager.
+
+The release includes rounded track corners with persistent restore, native
+teardrop controls, Via Tools, Trace Tools, visualization, and BGA fanout.
+Download `TraceForge-0.12.1-KiCad10-PCM.zip` and select **Plugin and Content
+Manager > Install from file**. Close all KiCad windows and reopen PCB Editor
+after installation. `SHA256SUMS.txt` covers the PCM and standalone ZIPs.
+
+Automated tests, lint, compilation, and package validation passed. The 0.12.0
+development checks below document the feature behavior and limitations. After
+editing copper, refill zones as needed, run DRC, and recheck length and skew.
+
+---
+
 # TraceForge 0.12.0 — Rounded corners, teardrops, and unified PCB tools
 
 Released 2026-10-28 for **Windows and KiCad 10**. This release consolidates the

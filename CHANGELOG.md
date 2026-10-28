@@ -1,6 +1,12 @@
 # Changelog
 
-Release details: [0.12.0](docs/RELEASE-NOTES.md).
+Release details: [0.12.1](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.12.1 (2026-10-28)
+
+- Publish the 0.12 feature set as a stable KiCad 10 Windows PCM package.
+- Keep the 0.12.0 testing package available for existing downloads.
+- No routing or UI behavior changes from 0.12.0.
 
 ## TraceForge 0.12.0 (2026-10-28)
 
