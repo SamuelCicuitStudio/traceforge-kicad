@@ -1,6 +1,85 @@
 # Changelog
 
-Release details: [0.11.17](docs/RELEASE-NOTES.md).
+Release details: [0.12.0](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.12.0 (2026-10-28)
+
+- Consolidate the 0.11.8–0.11.26 local builds into a published release.
+- Group stitching, RF fencing, and existing-via arrays in Via Tools.
+- Group cleanup, illustrated native teardrop controls, and rounded trace corners
+  in Trace Tools; add bulk selection to cleanup findings.
+- Preview and round eligible corners using actual item clearances, optional
+  smaller radii, exact-net filtering, and detailed skip reasons.
+- Restore selected or all managed rounded corners after saving and reopening
+  when the board's `.traceforge-fillets.json` sidecar is retained.
+- Improve via-array connectivity handling, visualization, and panel lifecycle.
+- Target Windows and KiCad 10. Run DRC and recheck timing/skew after copper edits.
+
+## TraceForge 0.11.26 (local test build)
+
+- Use each copper item's actual netclass/local clearance instead of the board's
+  maximum clearance when checking proposed fillet arcs.
+- Allow smaller radii up to the chosen maximum when a short segment or nearby
+  copper makes the full radius impossible. A checkbox keeps exact-radius mode.
+- Show skip counts by reason and allow previewing one exact net name.
+- On the SIM-node board at a 0.5 mm maximum, preview 1,884 eligible corners,
+  including 472 adjusted smaller bends; add/save/reopen/restore-all recovered
+  every original straight-track shape on a disposable copy.
+
+## TraceForge 0.11.25 (local test build)
+
+- Check the real proposed arc against nearby copper geometry, avoiding false
+  rejections from the old broad bounding-box test.
+- Add **Restore all rounded corners** alongside selective restore. This includes
+  all nets and differential-pair traces previously rounded by TraceForge.
+- Verify a 208-corner add/save/reopen/restore-all cycle on a disposable copy of
+  the SIM node board, recovering every original straight track shape.
+
+## TraceForge 0.11.24 (local test build)
+
+- Add board-wide and selected-track corner rounding with a chosen radius.
+- Preview eligible corners across all copper layers and explain skipped corners.
+- Restore individual TraceForge-generated arcs to their original straight shape
+  using a persistent board sidecar, including after reopening the PCB.
+- Keep the edit undoable through KiCad's native ActionPlugin transaction.
+
+## TraceForge 0.11.23 (local test build)
+
+- Fix Apply and the advanced teardrop shortcut not opening KiCad's dialog.
+  Deliver KiCad's menu command to its native PCB Editor window. Verified Add
+  and Remove on a disposable board in the real KiCad 10 PCB Editor.
+
+## TraceForge 0.11.22 (local test build)
+
+- Show labeled teardrop diagrams for vias, through-hole pads, surface pads, and
+  track junctions beside their target controls. Illustrate the shared length,
+  width, and pad/via size measurements without implying KiCad supports separate
+  size settings for each target.
+
+## TraceForge 0.11.21 (local test build)
+
+- Add in-Forge teardrop controls for Add/Remove, whole-board/selected scope,
+  pad and via targets, shape, and dimensions. Apply uses KiCad's native editor
+  generator and Undo transaction. Track-to-track teardrops use board defaults.
+- Keep the advanced KiCad dialog available for its other filters and settings.
+
+## TraceForge 0.11.20 (local test build)
+
+- Combine Trace Cleanup and Teardrops in one Trace Tools tab with a top-right
+  selector. The Teardrops view opens KiCad's native Edit Teardrops dialog.
+- Move the teardrop shortcut out of Visualization so the trace controls share
+  one place. Cleanup scan behavior and bulk selection remain available.
+
+## TraceForge 0.11.19 (local test build)
+
+- Add Select all and Unselect all to Trace Cleanup. They affect findings shown
+  by the active copper-layer filter and preserve checkbox choices across
+  filter changes. The existing dangling-track confirmation remains in place.
+
+## TraceForge 0.11.18 (local test build)
+
+- Combine Via Stitching, Via Fencing, and Via Array into one Via Tools tab with
+  a selector at the top right. Preserve each workflow's controls and F5 refresh.
 
 ## TraceForge 0.11.17 (local test build)
 

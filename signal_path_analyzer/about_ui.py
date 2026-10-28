@@ -68,12 +68,10 @@ class AboutPanel(wx.ScrolledWindow):
         outer.Add(label('Included tools', bold=True, scale=1.1), 0, wx.BOTTOM, 9)
         features = (
             ('Signals / xSignals', 'Inspect signal paths, timing, and differential pairs.'),
-            ('Via Stitching', 'Preview and manage via grids across copper regions.'),
+            ('Via Tools', 'Switch between stitching, RF fencing, and existing-via arrays.'),
             ('BGA Fanout', 'Preview and apply guided BGA escape routes.'),
-            ('Via Fencing', 'Place ground vias along both sides of RF traces.'),
-            ('Trace Cleanup', 'Find duplicate, overlapping, and dangling copper.'),
+            ('Trace Tools', 'Clean up copper, apply teardrops, or round and restore corners.'),
             ('Visualization', 'Color net groups and control ratsnest visibility.'),
-            ('Via Array', 'Arrange selected existing vias in an evenly spaced grid.'),
         )
         for name, description in features:
             row = wx.BoxSizer(wx.HORIZONTAL)

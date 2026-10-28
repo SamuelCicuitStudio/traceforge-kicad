@@ -254,6 +254,16 @@ def zoom_to_items(board, chosen, force=False):
 
 def dispatch(board, operation, payload):
     """Called only on the editor thread; no IPC API or file reload is involved."""
+    if operation.startswith('teardrop_'):
+        from signal_path_analyzer.teardrop_native import dispatch as teardrop_dispatch
+
+        return teardrop_dispatch(board, operation, payload)
+
+    if operation.startswith('fillet_'):
+        from signal_path_analyzer.trace_fillet_native import dispatch as fillet_dispatch
+
+        return fillet_dispatch(board, operation, payload)
+
     if operation.startswith('visual_'):
         from signal_path_analyzer.visualization_native import dispatch as visual_dispatch
 

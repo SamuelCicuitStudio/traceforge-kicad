@@ -1,6 +1,8 @@
 """Live KiCad Appearance controls, called on PCB Editor's main thread."""
 from __future__ import annotations
 
+import ctypes
+import os
 from pathlib import Path
 
 import pcbnew
@@ -108,6 +110,22 @@ def _find_teardrop_menu(menu):
     return None
 
 
+def _post_editor_menu(frame, command):
+    """Deliver a native menu command to KiCad's frame HWND.
+
+    KiCad's PCB_ACTIONS menu commands are handled by its C++ window procedure.
+    A synthetic wx.CommandEvent is accepted by wx but does not reach that handler.
+    """
+    if os.name != 'nt':
+        raise RuntimeError('Direct KiCad menu commands are supported on Windows only.')
+    post = ctypes.windll.user32.PostMessageW
+    post.argtypes = (ctypes.c_void_p, ctypes.c_uint,
+                     ctypes.c_size_t, ctypes.c_ssize_t)
+    post.restype = ctypes.c_bool
+    if not post(frame.GetHandle(), 0x0111, command, 0):  # WM_COMMAND
+        raise RuntimeError('Windows could not send the teardrop command to PCB Editor.')
+
+
 def dispatch(board, operation, payload):
     frame = _frame()
     if operation == 'visual_teardrops':
@@ -119,8 +137,8 @@ def dispatch(board, operation, payload):
                       None)
         if target is None:
             raise RuntimeError('KiCad Edit Teardrops command was not found')
-        menu, command = target
-        wx.PostEvent(menu, wx.MenuEvent(wx.EVT_MENU.typeId, command, menu))
+        _menu, command = target
+        _post_editor_menu(frame, command)
         return {'opened': True}
 
     grid, rows = _net_grid(frame, board)

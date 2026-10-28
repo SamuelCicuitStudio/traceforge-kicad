@@ -4,7 +4,9 @@
 
 **Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10 on Windows.**
 
-TraceForge puts seven PCB tools in one colored panel. It reads the open board through
+TraceForge 0.12.0 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
+and Visualization in one colored panel. Trace Tools includes cleanup, teardrops,
+and rounded corners with persistent restore. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. No official
 IPC API setup, API token, or pip runtime dependencies are needed.
 
@@ -49,7 +51,7 @@ does not require PowerShell or a manually created plugin junction.
    pointing to the extracted `native_bridge` folder. Keep the extracted files there.
 4. Start PCB Editor, open and save a board, then click the **TraceForge** toolbar
    icon or **Tools > External Plugins > TraceForge**.
-5. Open a feature tab. It loads automatically. **F5** or **Refresh** forces a refresh.
+5. Open a feature tab. Use **F5** or **Refresh** to read the open board on demand.
 
 Cloning this repository into a permanent folder and running the same installer
 also works. No separate Python installation is needed to use the plugin.
@@ -77,17 +79,16 @@ folder while the junction exists leaves a broken plugin link.
 | Tab | Workflow |
 | --- | --- |
 | **Signals / xSignals** | Detect paths through series passives, inspect chain length/timing, highlight differential pairs, export CSV and write reviewed DRC targets. |
-| **Via Stitching** | Preview symmetric or staggered via grids in a whole board, selected zone, rectangle or polygon; select, regenerate or remove managed sets. |
+| **Via Tools** | Use the selector at the top right to switch between Via Stitching, Via Fencing, and Via Array. Stitching previews symmetric or staggered grids and manages placed sets. Fencing follows an RF trace on either or both sides. Array evens out selected existing vias. |
 | **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
-| **Via Fencing** | Place managed ground-via rows on either or both sides of a routed RF trace; control copper gap, spacing and via size. |
-| **Trace Cleanup** | Preview redundant copper and native dangling-end findings, remove reviewed tracks with Undo, then recheck Signals. |
-| **Visualization** | Color net groups and individual nets live, focus the ratsnest on selected components, and open KiCad's native teardrop editor. |
-| **Via Array** | Detect the selected vias' row and column layout, preview current and proposed positions, then arrange them evenly inside their current bounds with Undo. |
+| **Trace Tools** | Use the selector at the top right for Trace Cleanup, Teardrops, or Round Corners. Cleanup previews redundant copper and dangling ends, supports bulk selection, and removes reviewed tracks with Undo. Teardrops use KiCad's native generator. Round Corners previews a selected radius across all copper layers, rounds eligible existing trace junctions, and restores selected generated corners. |
+| **Visualization** | Color net groups and individual nets live, and focus the ratsnest on selected components. |
 
 ### Via Array
 
 Select 1–64 vias of the same net, size, drill and layer pair in PCB Editor. Open
-**Via Array**, then click **Read & preview selection**. Auto detect fits the
+**Via Tools**, choose **Via Array** in the selector at the top right, then click
+**Read & preview selection**. Auto detect fits the
 existing row and column layout by finding the arrangement requiring the least
 movement. The two diagrams show current positions and the proposed array.
 To override the detected shape, choose **Rows** or **Columns**, enter a fixed
@@ -123,8 +124,9 @@ lets you remove a component while retaining nets shared with others. Show all an
 Add PCB selection also turn KiCad's global ratsnest display on if it was set to
 None. The first focus action filters the board; later additions update only newly
 included nets. A fully routed board has no ratsnest lines to show. These controls affect visibility only;
-they do not change connectivity. **Edit teardrops in KiCad** opens KiCad's native
-dialog, with its normal scope, defaults, and removal controls.
+they do not change connectivity. To edit teardrops, open **Trace Tools**, choose
+**Teardrops**, set the options, then click **Apply to PCB**. KiCad generates the
+teardrops as an undoable editor operation.
 
 ### Signals and path detection
 
@@ -232,12 +234,12 @@ Escape endpoints still need onward routing to their destination. Microvias, HDI
 layer assignment, differential-pair escape and full-board autorouting are not implemented.
 See [BGA fanout](docs/BGA-FANOUT.md).
 
-### Trace cleanup
+### Trace Tools
 
-![Current Trace Cleanup tab showing all six copper layers on the management switch PCB](docs/screenshots/trace-cleanup.png)
+![Trace Cleanup workflow showing all six copper layers on the management switch PCB](docs/screenshots/trace-cleanup.png)
 
 *The real management board reports all six enabled copper layers and track counts
-before Scan / Preview. Opening the tab does not start the full scan or change copper.*
+before Scan / Preview. Opening Cleanup does not start the full scan or change copper.*
 
 Scan the whole board or an exact net to find duplicate tracks, overlapping
 collinear tracks and native dangling endpoints. Filter findings by copper layer;
@@ -245,9 +247,39 @@ partially overlapping same-net segments can be fused into one continuous track.
 Every enabled copper layer appears in the summary, including hidden and empty
 layers; counts show findings and scanned track objects per layer. Preview rows
 highlight in PCB Editor. Redundant copper starts checked; dangling tracks require review and start
-unchecked. Cleanup is undoable. **Recheck length matching** returns to Signals and
+unchecked. **Select all** and **Unselect all** affect the shown layer's findings.
+Cleanup is undoable. **Recheck length matching** returns to Signals and
 refreshes the measurements. Partial overlaps, vias, locked and grouped copper are
 preserved. See [trace cleanup](docs/TRACE-CLEANUP.md).
+
+Choose **Teardrops** in the Trace Tools selector. Choose Add or Remove, the whole
+board or selected PCB items, and via, PTH, or SMD targets. For Add, set curved
+or straight edges, best length and width percentages, and optional maximums.
+Illustrations beside each target show where the teardrop appears; `d` is the
+pad/via minor size, `L` is the teardrop length, and `W` is its width.
+Click **Apply to PCB** to use KiCad's native teardrop generator and Undo. KiCad 10
+uses one specified size rule for pad and via targets. Track-to-track teardrops
+use Board Setup defaults and must be applied separately. Selected-only scope
+does not support track-to-track teardrops. Use **Open advanced KiCad dialog**
+for additional KiCad filters. Run KiCad DRC after applying.
+
+Choose **Round Corners** to enter a maximum radius in millimeters. By default,
+TraceForge fits a smaller radius where the full value cannot clear adjacent
+copper or fit a short segment; uncheck the fit option to require an exact radius.
+Use the optional exact-net field to inspect one net. **Preview corners**
+checks all copper layers of the open PCB, or only the selected tracks. It counts
+eligible corners, fitted smaller bends, and reasons for skipped junctions.
+**Round eligible corners**
+replaces qualifying straight corners with tangent copper arcs in one undoable
+KiCad edit. Branches, pads, vias, existing arcs, locked copper, and corners that
+cannot fit the radius are left alone. Select a generated arc or its adjacent
+track and click **Restore selected rounded corner(s)** to recover the original
+straight corner. **Restore all rounded corners** resets every TraceForge fillet
+on the open board, including differential-pair traces. Both work after reopening
+the saved board. Keep the fillet
+sidecar with the PCB. Recheck length matching and run KiCad DRC after rounding;
+the preview is conservative but does not replace the full DRC, including zones
+and custom rules. KiCad's shove router cannot drag copper arcs.
 
 ## Keep project metadata
 
@@ -258,6 +290,7 @@ Save the PCB normally and keep these sidecars alongside it when copying a projec
 | `<board>.traceforge.json` | Signal-chain definitions and reviewed limits |
 | `<board>.traceforge-stitching.json` | Stitching/fencing recipes and owned via UUIDs |
 | `<board>.traceforge-fanout.json` | Generated fanout ownership and recipes |
+| `<board>.traceforge-fillets.json` | Original corner geometry and generated arc ownership for selective restore |
 
 Removal/regeneration preserves locked or manually altered generated items. Missing
 ownership sidecars prevent managed removal. Legacy `xsignals.json` can be imported.

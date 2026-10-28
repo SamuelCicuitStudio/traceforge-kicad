@@ -1,4 +1,4 @@
-"""Net colors, ratsnest focus and KiCad teardrop access."""
+"""Net colors and ratsnest focus controls."""
 from __future__ import annotations
 
 import fnmatch
@@ -45,8 +45,7 @@ class VisualizationPanel(wx.Panel):
                   0, wx.ALL, 8)
         bar = wx.BoxSizer(wx.HORIZONTAL)
         for title, handler in (('Refresh nets', self.on_refresh),
-                               ('Reset all net colors to defaults', self.on_reset_colors),
-                               ('Edit teardrops in KiCad', self.on_teardrops)):
+                               ('Reset all net colors to defaults', self.on_reset_colors)):
             button = wx.Button(self, label=title)
             button.Bind(wx.EVT_BUTTON, handler)
             bar.Add(button, 0, wx.RIGHT, 5)
@@ -336,7 +335,3 @@ class VisualizationPanel(wx.Panel):
             self._call('visual_ratsnest', done, mode='remove', hide=sorted(hidden))
         else:
             done({})
-
-    def on_teardrops(self, event):
-        self._call('visual_teardrops',
-                   lambda result: self.message('KiCad Edit Teardrops opened.', 'ok'))

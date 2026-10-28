@@ -230,7 +230,7 @@ def plan(board, request):
             raise ValueError('Choose a separate fence net, normally GND; '
                              'do not use the RF signal net.')
         if values['pattern'] != 'trace':
-            raise ValueError('Use the Via Fencing tab for fences along a trace.')
+            raise ValueError('Choose Via Fencing in the Via Tools selector for trace fences.')
     if region['kind'] in ('zone', 'shape'):
         item = region_item(board, region['uuid'])
         if item is None:

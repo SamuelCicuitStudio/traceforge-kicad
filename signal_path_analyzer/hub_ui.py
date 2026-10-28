@@ -342,32 +342,28 @@ class TraceForgePanel(wx.Frame):
         box.Add(self.status, 0, wx.EXPAND | wx.ALL, 6)
         root.SetSizer(box)
 
-        from .stitching_ui import StitchingPanel
+        from .via_tools_ui import ViaToolsPanel
 
         self.notebook.AddPage(root, 'Signals / xSignals')
-        self.stitching = StitchingPanel(self.notebook, self, stitching)
-        self.notebook.AddPage(self.stitching, 'Via Stitching')
+        self.via_tools = ViaToolsPanel(self.notebook, self, stitching)
+        self.stitching = self.via_tools.stitching
+        self.trace_fence = self.via_tools.fencing
+        self.via_array = self.via_tools.array
+        self.notebook.AddPage(self.via_tools, 'Via Tools')
         from .fanout_ui import FanoutPanel
 
         self.fanout = FanoutPanel(self.notebook, self, stitching)
         self.notebook.AddPage(self.fanout, 'BGA Fanout')
-        from .trace_fence_ui import TraceFencePanel
+        from .trace_tools_ui import TraceToolsPanel
 
-        self.trace_fence = TraceFencePanel(self.notebook, self, stitching)
-        self.notebook.AddPage(self.trace_fence, 'Via Fencing')
-        from .trace_cleanup_ui import TraceCleanupPanel
-
-        self.trace_cleanup = TraceCleanupPanel(self.notebook, self, stitching)
-        self.notebook.AddPage(self.trace_cleanup, 'Trace Cleanup')
+        self.trace_tools = TraceToolsPanel(self.notebook, self, stitching)
+        self.trace_cleanup = self.trace_tools.cleanup
+        self.notebook.AddPage(self.trace_tools, 'Trace Tools')
         from .visualization_ui import VisualizationPanel
 
         board_file = (native_info or {}).get('board')
         self.visualization = VisualizationPanel(self.notebook, self, stitching, board_file)
         self.notebook.AddPage(self.visualization, 'Visualization')
-        from .via_array_ui import ViaArrayPanel
-
-        self.via_array = ViaArrayPanel(self.notebook, self, stitching)
-        self.notebook.AddPage(self.via_array, 'Via Array')
         from .about_ui import AboutPanel
 
         self.about = AboutPanel(self.notebook, self.dark, native_info)
@@ -397,7 +393,7 @@ class TraceForgePanel(wx.Frame):
     def on_tab_open(self, event):
         event.Skip()
         self.position_activity()
-        if self.notebook.GetSelection() == 5 and not self.visualization.nets:
+        if self.notebook.GetSelection() == 4 and not self.visualization.nets:
             wx.CallAfter(self.visualization.on_refresh)
         self.schedule_auto_refresh()
 
@@ -411,10 +407,12 @@ class TraceForgePanel(wx.Frame):
             self.schedule_auto_refresh()
 
     def schedule_auto_refresh(self):
-        if not self.native_call or self.closing or self.notebook.GetSelection() in (5, 6, 7):
-            return
         if self.auto_refresh_later:
             self.auto_refresh_later.Stop()
+        if (not self.native_call or self.closing or self.notebook.GetSelection() in (4, 5) or
+                (self.notebook.GetSelection() == 1 and self.via_tools.active_index == 2) or
+                (self.notebook.GetSelection() == 3 and self.trace_tools.active_index != 0)):
+            return
         self.auto_refresh_later = wx.CallLater(350, self.check_board_revision)
 
     def check_board_revision(self):
@@ -426,9 +424,15 @@ class TraceForgePanel(wx.Frame):
             return
         self.auto_check_deferred = False
         tab = self.notebook.GetSelection()
-        if tab in (5, 6, 7):
+        if (tab in (4, 5) or
+                (tab == 1 and self.via_tools.active_index == 2) or
+                (tab == 3 and self.trace_tools.active_index != 0)):
             return
-        page = (None, self.stitching, self.fanout, self.trace_fence, self.trace_cleanup)[tab]
+        via_mode = self.via_tools.active_index if tab == 1 else None
+        trace_mode = self.trace_tools.active_index if tab == 3 else None
+        page = (None, self.via_tools.active_page, self.fanout,
+                self.trace_tools.active_page)[tab]
+        policy_tab = (tab, via_mode) if tab == 1 else tab
         if page and getattr(page, 'canvas', None) and getattr(page.canvas, 'mode', None):
             return  # Never interrupt drawing a region.
         self.change_check_pending = True
@@ -437,7 +441,7 @@ class TraceForgePanel(wx.Frame):
             self.change_check_pending = False
             if self.closing or error:
                 if error and not self.closing:
-                    if tab == 4:
+                    if tab == 3:
                         self.trace_cleanup.message(
                             f'Board overview unavailable: {error}', 'warning')
                     else:
@@ -445,12 +449,14 @@ class TraceForgePanel(wx.Frame):
                             'Automatic change check unavailable. Use Refresh (F5).')
                 return  # No automatic retry after a busy/closed/old helper.
             self.resume_auto_check()
-            if (self.notebook.GetSelection() != tab or self.busy or self.actions_pending):
+            if (self.notebook.GetSelection() != tab or self.busy or self.actions_pending or
+                    (tab == 1 and self.via_tools.active_index != via_mode) or
+                    (tab == 3 and self.trace_tools.active_index != trace_mode)):
                 return
-            if tab == 4:
+            if tab == 3:
                 self.trace_cleanup.show_overview(state)
                 return  # Opening Cleanup never starts a full scan.
-            if self.refresh_policy.needs_refresh(tab, state):
+            if self.refresh_policy.needs_refresh(policy_tab, state):
                 if tab == 2 and not state['selection']:
                     self.fanout.message('Select a BGA in PCB Editor, then return here '
                                         'to analyze it.')
@@ -459,7 +465,7 @@ class TraceForgePanel(wx.Frame):
 
         def work():
             try:
-                operation = 'cleanup_info' if tab == 4 else 'revision'
+                operation = 'cleanup_info' if tab == 3 else 'revision'
                 state, error = self.api.call(lambda: self.native_call(operation)), None
             except Exception as exc:
                 state, error = None, exc
@@ -481,9 +487,16 @@ class TraceForgePanel(wx.Frame):
             return
         tab = self.notebook.GetSelection()
         target = (self.tree.GetMainWindow() if tab == 0 else
-                  self.trace_cleanup.table if tab == 4 else
-                  self.visualization.group_list if tab == 5 else
-                  self.via_array.table if tab == 6 else self.about)
+                  self.via_array.table if tab == 1 and
+                  self.via_tools.active_index == 2 else
+                  self.via_tools.active_page.canvas if tab == 1 else
+                  self.fanout.rows if tab == 2 else
+                  self.trace_cleanup.table if tab == 3 and
+                  self.trace_tools.active_index == 0 else
+                  self.trace_tools.teardrops.open_button if tab == 3 and
+                  self.trace_tools.active_index == 1 else
+                  self.trace_tools.fillets.details if tab == 3 else
+                  self.visualization.group_list if tab == 4 else self.about)
         bounds = target.GetScreenRect()
         center = self.ScreenToClient((bounds.x + bounds.width // 2,
                                       bounds.y + bounds.height // 2))
@@ -516,25 +529,19 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
-        if self.notebook.GetSelection() == 7:
-            return
-        if self.notebook.GetSelection() == 6:
-            self.via_array.on_refresh()
-            return
         if self.notebook.GetSelection() == 5:
-            self.visualization.on_refresh()
             return
         if self.notebook.GetSelection() == 4:
-            self.trace_cleanup.on_refresh()
+            self.visualization.on_refresh()
             return
         if self.notebook.GetSelection() == 3:
-            self.trace_fence.on_refresh()
+            self.trace_tools.active_page.on_refresh()
             return
         if self.notebook.GetSelection() == 2:
             self.fanout.on_refresh()
             return
         if self.notebook.GetSelection() == 1:
-            self.stitching.on_refresh()
+            self.via_tools.active_page.on_refresh()
             return
         if self.busy or self.actions_pending or self.closing:
             return

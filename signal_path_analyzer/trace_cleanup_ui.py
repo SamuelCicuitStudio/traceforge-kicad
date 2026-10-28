@@ -8,6 +8,8 @@ class TraceCleanupPanel(wx.Panel):
         self.host, self.native, self.preview = host, native, None
         self.overview_signature = None
         self.visible_rows = []
+        self.checked_ids = set()
+        self.filling_rows = False
         self.layer_names = {}
         if host.dark:
             self.SetBackgroundColour('#222C3A')
@@ -44,6 +46,17 @@ class TraceCleanupPanel(wx.Panel):
                                       'track objects scanned. Hidden layers are also analyzed.')
         filter_row.Add(self.layer_summary, 1, wx.ALIGN_CENTER_VERTICAL)
         box.Add(filter_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        selection = wx.BoxSizer(wx.HORIZONTAL)
+        selection.AddStretchSpacer()
+        self.select_all = wx.Button(self, label='Select all')
+        self.unselect_all = wx.Button(self, label='Unselect all')
+        for button, handler in ((self.select_all, self.on_select_all),
+                                (self.unselect_all, self.on_unselect_all)):
+            button.SetToolTip('Affects the findings shown for the current layer filter.')
+            button.Bind(wx.EVT_BUTTON, handler)
+            button.Disable()
+            selection.Add(button, 0, wx.LEFT, 6)
+        box.Add(selection, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.table = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self.table.SetBackgroundColour('#19212D' if host.dark else '#FFFFFF')
         self.table.SetForegroundColour('#E5EDF8' if host.dark else '#18212E')
@@ -52,6 +65,8 @@ class TraceCleanupPanel(wx.Panel):
                                             ('Track length (mm)', 145), ('Finding', 280)]):
             self.table.InsertColumn(i, label, width=width)
         self.table.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_select)
+        self.table.Bind(wx.EVT_LIST_ITEM_CHECKED, self.on_check)
+        self.table.Bind(wx.EVT_LIST_ITEM_UNCHECKED, self.on_check)
         box.Add(self.table, 1, wx.EXPAND | wx.ALL, 10)
         bottom = wx.BoxSizer(wx.HORIZONTAL)
         self.remove = wx.Button(self, label='Apply checked cleanup')
@@ -93,7 +108,10 @@ class TraceCleanupPanel(wx.Panel):
 
     def invalidate(self):
         self.preview = None
+        self.checked_ids.clear()
         self.remove.Disable()
+        self.select_all.Disable()
+        self.unselect_all.Disable()
         self.table.DeleteAllItems()
 
     def message(self, text, state='routed'):
@@ -110,6 +128,8 @@ class TraceCleanupPanel(wx.Panel):
         def done(result):
             self.invalidate()
             self.preview = result
+            self.checked_ids = {
+                row['id'] for row in result['redundant'] + result['fusions']}
             info = result['overview']
             self.overview_signature = (info['board'], tuple(info['layer_tracks'].items()))
             self.board_summary.SetLabel(
@@ -145,9 +165,11 @@ class TraceCleanupPanel(wx.Panel):
         self.fill_rows()
 
     def fill_rows(self):
+        self.filling_rows = True
         self.table.DeleteAllItems()
         self.visible_rows = []
         if self.preview is None:
+            self.filling_rows = False
             return
         layer = self.layer_names.get(self.layer.GetStringSelection(), 'All copper layers')
         rows = (self.preview['redundant'] + self.preview['fusions'] +
@@ -161,9 +183,39 @@ class TraceCleanupPanel(wx.Panel):
                 self.table.SetItem(index, column, value)
             state = 'warning' if row in self.preview['dangling'] else 'ok'
             self.table.SetItemTextColour(index, self.host.colors[state])
-            self.table.CheckItem(index, row not in self.preview['dangling'])
+            self.table.CheckItem(index, row['id'] in self.checked_ids)
             self.visible_rows.append(row)
-        self.remove.Enable(bool(self.visible_rows))
+        self.filling_rows = False
+        self.select_all.Enable(bool(self.visible_rows))
+        self.unselect_all.Enable(bool(self.visible_rows))
+        self.remove.Enable(any(row['id'] in self.checked_ids for row in self.visible_rows))
+
+    def on_check(self, event):
+        if self.filling_rows or event.GetIndex() >= len(self.visible_rows):
+            return
+        identity = self.visible_rows[event.GetIndex()]['id']
+        if self.table.IsItemChecked(event.GetIndex()):
+            self.checked_ids.add(identity)
+        else:
+            self.checked_ids.discard(identity)
+        self.remove.Enable(any(row['id'] in self.checked_ids for row in self.visible_rows))
+
+    def on_select_all(self, event):
+        self.set_visible_checked(True)
+
+    def on_unselect_all(self, event):
+        self.set_visible_checked(False)
+
+    def set_visible_checked(self, checked):
+        self.filling_rows = True
+        for index, row in enumerate(self.visible_rows):
+            if checked:
+                self.checked_ids.add(row['id'])
+            else:
+                self.checked_ids.discard(row['id'])
+            self.table.CheckItem(index, checked)
+        self.filling_rows = False
+        self.remove.Enable(checked and bool(self.visible_rows))
 
     def on_select(self, event):
         if not self.preview:
