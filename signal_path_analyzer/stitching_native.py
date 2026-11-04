@@ -440,8 +440,13 @@ def menu_item(menu, label):
 
 
 def editor_frame():
-    return next((w for w in wx.GetTopLevelWindows() if isinstance(w, wx.Frame)
-                 and w.GetTitle().endswith('PCB Editor')), None)
+    for window in wx.GetTopLevelWindows():
+        if not isinstance(window, wx.Frame):
+            continue
+        bar = window.GetMenuBar()
+        if bar and any(menu_item(menu, COMMIT_LABEL) for menu, _ in bar.GetMenus()):
+            return window
+    return None
 
 
 def transaction(board, job):

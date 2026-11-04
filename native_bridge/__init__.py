@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from .server import start  # noqa: E402
 
 
-def launch(script):
+def launch(script, tab=None):
     board = pcbnew.GetBoard()
     if board is None or not board.GetFileName():
         wx.MessageBox('Open and save a board before launching TraceForge.', 'TraceForge')
@@ -47,6 +47,10 @@ def launch(script):
     env['TRACEFORGE_NATIVE_ENDPOINT'] = str(server.file)
     env['TRACEFORGE_BOARD_FILE'] = board.GetFileName()
     env['TRACEFORGE_EDITOR_PID'] = str(os.getpid())
+    if tab is None:
+        env.pop('TRACEFORGE_START_TAB', None)
+    else:
+        env['TRACEFORGE_START_TAB'] = str(tab)
     for key in ('KICAD_API_SOCKET', 'KICAD_API_TOKEN', 'KICAD_API_CLIENT_NAME'):
         env.pop(key, None)
     subprocess.Popen([str(python), str(ROOT / script)], env=env,
@@ -55,8 +59,9 @@ def launch(script):
 
 
 class NativeLauncher(pcbnew.ActionPlugin):
-    def __init__(self, label, script, icon, toolbar=False):
-        self.label, self.script, self.icon, self.toolbar = label, script, icon, toolbar
+    def __init__(self, label, script, icon, toolbar=False, tab=None):
+        self.label, self.script, self.icon, self.toolbar, self.tab = (
+            label, script, icon, toolbar, tab)
         super().__init__()
 
     def defaults(self):
@@ -68,7 +73,7 @@ class NativeLauncher(pcbnew.ActionPlugin):
         self.dark_icon_file_name = str(ROOT / 'icons' / f'{self.icon}-dark-24.png')
 
     def Run(self):
-        launch(self.script)
+        launch(self.script, self.tab)
 
 
 class TraceForgeLauncher(NativeLauncher):
@@ -88,6 +93,39 @@ class ExportLauncher(NativeLauncher):
                          'export-signal-paths')
 
 
+class RotationLauncher(NativeLauncher):
+    def __init__(self):
+        super().__init__('TraceForge: PCB Rotation', 'traceforge_action.py',
+                         'pcb-rotation', True, 4)
+
+
+class ViaToolsLauncher(NativeLauncher):
+    def __init__(self):
+        super().__init__('TraceForge: Via Tools', 'traceforge_action.py', 'traceforge', tab=1)
+
+
+class FanoutLauncher(NativeLauncher):
+    def __init__(self):
+        super().__init__('TraceForge: BGA Fanout', 'traceforge_action.py', 'traceforge', tab=2)
+
+
+class TraceToolsLauncher(NativeLauncher):
+    def __init__(self):
+        super().__init__('TraceForge: Trace Tools', 'traceforge_action.py', 'traceforge', tab=3)
+
+
+class VisualizationLauncher(NativeLauncher):
+    def __init__(self):
+        super().__init__('TraceForge: Visualization', 'traceforge_action.py',
+                         'traceforge', tab=5)
+
+
+class ManufacturingLauncher(NativeLauncher):
+    def __init__(self):
+        super().__init__('TraceForge: Manufacturing', 'traceforge_action.py',
+                         'traceforge', tab=6)
+
+
 class StitchingCommit(pcbnew.ActionPlugin):
     def defaults(self):
         self.name = 'TraceForge: Apply Stitching Changes'
@@ -101,8 +139,10 @@ class StitchingCommit(pcbnew.ActionPlugin):
         commit_pending()
 
 
-for _plugin in (TraceForgeLauncher(), HighlightLauncher(), ExportLauncher(),
-                StitchingCommit()):
+for _plugin in (TraceForgeLauncher(), RotationLauncher(), ViaToolsLauncher(),
+                FanoutLauncher(), TraceToolsLauncher(), VisualizationLauncher(),
+                ManufacturingLauncher(),
+                HighlightLauncher(), ExportLauncher(), StitchingCommit()):
     _plugin.register()
 
 wx.CallAfter(start)

@@ -1,6 +1,38 @@
 # Changelog
 
-Release details: [0.12.1](docs/RELEASE-NOTES.md).
+Release details: [0.12.5](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.12.5 (local testing build)
+
+- Add a project-first Manufacturing tab with labeled manufacturer choices and a
+  board-by-board engineering review instead of a JSON editor. One board project
+  is the default; sibling-board bundles require explicit selection.
+- Bundle deterministic PCBWay and PCBPower exporters, preflight checks, output
+  integrity checks, and guarded replacement of generated packages.
+- Import existing PCBPower board settings and support linked mechanical files in
+  the new package; keep PCBWay order choices unselected until verified.
+
+## TraceForge 0.12.4 (2026-11-01)
+
+- Add supported KiCad toolbar and Tools menu shortcuts for Rotation, Via Tools,
+  BGA Fanout, Trace Tools, and Visualization.
+- Open the requested tab in an existing TraceForge window.
+- Restrict TraceForge rotation to components after a live test found KiCad Undo
+  did not restore an edited graphical polygon. Use KiCad's native configurable
+  rotation step for shapes and zones.
+
+## TraceForge 0.12.3 (2026-11-01)
+
+- Fix PCB Rotation rejecting the live board because KiCad's undo action supplies
+  a different Python wrapper for the same board.
+- Add a regression check that rotates through a distinct board wrapper.
+
+## TraceForge 0.12.2 (2026-11-01)
+
+- Add a PCB Rotation tab for exact-angle rotation of selected PCB components,
+  graphical polygons, and copper zones, including 45-degree rotation.
+- Keep the operation undoable in KiCad and refill zones after rotation.
+- Package this local testing update separately from the installed 0.12.1 release.
 
 ## TraceForge 0.12.1 (2026-10-28)
 

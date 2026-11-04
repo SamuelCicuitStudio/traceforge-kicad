@@ -264,6 +264,11 @@ def dispatch(board, operation, payload):
 
         return fillet_dispatch(board, operation, payload)
 
+    if operation.startswith('rotate_'):
+        from signal_path_analyzer.board_rotate_native import dispatch as rotate_dispatch
+
+        return rotate_dispatch(board, operation, payload)
+
     if operation.startswith('visual_'):
         from signal_path_analyzer.visualization_native import dispatch as visual_dispatch
 

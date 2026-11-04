@@ -129,14 +129,19 @@ def _log_to_file() -> None:
 def main() -> int:
     _log_to_file()
     try:
-        if try_activate_existing(PORT):
+        tab_text = os.environ.get('TRACEFORGE_START_TAB', '')
+        start_tab = int(tab_text) if tab_text else None
+        if start_tab is not None and not 0 <= start_tab < 7:
+            raise ValueError('Invalid TraceForge tab requested by the PCB Editor.')
+        if try_activate_existing(PORT, tab=start_tab):
             return 0
         from signal_path_analyzer import hub_ui
         from signal_path_analyzer.endpoint_service import EndpointService
 
         session = Session.open()
         hub_ui.run(build_tools(session), single_instance_port=PORT, stitching=session.native.call,
-                   endpoints=EndpointService(session), native_info=session.native.info)
+                   endpoints=EndpointService(session), native_info=session.native.info,
+                   start_tab=start_tab)
         print("panel closed normally")
     except (ExistingPanelVersionError, NativeVersionError) as exc:
         traceback.print_exc()

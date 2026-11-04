@@ -15,6 +15,7 @@ from . import __version__
 
 PORT = 47231  # localhost only
 _MAGIC = b"traceforge:front\n"
+_TAB_MAGIC = b"traceforge:tab:"
 _VERSION_MAGIC = b"traceforge:version\n"
 
 
@@ -22,7 +23,7 @@ class ExistingPanelVersionError(RuntimeError):
     """A running panel belongs to a different installed build."""
 
 
-def try_activate_existing(port: int = PORT) -> bool:
+def try_activate_existing(port: int = PORT, tab: Optional[int] = None) -> bool:
     """True when a panel is already running (it was asked to come to the front)."""
 
     try:
@@ -39,14 +40,14 @@ def try_activate_existing(port: int = PORT) -> bool:
             'Close the old TraceForge window and every KiCad window, then reopen the board.')
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.5) as s:
-            s.sendall(_MAGIC)
+            s.sendall(_MAGIC if tab is None else _TAB_MAGIC + f'{tab}\n'.encode())
             return s.recv(3) == b"ok\n"
     except OSError:
         return False
 
 
 class Listener:
-    def __init__(self, port: int, on_activate: Callable[[], None]):
+    def __init__(self, port: int, on_activate: Callable[[Optional[int]], None]):
         self.server: Optional[socket.socket] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
@@ -73,7 +74,12 @@ class Listener:
                         conn.sendall(f'version:{__version__}\n'.encode())
                     elif command == _MAGIC:
                         conn.sendall(b"ok\n")
-                        self.on_activate()
+                        self.on_activate(None)
+                    elif command.startswith(_TAB_MAGIC):
+                        value = command[len(_TAB_MAGIC):].strip()
+                        if value in tuple(str(i).encode() for i in range(7)):
+                            conn.sendall(b"ok\n")
+                            self.on_activate(int(value))
             except OSError:
                 continue
 
@@ -85,5 +91,5 @@ class Listener:
         self.thread.join(timeout=2)
 
 
-def listen(port: int, on_activate: Callable[[], None]) -> Listener:
+def listen(port: int, on_activate: Callable[[Optional[int]], None]) -> Listener:
     return Listener(port, on_activate)

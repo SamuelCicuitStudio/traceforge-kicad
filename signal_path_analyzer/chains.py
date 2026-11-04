@@ -348,12 +348,12 @@ def _leaf(net: str) -> str:
 
 def auto_config(links: Iterable[Link], netclass_of: Mapping[str, Optional[str]],
                 timed_classes: Iterable[str], die_ps_per_mm: float = 6.952) -> Config:
-    """Chains found on the board: series links between nets of timing-controlled netclasses.
+    """Chains found on the board: timed nets, including paths through series parts.
 
-    Nets joined through any number of 2-terminal series parts form one chain; chains are grouped
-    by netclass, and _P/_N (or +/-) chains become pairs. Driver side, stub limits and skew targets
-    are unknown, so auto groups report timing and highlight but write no DRC targets until the
-    config is saved and reviewed.
+    Nets joined through any number of 2-terminal series parts form one chain. Timed nets without
+    a series part are single-net chains. Chains are grouped by netclass, and _P/_N (or +/-) chains
+    become pairs. Driver side, stub limits and skew targets are unknown, so auto groups report
+    timing and highlight but write no DRC targets until the config is saved and reviewed.
     """
 
     timed = set(timed_classes)
@@ -373,8 +373,20 @@ def auto_config(links: Iterable[Link], netclass_of: Mapping[str, Optional[str]],
             name = min((_leaf(n) for n in nets), key=len)
             by_class.setdefault(group, []).append(
                 ChainDef(group, name, tuple(sorted(nets)), tuple(sorted(refs))))
+    for net, netclass in sorted(netclass_of.items()):
+        if netclass in timed and net not in seen:
+            by_class.setdefault(netclass, []).append(
+                ChainDef(netclass, _leaf(net), (net,)))
     groups = []
     for group, chains in sorted(by_class.items()):
+        # Nets on different hierarchical sheets can share a leaf name.
+        counts = {}
+        for chain in chains:
+            counts[chain.name] = counts.get(chain.name, 0) + 1
+        chains = [ChainDef(chain.group,
+                           chain.nets[0] if counts[chain.name] > 1 else chain.name,
+                           chain.nets, chain.series)
+                  for chain in chains]
         names = {c.name for c in chains}
         paired = []
         for c in sorted(chains, key=lambda c: c.name):

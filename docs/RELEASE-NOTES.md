@@ -1,3 +1,85 @@
+# TraceForge 0.12.5 — Manufacturing workflow testing build
+
+The Manufacturing tab opens on one saved board project by default. A sibling-board
+bundle is available only when selected explicitly.
+It uses labeled forms for PCBWay and PCBPower choices and shows an engineering
+review of layers, schematic sheets, linked CAM and mechanical documents, ERC/DRC
+findings, BOM/centroid parity, package contents, and release holds. Internal
+configuration files remain hidden from the normal workflow.
+
+The three-board Modular 256 SIM project has PCBPower profiles based on its
+existing Rev B export settings and linked mechanical files. PCBWay order and
+stackup choices remain unselected until confirmed. Generated packages are kept
+separate from the existing Rev B review snapshot.
+
+This is a **local testing build**. Manufacturing export needs `kicad-cli` and a
+Python installation with `openpyxl`; the other TraceForge tabs continue to use
+KiCad's bundled Python. A generated package may still be on HOLD for DRC findings
+or missing quote decisions. No manufacturer order approval is implied.
+
+Install `TraceForge-0.12.5-KiCad10-PCM.zip` with **Plugin and Content Manager >
+Install from File**, then restart PCB Editor.
+
+---
+
+# TraceForge 0.12.4 — PCB Editor shortcuts
+
+This local KiCad 10 testing build adds a **TraceForge: PCB Rotation** toolbar
+button and direct entries under **Tools > External Plugins** for PCB Rotation,
+Via Tools, BGA Fanout, Trace Tools, and Visualization. These actions open the
+corresponding tab in the existing TraceForge window when one is running.
+
+Live KiCad testing confirmed that the rotation menu action registers, and that
+component rotation through 45 degrees is restored by KiCad Undo. Testing also
+showed that the previous graphical polygon rotation could change the drawing
+without KiCad Undo restoring it. This build limits TraceForge rotation to
+components. To rotate a shape or zone 45 degrees, set **Preferences > PCB
+Editor > Editing Options > Step for rotate commands** to 45 degrees, select
+the object, and press **R**. KiCad's ActionPlugin API exposes toolbar and Tools
+menu actions; it does not expose a supported PCB canvas context-menu hook.
+
+Install `TraceForge-0.12.4-KiCad10-PCM.zip` through **Plugin and Content Manager >
+Install from File**, then restart PCB Editor to load the new menu actions.
+
+---
+
+# TraceForge 0.12.3 — PCB Rotation fix
+
+This testing build fixes the PCB Rotation error **"The open board changed before
+rotation."** KiCad passes a fresh Python wrapper for the same board into its
+undoable edit action; TraceForge now relies on the existing board-file check
+instead of Python object identity. Use the 0.12.3 package when updating from
+0.12.2. The rotation tab and controls are unchanged.
+
+The fix was exercised in a disposable live KiCad PCB Editor: a selected
+component rotated from 0 to 45 degrees, then KiCad Undo restored 0 degrees.
+Graphical polygon and zone rotation also passed in-memory KiCad 10 checks.
+Those checks did not verify KiCad Undo for drawings. Live testing for 0.12.4
+found that the drawing edit was not restored by Undo.
+
+Install `TraceForge-0.12.3-KiCad10-PCM.zip` with **Plugin and Content Manager >
+Install from File**, then close every KiCad window and reopen PCB Editor.
+
+---
+
+# TraceForge 0.12.2 — PCB Rotation testing build
+
+This Windows/KiCad 10 build adds a top-level **PCB Rotation** tab. Select one or
+more components, graphical polygons, or copper zones in PCB Editor, enter `45`
+or another signed angle, and click **Rotate selected items**. Positive angles
+rotate counterclockwise; negative angles rotate clockwise. Each component
+rotates around its anchor; polygons and zones rotate around their own centers.
+The edit is one KiCad Undo step. Zone fills are updated after rotation.
+
+Install `TraceForge-0.12.2-KiCad10-PCM.zip` with **Plugin and Content Manager >
+Install from File**, then close every KiCad window and reopen PCB Editor.
+Open TraceForge and select the **PCB Rotation** tab. The TraceForge title and About tab should say
+`0.12.2`. Inspect connected traces and run DRC after rotating components.
+
+This is a local testing package; the official 0.12.1 release remains available.
+
+---
+
 # TraceForge 0.12.1 — Stable KiCad 10 Windows release
 
 TraceForge 0.12.1 publishes the 0.12 feature set as **stable** for Windows and

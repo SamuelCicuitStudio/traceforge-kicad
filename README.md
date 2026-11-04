@@ -4,11 +4,12 @@
 
 **Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10 on Windows.**
 
-TraceForge 0.12.1 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
-and Visualization in one colored panel. Trace Tools includes cleanup, teardrops,
-and rounded corners with persistent restore. It reads the open board through
-KiCad's native `pcbnew` bindings, including unsaved routing changes. No official
-IPC API setup, API token, or pip runtime dependencies are needed.
+TraceForge 0.12.5 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
+PCB Rotation, Visualization, and Manufacturing in one panel. Trace Tools includes
+cleanup, teardrops, and rounded corners with persistent restore. It reads the open board through
+KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
+tools need no IPC API setup or token. Manufacturing exports read saved files and
+need a separate Python with `openpyxl`.
 
 ![TraceForge Signals tab over the management switch PCB in KiCad](docs/screenshots/signals-xsignals.png)
 
@@ -54,7 +55,8 @@ does not require PowerShell or a manually created plugin junction.
 5. Open a feature tab. Use **F5** or **Refresh** to read the open board on demand.
 
 Cloning this repository into a permanent folder and running the same installer
-also works. No separate Python installation is needed to use the plugin.
+also works. The main plugin needs no separate Python installation; Manufacturing
+export needs Python with `openpyxl` as described in its workflow guide.
 
 ### Update or remove a standalone installation
 
@@ -82,7 +84,9 @@ folder while the junction exists leaves a broken plugin link.
 | **Via Tools** | Use the selector at the top right to switch between Via Stitching, Via Fencing, and Via Array. Stitching previews symmetric or staggered grids and manages placed sets. Fencing follows an RF trace on either or both sides. Array evens out selected existing vias. |
 | **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
 | **Trace Tools** | Use the selector at the top right for Trace Cleanup, Teardrops, or Round Corners. Cleanup previews redundant copper and dangling ends, supports bulk selection, and removes reviewed tracks with Undo. Teardrops use KiCad's native generator. Round Corners previews a selected radius across all copper layers, rounds eligible existing trace junctions, and restores selected generated corners. |
+| **PCB Rotation** | Apply an exact angle to selected components in the open PCB Editor. |
 | **Visualization** | Color net groups and individual nets live, and focus the ratsnest on selected components. |
+| **Manufacturing** | Inventory saved project files, run ERC/DRC and BOM checks, edit verified PCBWay or PCBPower export choices, build detailed single or multi-board packages, and clean up reviewed local library table entries. See [manufacturing and project maintenance](docs/MANUFACTURING-AND-PROJECT-MAINTENANCE.md). |
 
 ### Via Array
 
@@ -280,6 +284,22 @@ the saved board. Keep the fillet
 sidecar with the PCB. Recheck length matching and run KiCad DRC after rounding;
 the preview is conservative but does not replace the full DRC, including zones
 and custom rules. KiCad's shove router cannot drag copper arcs.
+
+Open the **PCB Rotation** tab to rotate selected components in the open PCB Editor.
+Enter a positive angle for counterclockwise rotation, or a negative angle for
+clockwise rotation; `45` and `-45` are both valid. Components rotate around their
+footprint anchor. The edit is a single KiCad Undo step. Locked items, tracks,
+pads, drawings, and zones are rejected. Inspect trace connections and run DRC
+after rotating a connected component. For graphical shapes and zones, set
+**Preferences > PCB Editor > Editing Options > Step for rotate commands** to
+45 degrees and use KiCad's native **R** command.
+
+For quick access, use the **TraceForge: PCB Rotation** toolbar button or
+**Tools > External Plugins > TraceForge: PCB Rotation**. The same menu offers
+**Via Tools**, **BGA Fanout**, **Trace Tools**, and **Visualization** shortcuts.
+Each shortcut opens its tab in the existing TraceForge window when one is open.
+KiCad's Python ActionPlugin API does not provide a supported way to add these
+actions to the PCB canvas right-click menu.
 
 ## Keep project metadata
 

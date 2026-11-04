@@ -359,11 +359,19 @@ class TraceForgePanel(wx.Frame):
         self.trace_tools = TraceToolsPanel(self.notebook, self, stitching)
         self.trace_cleanup = self.trace_tools.cleanup
         self.notebook.AddPage(self.trace_tools, 'Trace Tools')
+        from .board_rotate_ui import BoardRotatePanel
+
+        self.rotation = BoardRotatePanel(self.notebook, self, stitching)
+        self.notebook.AddPage(self.rotation, 'PCB Rotation')
         from .visualization_ui import VisualizationPanel
 
         board_file = (native_info or {}).get('board')
         self.visualization = VisualizationPanel(self.notebook, self, stitching, board_file)
         self.notebook.AddPage(self.visualization, 'Visualization')
+        from .manufacturing_ui import ManufacturingPanel
+
+        self.manufacturing = ManufacturingPanel(self.notebook, self, board_file)
+        self.notebook.AddPage(self.manufacturing, 'Manufacturing')
         from .about_ui import AboutPanel
 
         self.about = AboutPanel(self.notebook, self.dark, native_info)
@@ -393,7 +401,7 @@ class TraceForgePanel(wx.Frame):
     def on_tab_open(self, event):
         event.Skip()
         self.position_activity()
-        if self.notebook.GetSelection() == 4 and not self.visualization.nets:
+        if self.notebook.GetSelection() == 5 and not self.visualization.nets:
             wx.CallAfter(self.visualization.on_refresh)
         self.schedule_auto_refresh()
 
@@ -409,7 +417,7 @@ class TraceForgePanel(wx.Frame):
     def schedule_auto_refresh(self):
         if self.auto_refresh_later:
             self.auto_refresh_later.Stop()
-        if (not self.native_call or self.closing or self.notebook.GetSelection() in (4, 5) or
+        if (not self.native_call or self.closing or self.notebook.GetSelection() in (4, 5, 6, 7) or
                 (self.notebook.GetSelection() == 1 and self.via_tools.active_index == 2) or
                 (self.notebook.GetSelection() == 3 and self.trace_tools.active_index != 0)):
             return
@@ -424,7 +432,7 @@ class TraceForgePanel(wx.Frame):
             return
         self.auto_check_deferred = False
         tab = self.notebook.GetSelection()
-        if (tab in (4, 5) or
+        if (tab in (4, 5, 6, 7) or
                 (tab == 1 and self.via_tools.active_index == 2) or
                 (tab == 3 and self.trace_tools.active_index != 0)):
             return
@@ -496,7 +504,8 @@ class TraceForgePanel(wx.Frame):
                   self.trace_tools.teardrops.open_button if tab == 3 and
                   self.trace_tools.active_index == 1 else
                   self.trace_tools.fillets.details if tab == 3 else
-                  self.visualization.group_list if tab == 4 else self.about)
+                  self.rotation.angle if tab == 4 else
+                  self.visualization.group_list if tab == 5 else self.about)
         bounds = target.GetScreenRect()
         center = self.ScreenToClient((bounds.x + bounds.width // 2,
                                       bounds.y + bounds.height // 2))
@@ -529,10 +538,13 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 6:
+            return
         if self.notebook.GetSelection() == 5:
+            self.visualization.on_refresh()
             return
         if self.notebook.GetSelection() == 4:
-            self.visualization.on_refresh()
+            self.rotation.on_refresh()
             return
         if self.notebook.GetSelection() == 3:
             self.trace_tools.active_page.on_refresh()
@@ -583,8 +595,8 @@ class TraceForgePanel(wx.Frame):
         self.snapshot.SetLabel(f"Snapshot: {when}. Checks for changes when you return "
                                'to TraceForge.')
         if not results:
-            self.status.SetLabel(f"{when} · no signal chains found (no xsignals.json and no series "
-                                 "parts between tuning-profile netclasses)")
+            self.status.SetLabel(f"{when} · no signal chains found (no xsignals.json or nets "
+                                 "assigned to tuning-profile netclasses)")
         else:
             self.status.SetLabel(f"{when} · groups from {source}")
 
@@ -921,18 +933,21 @@ class TraceForgePanel(wx.Frame):
 
 
 def run(tools: Tools, single_instance_port: Optional[int] = None, stitching=None,
-        endpoints=None, native_info=None) -> None:
+        endpoints=None, native_info=None, start_tab=None) -> None:
     app = wx.App(False)
     if kicad_dark_theme() and hasattr(app, "MSWEnableDarkMode"):
         app.MSWEnableDarkMode(1)  # wxWidgets 3.3 DarkMode_Always, matching KiCad's dark theme
     panel = TraceForgePanel(tools, stitching=stitching, endpoints=endpoints,
                             native_info=native_info)
+    if start_tab is not None:
+        panel.notebook.SetSelection(start_tab)
     panel.Show()
     listener = None
     if single_instance_port is not None:
         from .single_instance import listen
 
-        listener = listen(single_instance_port, lambda: wx.CallAfter(_bring_front, panel))
+        listener = listen(single_instance_port,
+                          lambda tab: wx.CallAfter(_bring_front, panel, tab))
     try:
         app.MainLoop()
     finally:
@@ -940,7 +955,9 @@ def run(tools: Tools, single_instance_port: Optional[int] = None, stitching=None
             listener.stop()
 
 
-def _bring_front(panel: wx.Frame) -> None:
+def _bring_front(panel: wx.Frame, tab=None) -> None:
+    if tab is not None and 0 <= tab < panel.notebook.GetPageCount():
+        panel.notebook.SetSelection(tab)
     panel.Show()
     panel.Iconize(False)
     panel.Raise()

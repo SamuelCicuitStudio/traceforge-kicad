@@ -67,8 +67,21 @@ def export(d: ImageDraw.ImageDraw, c: dict) -> None:
     d.polygon([(_w(43), _w(24)), (_w(35), _w(17)), (_w(35), _w(31))], fill=c["accent"])
 
 
+def rotation(d: ImageDraw.ImageDraw, c: dict) -> None:
+    """A curved arrow around a tilted component for the rotation shortcut."""
+    _badge(d, c)
+    d.arc([_w(9), _w(9), _w(39), _w(39)], 205, 505,
+          fill=c["timing"], width=_w(4))
+    d.polygon([(_w(37), _w(11)), (_w(43), _w(15)), (_w(35), _w(20))],
+              fill=c["timing"])
+    d.polygon([(_w(24), _w(16)), (_w(32), _w(24)),
+               (_w(24), _w(32)), (_w(16), _w(24))],
+              fill=c["accent"], outline=c["trace"])
+
+
 ICONS = {"traceforge": traceforge,
-         "highlight-signal-chain": highlight, "export-signal-paths": export}
+         "highlight-signal-chain": highlight, "export-signal-paths": export,
+         "pcb-rotation": rotation}
 
 
 def main() -> None:

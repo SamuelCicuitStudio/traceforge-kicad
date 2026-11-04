@@ -72,6 +72,7 @@ class AboutPanel(wx.ScrolledWindow):
             ('BGA Fanout', 'Preview and apply guided BGA escape routes.'),
             ('Trace Tools', 'Clean up copper, apply teardrops, or round and restore corners.'),
             ('Visualization', 'Color net groups and control ratsnest visibility.'),
+            ('Manufacturing', 'Inspect saved projects and prepare vendor-specific deliverables.'),
         )
         for name, description in features:
             row = wx.BoxSizer(wx.HORIZONTAL)

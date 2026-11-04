@@ -20,9 +20,12 @@ def release_files():
         'docs/VIA-STITCHING-TESTING.md', 'docs/FEATURE-SCOPE.md',
         'docs/BGA-FANOUT.md', 'docs/VIA-FENCING.md',
         'docs/SELECTED-ENDPOINTS.md', 'docs/TRACE-CLEANUP.md',
+        'docs/MANUFACTURING-AND-PROJECT-MAINTENANCE.md',
     )]
     for directory in ('signal_path_analyzer', 'native_bridge'):
         paths.extend((ROOT / directory).glob('*.py'))
+    paths.extend(path for path in (ROOT / 'signal_path_analyzer' / 'manufacturing_resources').rglob('*')
+                 if path.is_file() and '__pycache__' not in path.parts)
     paths.append(ROOT / 'docs' / 'RELEASE-NOTES.md')
     paths.extend((ROOT / 'docs' / 'screenshots').glob('*.png'))
     paths.extend((ROOT / 'icons').glob('*.png'))

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kicad-pcb-automation-toolkit"
-version = "0.12.1"
+version = "0.12.5"
 description = "TraceForge for KiCad 10: signal paths, via stitching, RF fencing and BGA fanout"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -28,6 +28,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["signal_path_analyzer*"]
+
+[tool.setuptools.package-data]
+signal_path_analyzer = ["manufacturing_resources/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

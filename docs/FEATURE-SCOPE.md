@@ -6,9 +6,11 @@ prevents similarly named PCB features from being implemented with the wrong mode
 ## TraceForge feature tabs
 
 The layout is one window with **Signals / xSignals**, **Via Tools**,
-**BGA Fanout**, **Trace Tools**, and **Visualization** tabs. Via Tools groups
+**BGA Fanout**, **Trace Tools**, **PCB Rotation**, **Visualization**, and **Manufacturing** tabs. Via Tools groups
 stitching, fencing, and existing-via arrays. Trace Tools groups cleanup,
-native teardrops, and rounded corners with persistent restore. Cleanup previews redundant
+native teardrops and rounded corners with persistent restore. PCB Rotation applies
+exact angles to selected components. KiCad's native rotation handles graphical
+shapes and zones with a configurable angle step. Cleanup previews redundant
 copper and native dangling endpoints, with reviewed undoable removal and a return
 to Signals for length checks. See [trace cleanup](TRACE-CLEANUP.md). Keep net/chain analysis,
 timing, highlighting, chain editing, DRC targets and exports together in Signals. The stitching tab owns
@@ -18,6 +20,11 @@ changed. Returning from PCB Editor also checks for changes, without continuous
 polling. See [native board access](NATIVE-BOARD-ACCESS.md),
 [via stitching testing](VIA-STITCHING-TESTING.md), and [BGA Fanout](BGA-FANOUT.md)
 for the implemented workflows and limits.
+
+Manufacturing uses saved board and schematic files, project-specific profiles,
+KiCad CLI checks, and deterministic PCBWay or PCBPower exporters. Its review
+shows each board's manufacturing choices and output status without exposing the
+internal config JSON. See [manufacturing and project maintenance](MANUFACTURING-AND-PROJECT-MAINTENANCE.md).
 
 ## Signal Path Analyzer
 

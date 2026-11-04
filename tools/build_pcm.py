@@ -25,6 +25,10 @@ def files():
             paths[f'plugins/{source.name}'] = source
     for source in (ROOT / 'signal_path_analyzer').glob('*.py'):
         paths[f'plugins/signal_path_analyzer/{source.name}'] = source
+    for source in (ROOT / 'signal_path_analyzer' / 'manufacturing_resources').rglob('*'):
+        if source.is_file() and '__pycache__' not in source.parts:
+            relative = source.relative_to(ROOT / 'signal_path_analyzer').as_posix()
+            paths[f'plugins/signal_path_analyzer/{relative}'] = source
     for source in (ROOT / 'icons').glob('*.png'):
         if source.name.endswith(('-24.png', '-48.png')):
             paths[f'plugins/icons/{source.name}'] = source
