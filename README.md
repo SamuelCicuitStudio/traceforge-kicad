@@ -4,7 +4,7 @@
 
 **Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10 on Windows.**
 
-TraceForge 0.12.5 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
+TraceForge 0.12.6 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
 PCB Rotation, Visualization, and Manufacturing in one panel. Trace Tools includes
 cleanup, teardrops, and rounded corners with persistent restore. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB

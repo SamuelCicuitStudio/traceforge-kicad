@@ -174,6 +174,10 @@ class ChainResult:
     tunable_mm: Optional[float] = None
     stub_mm: Optional[float] = None
 
+    minimum_ps: Optional[float] = None
+    maximum_ps: Optional[float] = None
+    independent_ok: Optional[bool] = None
+
     @property
     def delta_ps(self) -> Optional[float]:
         return None if self.target_ps is None else self.total_ps - self.target_ps
@@ -184,7 +188,9 @@ class ChainResult:
             return "pending"
         if self.target_ps is None:
             return "routed"
-        if abs(self.delta_ps) <= (self.tolerance_ps or 0) + 1e-9:
+        if self.independent_ok is True:
+            return "ok"
+        if self.independent_ok is None and abs(self.delta_ps) <= (self.tolerance_ps or 0) + 1e-9:
             return "ok"
         return "short" if self.delta_ps < 0 else "long"
 
@@ -198,7 +204,21 @@ class GroupResult:
 
     @property
     def spread_ps(self) -> Optional[float]:
-        done = [c.total_ps for c in self.chains if c.routed]
+        done = []
+        seen = set()
+        by_name = {c.chain.name: c for c in self.chains}
+        for c in self.chains:
+            if not c.routed or c.chain.name in seen:
+                continue
+            mate = by_name.get(c.chain.pair)
+            if mate is not None and mate.routed:
+                done.append((c.total_ps + mate.total_ps) / 2)
+                seen.add(mate.chain.name)
+            elif c.chain.pair:
+                continue
+            else:
+                done.append(c.total_ps)
+            seen.add(c.chain.name)
         return max(done) - min(done) if len(done) > 1 else None
 
 
@@ -213,6 +233,13 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
             routed[c.name] = all(geometry.get(n) is not None and geometry[n].routed for n in c.nets)
         done = [totals[k] for k, ok in routed.items() if ok]
         target = max(done) if done and group.skew_ps is not None else None
+        centers = [(totals[c.name] + totals[c.pair]) / 2
+                   for c in group.chains if c.pair in totals
+                   and routed[c.name] and routed[c.pair]]
+        centers.extend(totals[c.name] for c in group.chains if not c.pair and routed[c.name])
+        center_max = max(centers, default=None)
+        if center_max is not None and all(c.pair for c in group.chains):
+            target = center_max if group.skew_ps is not None else None
         results, stubs = [], []
         for c in group.chains:
             tgt, tol, pskew = target, (group.skew_ps / 2 if group.skew_ps else None), None
@@ -223,6 +250,29 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
                         tgt = max(totals[c.name], totals[c.pair])
                     if group.pair_skew_ps is not None:
                         tol = group.pair_skew_ps / 2
+            lower = upper = independent_ok = None
+            if c.pair in totals and routed[c.name] and routed[c.pair] and group.pair_skew_ps is not None:
+                own, mate = totals[c.name], totals[c.pair]
+                center = (own + mate) / 2
+                pair_limit = group.pair_skew_ps
+                group_floor = (center_max - group.skew_ps
+                               if center_max is not None and group.skew_ps is not None else None)
+                pair_ok = abs(own - mate) <= pair_limit + 1e-9
+                group_ok = group_floor is None or center >= group_floor - 1e-9
+                independent_ok = pair_ok and group_ok
+                lower, upper = mate - pair_limit, mate + pair_limit
+                if group_floor is not None:
+                    lower = max(lower, 2 * group_floor - mate)
+                    upper = min(upper, 2 * center_max - mate)
+                if lower > upper:
+                    # Both members need to move: propose a common feasible pair window.
+                    planned = max(own, mate, (group_floor + pair_limit / 2)
+                                  if group_floor is not None else 0)
+                    lower, upper = planned - pair_limit / 2, planned + pair_limit / 2
+                tgt = min(max(own, lower), upper)
+                tol = (upper - lower) / 2
+            if c.pair in totals and not routed[c.pair]:
+                tgt = tol = None
             stub = (delays[c.stub].track_ps + delays[c.stub].via_ps
                     if c.stub and c.stub in delays else None)
             if stub is not None and group.stub_max_ps is not None and stub > group.stub_max_ps:
@@ -232,7 +282,8 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
                                        tgt if routed[c.name] else None, tol, pskew,
                                        sum(track_mm.get(n, 0.0) for n in c.nets),
                                        track_mm.get(c.tunable, 0.0),
-                                       track_mm.get(c.stub, 0.0) if c.stub else None))
+                                       track_mm.get(c.stub, 0.0) if c.stub else None,
+                                       lower, upper, independent_ok))
         out.append(GroupResult(group, tuple(results), target, tuple(stubs)))
     return out
 
@@ -263,7 +314,10 @@ def drc_rules(results: Iterable[GroupResult],
             if c.target_ps is None or c.tolerance_ps is None:
                 continue
             opt = c.tunable_ps + (c.target_ps - c.total_ps)
-            lo, hi = opt - c.tolerance_ps, opt + c.tolerance_ps
+            lo = (c.tunable_ps + c.minimum_ps - c.total_ps
+                  if c.minimum_ps is not None else opt - c.tolerance_ps)
+            hi = (c.tunable_ps + c.maximum_ps - c.total_ps
+                  if c.maximum_ps is not None else opt + c.tolerance_ps)
             lines.append(f'(rule "XSIG {g.group.name} {c.chain.name} total"\n'
                          f'\t(condition "{_cond(c.chain.tunable)}")\n'
                          f"\t(constraint length (min {lo:.2f}ps) (opt {opt:.2f}ps) "

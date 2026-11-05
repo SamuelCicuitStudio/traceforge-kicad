@@ -1,3 +1,26 @@
+# TraceForge 0.12.6 ? differential matching correction
+
+Intra-pair P/N skew and inter-pair delay spread are evaluated separately.
+Pair timing is the average of its P and N whole-chain delays. Group spread
+compares those centers; each P/N difference is checked against the pair limit.
+With a 30 ps group limit and 0.7 ps pair limit, two internally matched pairs
+20 ps apart now pass without tuning all eight signals into one 0.7 ps window.
+
+Generated rules use per-chain lower/upper bounds, with the already routed
+series-net delay subtracted from the tunable net target. Rule windows are a
+snapshot: regenerate them after changing either member or its fixed segment.
+The live monitor always re-evaluates actual pair/group skew.
+
+Source PCB limits exclude package delay; whole-chain matching retains it.
+A series resistor pad or additional-contact notice does not imply a dangling
+stub. Pending differential partners are not certified matched.
+
+Install the PCM ZIP through KiCad Plugin and Content Manager > Install from
+file. Close all KiCad windows before reopening the updated plugin. Project
+limits are retained; this release does not establish hardware timing budgets.
+
+## Previous manufacturing testing build
+
 # TraceForge 0.12.5 — Manufacturing workflow testing build
 
 The Manufacturing tab opens on one saved board project by default. A sibling-board

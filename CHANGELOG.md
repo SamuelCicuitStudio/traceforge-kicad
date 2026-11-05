@@ -1,6 +1,17 @@
 # Changelog
 
-Release details: [0.12.5](docs/RELEASE-NOTES.md).
+Release details: [0.12.6](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.12.6 (2026-11-06)
+
+- Separate differential P/N skew from inter-pair delay spread; valid pairs no
+  longer inherit the tight P/N window around the longest unrelated signal.
+- Generate independent whole-chain tuning bounds from both budgets and account
+  for fixed series-net offsets. Refresh DRC targets after routing changes.
+- Measure differential group spread between pair centers. Pending partners
+  cannot be reported as matched.
+- Exclude package delay from source PCB segment limits while retaining it in
+  whole-chain delay, and clarify pad/branch contact notices.
 
 ## TraceForge 0.12.5 (local testing build)
 
