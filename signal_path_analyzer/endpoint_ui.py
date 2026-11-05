@@ -141,7 +141,7 @@ class EndpointDialog(wx.Dialog):
             lines += [f"Routed track objects: {path['track_mm']:.3f} mm "
                       '(excludes via barrels and part internals).']
             if path['branches']:
-                lines += ['Branch/overlap detected: one shortest routed-item path is shown.']
+                lines += ['Additional pad/track contacts, overlaps or branches: one shortest routed-item path is shown. This is not a source-segment limit violation.']
             lines += [f'Already included: {existing.group}/{existing.name}' if existing else
                       'New chain; not yet added.', '']
         if result['pair_note']:

@@ -300,9 +300,9 @@ class TraceForgePanel(wx.Frame):
         right = wx.ALIGN_RIGHT
         columns = (("Group / chain", 190, wx.ALIGN_LEFT), ("Total ps", 80, right),
                    ("Target ps", 80, right), ("Δ ps", 70, right), ("P−N ps", 70, right),
-                   ("Stub ps", 70, right), ("Status", 160, wx.ALIGN_LEFT),
+                   ("Source PCB ps", 95, right), ("Status", 160, wx.ALIGN_LEFT),
                    ("Chain track mm", 110, right), ("Tunable mm", 100, right),
-                   ("Stub mm", 85, right))
+                   ("Source PCB mm", 100, right))
         for title, width, align in columns:
             self.tree.AddColumn(title, width=width, flag=align)
         self.tree.AddRoot("signals")
@@ -315,7 +315,7 @@ class TraceForgePanel(wx.Frame):
         self.snapshot.SetForegroundColour(self.colors["pending"])
         self.tree.GetMainWindow().SetToolTip(
             "Chain track mm = all tracks and arcs across every net in the chain. "
-            "Tunable mm = last net; Stub mm = first net before series parts. "
+            "Tunable mm = last net; Source PCB = first net before series parts, not a dangling branch. "
             "Lengths exclude via barrels, pad-to-die lengths, and component internals. "
             "All net branches are summed; KiCad tunes a point-to-point path. "
             "Timing includes the configured via and pad-to-die delay estimates.")
@@ -661,7 +661,7 @@ class TraceForgePanel(wx.Frame):
             states = [self.chain_color(c, g) for c in g.chains]
             priority = ("error", "warning", "pending", "routed")
             state = next((k for k in priority if k in states), "ok")
-            label = {"error": "\u2716 stub too long", "warning": "\u25b2 needs tuning",
+            label = {"error": "\u2716 source segment too long", "warning": "\u25b2 needs tuning",
                      "pending": "\u2026 pending", "routed": "\u25cf routed",
                      "ok": "\u2714 matched"}[state]
             self.set_cells(self.rows[key], ((2, fmt(g.target_ps)),
@@ -671,7 +671,7 @@ class TraceForgePanel(wx.Frame):
                 key = (g.group.name, c.chain.name)
                 status = f"{MARK.get(c.status, '')} {c.status}"
                 if c.chain.name in g.stub_violations:
-                    status = "\u2716 stub too long"
+                    status = "\u2716 source segment too long"
                 cells = (fmt(c.total_ps), fmt(c.target_ps), fmt(c.delta_ps, True),
                          fmt(c.pair_skew_ps, True), fmt(c.stub_ps), status,
                          "" if c.length_mm is None else f"{c.length_mm:.3f}",

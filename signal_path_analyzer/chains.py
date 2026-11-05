@@ -223,7 +223,8 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
                         tgt = max(totals[c.name], totals[c.pair])
                     if group.pair_skew_ps is not None:
                         tol = group.pair_skew_ps / 2
-            stub = delays[c.stub].total_ps if c.stub and c.stub in delays else None
+            stub = (delays[c.stub].track_ps + delays[c.stub].via_ps
+                    if c.stub and c.stub in delays else None)
             if stub is not None and group.stub_max_ps is not None and stub > group.stub_max_ps:
                 stubs.append(c.name)
             tun = delays[c.tunable].total_ps if c.tunable in delays else 0.0

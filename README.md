@@ -359,3 +359,10 @@ boards are ignored. `tools/build_chains.py` is an optional offline chain builder
 See [PCM publishing steps](docs/PCM-PUBLISHING.md),
 [release notes](docs/RELEASE-NOTES.md), [changelog](CHANGELOG.md) and
 [MIT license](LICENSE).
+
+Source-segment timing limits compare PCB track plus via delay only. Package
+pad-to-die delay stays in whole-chain timing and matching targets, but must not
+make a short source-to-series-resistor PCB segment appear too long. A source
+segment is not a dangling branch. Endpoint path previews separately report
+additional contacts (including pad pass-throughs, pull-ups and overlaps); this
+informational notice does not indicate a source-segment limit violation.
