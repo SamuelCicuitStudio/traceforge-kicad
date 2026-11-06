@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DESTINATION = ROOT / "signal_path_analyzer" / "manufacturing_resources"
 SOURCES = {
     "scripts/export_manufacturing.py": "scripts/export_manufacturing.py",
-    "skills/kicad-pcb-power/scripts/export_package.py": "skills/kicad-pcb-power/scripts/export_package.py",
-    "skills/kicad-pcb-power/scripts/package_preflight.py": "skills/kicad-pcb-power/scripts/package_preflight.py",
-    "skills/kicad-pcbway/scripts/export_package.py": "skills/kicad-pcbway/scripts/export_package.py",
+    "skills/kicad-pcb-power/scripts/export_package.py": "skills/kicad-pcb-power/scripts/export_package.py",  # noqa: E501 - composed report text or resource path
+    "skills/kicad-pcb-power/scripts/package_preflight.py": "skills/kicad-pcb-power/scripts/package_preflight.py",  # noqa: E501 - composed report text or resource path
+    "skills/kicad-pcbway/scripts/export_package.py": "skills/kicad-pcbway/scripts/export_package.py",  # noqa: E501 - composed report text or resource path
 }
 
 
@@ -29,7 +29,10 @@ def sync(source_root: Path) -> dict[str, str]:
         shutil.copy2(source, destination)
         versions[relative_destination] = hashlib.sha256(destination.read_bytes()).hexdigest()
     (DESTINATION / "SOURCE-MANIFEST.json").write_text(
-        json.dumps({"source": "pcb skill deterministic exporter scripts", "sha256": versions}, indent=2) + "\n",
+        json.dumps(
+            {"source": "pcb skill deterministic exporter scripts", "sha256": versions}, indent=2
+        )
+        + "\n",
         encoding="utf-8",
     )
     return versions

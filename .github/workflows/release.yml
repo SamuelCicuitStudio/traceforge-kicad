@@ -42,9 +42,11 @@ jobs:
             fi
             gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt --clobber
           else
+            NOTES="docs/releases/$VERSION.md"
+            [[ -f "$NOTES" ]] || NOTES="docs/RELEASE-NOTES.md"
             gh release create "$TAG" dist/*.zip dist/SHA256SUMS.txt \
               --draft --verify-tag --title "TraceForge $VERSION" \
-              --notes-file "docs/RELEASE-NOTES.md"
+              --notes-file "$NOTES"
           fi
       - name: Record draft verification for SSH-only maintainers
         env:
@@ -82,4 +84,24 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin refs/notes/release-status:refs/notes/release-status || true
           git notes --ref=release-status add -f -F release-status.json "$GITHUB_SHA"
+          git push origin refs/notes/release-status
+      - name: Publish explicitly authorized tag
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          VERSION=$(python -c 'import importlib.metadata; print(importlib.metadata.version("kicad-pcb-automation-toolkit"))')
+          TAG="v$VERSION"
+          APPROVED=$(python -c 'import json; print(json.load(open("pcm/publish.json"))["tag"])')
+          if [[ "$TAG" != "$APPROVED" ]]; then
+            echo "Tag has no publication authorization; keeping draft"
+            exit 0
+          fi
+          PRERELEASE=$(python -c 'import json; print(str(json.load(open("pcm/publish.json"))["prerelease"]).lower())')
+          gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE"
+          gh release view "$TAG" --json url,isDraft,tagName,isPrerelease,assets > published-status.json
+          python -c 'import json; d=json.load(open("published-status.json")); assert not d["isDraft"]; print(d["url"])'
+          git notes --ref=release-status add -f -F published-status.json "$GITHUB_SHA"
           git push origin refs/notes/release-status

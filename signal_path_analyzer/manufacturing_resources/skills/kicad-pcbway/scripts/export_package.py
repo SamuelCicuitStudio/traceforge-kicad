@@ -25,7 +25,6 @@ import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-
 BOM_FIELDS = [
     "Reference",
     "${QUANTITY}",
@@ -81,10 +80,25 @@ SOURCE_URLS = {
 
 SOURCE_SKIP_DIRS = {".git", ".history", "__pycache__", "downloads", "dosnloads"}
 SOURCE_SKIP_SUFFIXES = {".kicad_prl", ".lck", ".bak", ".zip"}
-SOURCE_ALLOWED_SUFFIXES = {".kicad_pcb", ".kicad_sch", ".kicad_pro", ".kicad_sym",
-                           ".kicad_mod", ".kicad_dru", ".kicad_wks", ".step", ".stp",
-                           ".wrl", ".stl", ".igs", ".iges", ".svg", ".dxf",
-                           ".lib", ".dcm"}
+SOURCE_ALLOWED_SUFFIXES = {
+    ".kicad_pcb",
+    ".kicad_sch",
+    ".kicad_pro",
+    ".kicad_sym",
+    ".kicad_mod",
+    ".kicad_dru",
+    ".kicad_wks",
+    ".step",
+    ".stp",
+    ".wrl",
+    ".stl",
+    ".igs",
+    ".iges",
+    ".svg",
+    ".dxf",
+    ".lib",
+    ".dcm",
+}
 SOURCE_ALLOWED_NAMES = {"fp-lib-table", "sym-lib-table"}
 
 
@@ -176,14 +190,21 @@ def summarize_report(path: Path) -> dict[str, Any]:
     findings = re.findall(r"(?m)^\s*\[[^\]]+\][^\n]*(?:\n[^\n]*)?", text)
     errors = sum(bool(re.search(r"\berror\b", item, re.I)) for item in findings)
     warnings = sum(bool(re.search(r"\bwarning\b", item, re.I)) for item in findings)
-    return {"exists": path.exists(), "findings_detected": len(findings),
-            "errors_detected": errors, "warnings_detected": warnings}
+    return {
+        "exists": path.exists(),
+        "findings_detected": len(findings),
+        "errors_detected": errors,
+        "warnings_detected": warnings,
+    }
 
 
 class Context:
     def __init__(self, config: dict[str, Any], config_path: Path):
         base = config_path.parent
-        resolve = lambda key: (base / config[key]).resolve()
+
+        def resolve(key):
+            return (base / config[key]).resolve()
+
         self.config = config
         self.project = resolve("project_dir")
         self.name = config["name"]
@@ -195,7 +216,9 @@ class Context:
         self.mechanical = resolve("mechanical_dir") if config.get("mechanical_dir") else None
         self.cli = Path(config.get("kicad_cli", "C:/Program Files/KiCad/10.0/bin/kicad-cli.exe"))
         self.use_origin = bool(config.get("use_auxiliary_origin", True))
-        self.not_ref = re.compile(config.get("not_assembled_refs", r"^(TP.*|FID\d+|MH\d+|LOGO\d*)$"))
+        self.not_ref = re.compile(
+            config.get("not_assembled_refs", r"^(TP.*|FID\d+|MH\d+|LOGO\d*)$")
+        )
         self.not_footprint = re.compile(
             config.get("not_assembled_footprints", r"FID|MountingHole|MH_"), re.I
         )
@@ -224,8 +247,11 @@ class Context:
         if not self.board.is_file() or not self.schematic.is_file():
             raise FileNotFoundError("matching .kicad_pcb and .kicad_sch files are required")
         for label, source in (("docs_dir", self.docs), ("mechanical_dir", self.mechanical)):
-            if source and (source == self.output or self.output.is_relative_to(source)
-                           or source.is_relative_to(self.output)):
+            if source and (
+                source == self.output
+                or self.output.is_relative_to(source)
+                or source.is_relative_to(self.output)
+            ):
                 raise ValueError(f"{label} and output directory must be separate")
         mode = self.pcbway.get("assembly_mode")
         if mode not in {"turnkey", "partial_turnkey", "consigned"}:
@@ -252,16 +278,26 @@ class Context:
 def prepare_output(context: Context, replace: bool) -> None:
     target = context.output.resolve()
     project = context.project.resolve()
-    if (target == Path(target.anchor) or project == target or
-            project.is_relative_to(target) or target.is_relative_to(project)):
+    if (
+        target == Path(target.anchor)
+        or project == target
+        or project.is_relative_to(target)
+        or target.is_relative_to(project)
+    ):
         raise ValueError(f"unsafe output directory: {target}")
     if target.exists():
         if not replace:
-            raise FileExistsError(f"output exists; inspect it or rerun with --replace-output: {target}")
+            raise FileExistsError(
+                f"output exists; inspect it or rerun with --replace-output: {target}"
+            )
         prior_facts = context.facts.is_relative_to(target) and context.facts.is_file()
-        prior_manifest = (target / "SHA256SUMS.json").is_file() or (target / "01-Reports" / "SHA256SUMS.json").is_file()
+        prior_manifest = (target / "SHA256SUMS.json").is_file() or (
+            target / "01-Reports" / "SHA256SUMS.json"
+        ).is_file()
         if not (prior_facts or prior_manifest):
-            raise ValueError(f"refusing to replace a directory without a prior PCBWay export marker: {target}")
+            raise ValueError(
+                f"refusing to replace a directory without a prior PCBWay export marker: {target}"
+            )
         shutil.rmtree(target)
     for directory in context.dirs.values():
         directory.mkdir(parents=True, exist_ok=True)
@@ -371,7 +407,9 @@ def export_fabrication(context: Context, layers: list[str]) -> dict[str, Any]:
             if archive.testzip() is not None:
                 raise RuntimeError("Gerber ZIP integrity check failed")
         for path in temp.glob("*.pdf"):
-            shutil.copy2(path, context.dirs["fab"] / path.name.replace(context.name, context.prefix))
+            shutil.copy2(
+                path, context.dirs["fab"] / path.name.replace(context.name, context.prefix)
+            )
         report = temp / "drill-report.txt"
         if report.exists():
             shutil.copy2(report, context.dirs["fab"] / f"{context.prefix}-Drill-Report.txt")
@@ -396,12 +434,17 @@ def export_fabrication(context: Context, layers: list[str]) -> dict[str, Any]:
         str(context.dirs["fab"] / f"{context.prefix}-Fabrication-Drawing.pdf"),
         str(context.board),
     )
-    return {"zip": target_zip.name, "files": archive_names,
-            "layers_requested": layers, "gerber_job_general": gerber_job_general}
+    return {
+        "zip": target_zip.name,
+        "files": archive_names,
+        "layers_requested": layers,
+        "gerber_job_general": gerber_job_general,
+    }
 
 
-def check_fabrication_archive(context: Context, fabrication: dict[str, Any],
-                              copper_layers: list[str]) -> list[str]:
+def check_fabrication_archive(
+    context: Context, fabrication: dict[str, Any], copper_layers: list[str]
+) -> list[str]:
     errors: list[str] = []
     target = context.dirs["fab"] / fabrication["zip"]
     with zipfile.ZipFile(target) as archive:
@@ -417,7 +460,9 @@ def check_fabrication_archive(context: Context, fabrication: dict[str, Any],
             for item in attrs:
                 if item.get("Path") not in names:
                     errors.append(f"Gerber job references missing file: {item.get('Path')}")
-            if sum(item.get("FileFunction", "").startswith("Copper,") for item in attrs) != len(copper_layers):
+            if sum(item.get("FileFunction", "").startswith("Copper,") for item in attrs) != len(
+                copper_layers
+            ):
                 errors.append("Gerber copper layer count differs from enabled board copper layers")
             if not any(item.get("FileFunction") == "Profile" for item in attrs):
                 errors.append("Gerber job lacks board outline profile")
@@ -455,7 +500,11 @@ def parse_position_rows(context: Context, footprint_types: dict[str, str]) -> li
                 for item in csv.DictReader(stream):
                     ref = item.get("Ref", "").strip()
                     package = item.get("Package", "").strip()
-                    if not ref or context.not_ref.match(ref) or context.not_footprint.search(package):
+                    if (
+                        not ref
+                        or context.not_ref.match(ref)
+                        or context.not_footprint.search(package)
+                    ):
                         continue
                     if footprint_types.get(ref, "SMD") != "SMD":
                         continue
@@ -524,7 +573,9 @@ def build_bom_rows(
         notes = (row.get("Assembly Notes") or "").strip()
         alternates = (row.get("Approved Alternate MPNs") or "").strip()
         if alternates:
-            notes = "; ".join(item for item in (notes, f"Approved alternates: {alternates}") if item)
+            notes = "; ".join(
+                item for item in (notes, f"Approved alternates: {alternates}") if item
+            )
         records.append(
             {
                 "refs": keep,
@@ -563,7 +614,9 @@ def build_bom_rows(
     missing_manufacturer: list[str] = []
     duplicate_refs: list[str] = []
     ref_counts = Counter(ref for record in records for ref in record["refs"])
-    duplicate_refs.extend(sorted((ref for ref, count in ref_counts.items() if count > 1), key=natural))
+    duplicate_refs.extend(
+        sorted((ref for ref, count in ref_counts.items() if count > 1), key=natural)
+    )
     for line, record in enumerate(records, 1):
         refs = ", ".join(record["refs"])
         pcbway_sourced = record["source_mode"].casefold() not in {"customer", "consigned"}
@@ -650,8 +703,9 @@ def export_bom(
     return rows, facts
 
 
-def write_extended_bom(context: Context, raw_rows: list[dict[str, str]],
-                       assembled_refs: set[str]) -> None:
+def write_extended_bom(
+    context: Context, raw_rows: list[dict[str, str]], assembled_refs: set[str]
+) -> None:
     """Keep a review BOM with source fields, separate from PCBWay's upload BOM."""
     fields = [field for field in BOM_FIELDS if not field.startswith("${")]
     records: list[list[str]] = []
@@ -666,13 +720,18 @@ def write_extended_bom(context: Context, raw_rows: list[dict[str, str]],
         records.append([record.get(field, "") for field in ["Quantity Per PCB", *fields]])
     header = ["Quantity Per PCB", *fields]
     target = context.dirs["bom"]
-    with (target / f"{context.prefix}-BOM-Full.csv").open("w", encoding="utf-8-sig", newline="") as stream:
+    with (target / f"{context.prefix}-BOM-Full.csv").open(
+        "w", encoding="utf-8-sig", newline=""
+    ) as stream:
         writer = csv.writer(stream)
         writer.writerow(header)
         writer.writerows(records)
     write_xlsx(target / f"{context.prefix}-BOM-Full.xlsx", "Full BOM", header, records)
-    for supplier, field in (("DigiKey", "DigiKey Part #"), ("Mouser", "Mouser Part #"),
-                            ("LCSC", "LCSC Part #")):
+    for supplier, field in (
+        ("DigiKey", "DigiKey Part #"),
+        ("Mouser", "Mouser Part #"),
+        ("LCSC", "LCSC Part #"),
+    ):
         subset = [row for row in records if row[header.index(field)].strip()]
         if subset:
             write_xlsx(target / f"{context.prefix}-BOM-{supplier}.xlsx", supplier, header, subset)
@@ -705,9 +764,11 @@ def export_assembly_documents(context: Context) -> list[Path]:
 def write_order_specification(context: Context, copper_layers: list[str]) -> Path:
     data = context.pcbway
     output = context.dirs["assembly"] / f"{context.prefix}-PCBWay-Order-Specification.md"
+
     def shown(key: str, unit: str = "") -> str:
         value = data.get(key)
         return f"{value}{unit}" if value is not None and value != "" else "NOT SPECIFIED"
+
     rows = [
         ("Assembly mode", shown("assembly_mode")),
         ("PCB quantity", shown("pcb_quantity")),
@@ -751,8 +812,11 @@ def export_board_statistics(context: Context) -> dict[str, float | None]:
         match = re.search(rf"(?m)^\s*-\s*{re.escape(label)}:\s*([\d.]+)", text)
         return float(match.group(1)) if match else None
 
-    return {"width_mm": number("Width"), "height_mm": number("Height"),
-            "stackup_thickness_mm": number("Board stackup thickness")}
+    return {
+        "width_mm": number("Width"),
+        "height_mm": number("Height"),
+        "stackup_thickness_mm": number("Board stackup thickness"),
+    }
 
 
 def build_order_guide(context: Context, facts: dict[str, Any]) -> str:
@@ -782,7 +846,10 @@ def build_order_guide(context: Context, facts: dict[str, Any]) -> str:
     assembly_sides = facts["centroid_sides"]
     sides = ", ".join(assembly_sides) if assembly_sides else "No SMD placements"
     blockers = facts["unresolved_release_items"]
-    blocker_lines = "\n".join(f"- {item}" for item in blockers) or "- None detected by the exporter; engineering and CAM approval are still required."
+    blocker_lines = (
+        "\n".join(f"- {item}" for item in blockers)
+        or "- None detected by the exporter; engineering and CAM approval are still required."
+    )
     rows = [
         ("PCB name / revision", prefix),
         ("PCB type", field("pcb_type")),
@@ -830,7 +897,10 @@ def build_order_guide(context: Context, facts: dict[str, Any]) -> str:
         ("PCBWay BOM upload", f"../05-Assembly/{prefix}-PCBWay-BOM.xlsx"),
         ("Centroid / pick-and-place upload", f"../05-Assembly/{prefix}-PCBWay-Centroid.csv"),
         ("Assembly Other Files", f"../05-Assembly/{prefix}-PCBWay-Assembly-Other-Files.zip"),
-        ("Fabrication drawing for CAM review", f"../04-Fabrication/{prefix}-Fabrication-Drawing.pdf"),
+        (
+            "Fabrication drawing for CAM review",
+            f"../04-Fabrication/{prefix}-Fabrication-Drawing.pdf",
+        ),
         ("ERC and DRC evidence", "../03-ERC-DRC-Reports/"),
     ]
     upload_table = "\n".join(f"| {label} | `{path}` |" for label, path in upload)
@@ -838,16 +908,20 @@ def build_order_guide(context: Context, facts: dict[str, Any]) -> str:
     return (
         "# How to order this board from PCBWay\n\n"
         f"Board: **{prefix}** · Package generated: **{facts['generated']}** · "
-        f"Release state: **{'HOLD' if blockers else 'EXPORT CHECKS PASSED — CAM APPROVAL PENDING'}**.\n\n"
+        f"Release state: "
+        f"**{'HOLD' if blockers else 'EXPORT CHECKS PASSED — CAM APPROVAL PENDING'}**.\n\n"
         "## 1. Upload the fabrication data\n\n"
         "Create or open the PCBWay PCB fabrication quote. Enter the board parameters below; "
-        "upload only the Gerber ZIP in the fabrication upload. Keep the BOM and centroid as separate assembly uploads.\n\n"
+        "upload only the Gerber ZIP in the fabrication upload. "
+        "Keep the BOM and centroid as separate assembly "
+        "uploads.\n\n"
         "## 2. Enter the order fields\n\n| Field | Value from config or board |\n|---|---|\n"
         f"{table}\n\n"
         "Values marked **NOT SPECIFIED** are decisions for the quote, not inferred defaults. "
         "The KiCad stack-up thickness is a board-file reading, not PCBWay approval.\n\n"
         "## 3. Add PCB assembly and source the parts\n\n"
-        f"Choose **{field('assembly_mode')}** sourcing and enter **{field('assembled_quantity')}** assembled boards. "
+        f"Choose **{field('assembly_mode')}** sourcing and enter "
+        f"**{field('assembled_quantity')}** assembled boards. "
         f"The BOM contains **{bom['parts_per_board']}** placements per board: "
         f"**{len(smd)} SMD** and **{len(tht)} through-hole**; centroid rows: **{centroid_count}**, "
         f"on **{sides}**. PCBWay-sourced lines require exact manufacturer and MPN. "
@@ -855,13 +929,17 @@ def build_order_guide(context: Context, facts: dict[str, Any]) -> str:
         "Any substitute requires explicit approval.\n\n"
         "## 4. Upload map\n\n| PCBWay upload or reviewer | File in this package |\n|---|---|\n"
         f"{upload_table}\n\n"
-        "The Assembly Other Files ZIP contains drawings, an order specification and optional renders. "
+        "The Assembly Other Files ZIP contains drawings, an "
+        "order specification and optional renders. "
         "The Gerber ZIP is fabrication data only.\n\n"
         "## 5. Controlled impedance and CAM handoff\n\n"
         f"PCBWay standard stack-up ID: **{field('standard_stackup_id')}**. "
         f"Approval state: **{field('stackup_status')}**. "
-        "Send the fabrication drawing, actual routed-layer/trace-width/gap schedule, target impedances, "
-        "reference planes and tolerance to PCBWay. The selected construction and production geometry need "
+        "Send the fabrication drawing, actual "
+        "routed-layer/trace-width/gap schedule, target "
+        "impedances, "
+        "reference planes and tolerance to PCBWay. The selected "
+        "construction and production geometry need "
         "written confirmation before fabrication.\n\n"
         f"Special notes: {notes}\n\n"
         "## 6. Release hold and final review\n\n"
@@ -869,7 +947,8 @@ def build_order_guide(context: Context, facts: dict[str, Any]) -> str:
         "Check the online quote against these fields, assembly population, panelization, "
         "component substitutions and the reviewed CAM response before placing the order. "
         "This file is an ordering guide, not an approved fabrication drawing.\n\n"
-        "PCBWay references: [PCBA file requirements](https://www.pcbway.com/assembly-file-requirements.html) "
+        "PCBWay references: [PCBA file "
+        "requirements](https://www.pcbway.com/assembly-file-requirements.html) "
         "and [assembly upload flow](https://www.pcbway.com/helpcenter/pcb_assembly_ordering/How_to_Upload_PCB_Assembly_PCBA__Inquiry.html).\n"
     )
 
@@ -902,13 +981,20 @@ def write_package_documents(context: Context, facts: dict[str, Any]) -> list[str
     readme.write_text(
         f"# {context.prefix} — PCBWay manufacturing deliverable\n\n"
         f"Generated {facts['generated']} from `{context.board.name}`. "
-        f"Status: **{'HOLD' if facts['unresolved_release_items'] else 'EXPORT CHECKS PASSED — CAM APPROVAL PENDING'}**.\n\n"
+        f"Status: "
+        f"**{'HOLD' if facts['unresolved_release_items'] else 'EXPORT CHECKS PASSED — CAM APPROVAL PENDING'}**.\n\n"  # noqa: E501 - composed report text or resource path
         "| Folder | Contents |\n|---|---|\n"
         "| `01-Schematics` | Schematic PDF |\n"
-        "| `02-PCB-Layout` | Filtered KiCad source ZIP; detailed, fit-check and bare-board STEP plus four 3D views when rendering is enabled |\n"
+        "| `02-PCB-Layout` | Filtered KiCad source ZIP; "
+        "detailed, fit-check and bare-board STEP plus four 3D "
+        "views when rendering is enabled |\n"
         "| `03-ERC-DRC-Reports` | ERC and DRC reports |\n"
-        "| `04-Fabrication` | PCBWay Gerber/drill ZIP, drill maps, IPC-D-356, board statistics, fabrication drawing and specification |\n"
-        "| `05-Assembly` | PCBWay BOM and centroid, full/distributor review BOMs, assembly drawings and other-files ZIP |\n"
+        "| `04-Fabrication` | PCBWay Gerber/drill ZIP, drill "
+        "maps, IPC-D-356, board statistics, fabrication drawing "
+        "and specification |\n"
+        "| `05-Assembly` | PCBWay BOM and centroid, "
+        "full/distributor review BOMs, assembly drawings and "
+        "other-files ZIP |\n"
         "| `06-Mechanical` | Supplied mechanical drawings and notes, if any |\n"
         "| `07-Ordering-PCBWay` | Board-specific ordering guide and upload map |\n"
         "| `08-Bring-Up-Test-Plan` | Structured test-plan handoff |\n"
@@ -919,8 +1005,10 @@ def write_package_documents(context: Context, facts: dict[str, Any]) -> list[str
         f"{facts['centroid_rows']} SMD centroid rows.\n\n"
         "## Evidence boundary\n\n"
         "Dimensions and stack-up thickness come from KiCad board statistics. "
-        "Layer names come from the saved board. Component counts come from the exported BOM and centroid. "
-        "Quote selections come only from the export config and are not vendor-approved by this tool. "
+        "Layer names come from the saved board. Component "
+        "counts come from the exported BOM and centroid. "
+        "Quote selections come only from the export config and "
+        "are not vendor-approved by this tool. "
         "Mechanical files are copied only when `mechanical_dir` is configured. "
         "Unknown choices are printed explicitly and keep release on HOLD where required.\n\n"
         "## Release holds\n\n" + blockers + "\n\n"
@@ -931,15 +1019,20 @@ def write_package_documents(context: Context, facts: dict[str, Any]) -> list[str
     )
     fab = context.dirs["fab"] / "FABRICATION-AND-STACKUP-SPECIFICATION.md"
     requirements = order.get("impedance_requirements") or []
-    impedance_rows = "\n".join(
-        f"| {entry.get('net_or_class', missing)} | {entry.get('target_ohms', missing)} | "
-        f"{entry.get('signal_layer', missing)} | {entry.get('reference_plane', missing)} | "
-        f"{entry.get('width_mm', missing)} | {entry.get('gap_mm', missing)} |"
-        for entry in requirements if isinstance(entry, dict)
-    ) or f"| {missing} | {missing} | {missing} | {missing} | {missing} | {missing} |"
+    impedance_rows = (
+        "\n".join(
+            f"| {entry.get('net_or_class', missing)} | {entry.get('target_ohms', missing)} | "
+            f"{entry.get('signal_layer', missing)} | {entry.get('reference_plane', missing)} | "
+            f"{entry.get('width_mm', missing)} | {entry.get('gap_mm', missing)} |"
+            for entry in requirements
+            if isinstance(entry, dict)
+        )
+        or f"| {missing} | {missing} | {missing} | {missing} | {missing} | {missing} |"
+    )
     fab.write_text(
         f"# {context.prefix} — PCBWay fabrication and stack-up request\n\n"
-        "Requested values require PCBWay CAM confirmation. The board-file stack-up is not a production approval.\n\n"
+        "Requested values require PCBWay CAM confirmation. The "
+        "board-file stack-up is not a production approval.\n\n"
         "| Parameter | Requested / observed |\n|---|---|\n"
         f"| Board size | {metric('width_mm')} × {metric('height_mm')} |\n"
         f"| Finished size tolerance | {option('board_size_tolerance_mm', ' mm')} |\n"
@@ -947,10 +1040,15 @@ def write_package_documents(context: Context, facts: dict[str, Any]) -> list[str
         f"| Copper layers | {copper} |\n"
         f"| Finished thickness requested | {option('finished_thickness_mm', ' mm')} |\n"
         f"| KiCad stack-up thickness | {metric('stackup_thickness_mm')} |\n"
-        f"| PCBWay stack-up ID / approval | {option('standard_stackup_id')} / {option('stackup_status')} |\n"
+        f"| PCBWay stack-up ID / approval | "
+        f"{option('standard_stackup_id')} / "
+        f"{option('stackup_status')} |\n"
         f"| Material / grade | {option('material')} / {option('material_grade')} |\n"
-        f"| Outer / inner copper | {option('finished_outer_copper_oz', ' oz')} / {option('inner_copper_oz', ' oz')} |\n"
-        f"| Finish, mask, legend | {option('surface_finish')}; {option('solder_mask')}; {option('silkscreen')} |\n"
+        f"| Outer / inner copper | "
+        f"{option('finished_outer_copper_oz', ' oz')} / "
+        f"{option('inner_copper_oz', ' oz')} |\n"
+        f"| Finish, mask, legend | {option('surface_finish')}; "
+        f"{option('solder_mask')}; {option('silkscreen')} |\n"
         f"| Via treatment | {option('via_treatment')} |\n"
         f"| Panelization | {option('panelization')} |\n"
         f"| Electrical test / IPC class | {option('electrical_test_and_ipc_class')} |\n\n"
@@ -958,7 +1056,8 @@ def write_package_documents(context: Context, facts: dict[str, Any]) -> list[str
         "| Net or class | Target Ω | Signal layer | Reference plane | Width mm | Gap mm |\n"
         "|---|---|---|---|---|---|\n" + impedance_rows + "\n\n"
         f"Requested tolerance: {option('impedance_tolerance_percent', '%')}. "
-        "Confirm the final dielectric buildup, Dk, production width/gap, coupon and measured report in writing.\n\n"
+        "Confirm the final dielectric buildup, Dk, production "
+        "width/gap, coupon and measured report in writing.\n\n"
         "## CAM questions\n\n"
         "1. Confirm outline, finished size tolerance, holes, slots, plating and panel drawing.\n"
         "2. Return approved stack-up, layer-by-layer copper and dielectric thicknesses.\n"
@@ -970,14 +1069,17 @@ def write_package_documents(context: Context, facts: dict[str, Any]) -> list[str
     bringup = context.dirs["bringup"] / "BRING-UP-AND-TEST-PLAN.md"
     bringup.write_text(
         f"# {context.prefix} — bring-up and test-plan handoff\n\n"
-        "Project-specific limits and procedures must be supplied by the design owner before testing.\n\n"
+        "Project-specific limits and procedures must be "
+        "supplied by the design owner before testing.\n\n"
         "| Stage | Required project-specific evidence | Status |\n|---|---|---|\n"
-        "| Visual inspection | Polarity, pin 1, solder quality, missing parts, shorts | TO DEFINE |\n"
+        "| Visual inspection | Polarity, pin 1, solder quality, "
+        "missing parts, shorts | TO DEFINE |\n"
         "| Unpowered checks | Rail-to-ground resistance and expected ranges | TO DEFINE |\n"
         "| First power | Supply, current limit, power sequence, rail limits | TO DEFINE |\n"
         "| Programming | Firmware image, programming path, expected response | TO DEFINE |\n"
         "| Interfaces | Connector pinout, communications, clocks and test fixtures | TO DEFINE |\n"
-        "| Functional test | Acceptance criteria, test record and serial traceability | TO DEFINE |\n\n"
+        "| Functional test | Acceptance criteria, test record "
+        "and serial traceability | TO DEFINE |\n\n"
         "This document is a handoff checklist, not a validated electrical test procedure.\n",
         encoding="utf-8",
     )
@@ -1018,11 +1120,18 @@ def export_mechanical(context: Context) -> list[str]:
     index = context.dirs["mechanical"] / "README.md"
     index.write_text(
         "# Mechanical handoff\n\n"
-        + ("Supplied mechanical files copied from the configured `mechanical_dir`:\n\n"
-           + "\n".join(f"- `{name}`" for name in copied) + "\n\n"
-           if copied else "No mechanical source directory was configured or supplied. "
-           "Check the board and chassis interface separately.\n\n")
-        + "Mechanical fit, datums, installed component heights and chassis clearances require project review.\n",
+        + (
+            "Supplied mechanical files copied from the configured `mechanical_dir`:\n\n"
+            + "\n".join(f"- `{name}`" for name in copied)
+            + "\n\n"
+            if copied
+            else "No mechanical source directory was configured or supplied. "
+            "Check the board and chassis interface separately.\n\n"
+        )
+        + (
+            "Mechanical fit, datums, installed component heights "
+            "and chassis clearances require project review.\n"
+        ),
         encoding="utf-8",
     )
     return copied
@@ -1036,11 +1145,18 @@ def export_source_archive(context: Context) -> dict[str, Any]:
             if not source.is_file() or source.is_relative_to(context.output):
                 continue
             relative = source.relative_to(context.project)
-            if (any(part in SOURCE_SKIP_DIRS or part.endswith("-backups") for part in relative.parts)
-                    or source.suffix.lower() in SOURCE_SKIP_SUFFIXES
-                    or source.name.startswith(("~", "_autosave"))):
+            if (
+                any(
+                    part in SOURCE_SKIP_DIRS or part.endswith("-backups") for part in relative.parts
+                )
+                or source.suffix.lower() in SOURCE_SKIP_SUFFIXES
+                or source.name.startswith(("~", "_autosave"))
+            ):
                 continue
-            if source.suffix.lower() not in SOURCE_ALLOWED_SUFFIXES and source.name not in SOURCE_ALLOWED_NAMES:
+            if (
+                source.suffix.lower() not in SOURCE_ALLOWED_SUFFIXES
+                and source.name not in SOURCE_ALLOWED_NAMES
+            ):
                 continue
             archive.write(source, Path(f"{context.prefix}-KiCad") / relative)
             count += 1
@@ -1055,20 +1171,46 @@ def export_layout_views(context: Context) -> list[str]:
         return []
     outputs: list[Path] = []
     for suffix, extra in (
-        ("3D", ["--no-dnp", "--include-tracks", "--include-pads", "--include-zones",
-                "--include-silkscreen", "--include-soldermask"]),
+        (
+            "3D",
+            [
+                "--no-dnp",
+                "--include-tracks",
+                "--include-pads",
+                "--include-zones",
+                "--include-silkscreen",
+                "--include-soldermask",
+            ],
+        ),
         ("3D-Fit-Check", ["--no-dnp"]),
         ("3D-Board-Only", ["--board-only"]),
     ):
         output = context.dirs["layout"] / f"{context.prefix}-{suffix}.step"
-        context.run("pcb", "export", "step", "--force", *extra, "-o", str(output), str(context.board))
+        context.run(
+            "pcb", "export", "step", "--force", *extra, "-o", str(output), str(context.board)
+        )
         outputs.append(output)
-    for name, side, rotate in (("Top", "top", None), ("Bottom", "bottom", None),
-                               ("Isometric-Top", "top", "-45,0,45"),
-                               ("Isometric-Bottom", "bottom", "45,0,-45")):
+    for name, side, rotate in (
+        ("Top", "top", None),
+        ("Bottom", "bottom", None),
+        ("Isometric-Top", "top", "-45,0,45"),
+        ("Isometric-Bottom", "bottom", "45,0,-45"),
+    ):
         output = context.dirs["layout_renders"] / f"{context.prefix}-{name}.png"
-        args = ["pcb", "render", "--side", side, "--quality", "high",
-                "--background", "opaque", "--width", "2400", "--height", "1600"]
+        args = [
+            "pcb",
+            "render",
+            "--side",
+            side,
+            "--quality",
+            "high",
+            "--background",
+            "opaque",
+            "--width",
+            "2400",
+            "--height",
+            "1600",
+        ]
         if rotate:
             args.extend(["--rotate", rotate, "--perspective", "--zoom", "0.85"])
         context.run(*args, "-o", str(output), str(context.board))
@@ -1138,7 +1280,9 @@ def main() -> int:
 
     board_text = context.board.read_text(encoding="utf-8")
     copper = enabled_copper_layers(board_text)
-    if context.pcbway.get("layer_count") is not None and len(copper) != int(context.pcbway["layer_count"]):
+    if context.pcbway.get("layer_count") is not None and len(copper) != int(
+        context.pcbway["layer_count"]
+    ):
         raise ValueError(
             f"board has {len(copper)} copper layers but config requests "
             f"{context.pcbway['layer_count']}"
@@ -1171,25 +1315,43 @@ def main() -> int:
     try:
         layout_views = export_layout_views(context)
     except RuntimeError as error:
-        layout_views = [path.relative_to(context.output).as_posix()
-                        for path in context.dirs["layout"].rglob("*") if path.is_file() and path.suffix.lower() in {".step", ".png"}]
+        layout_views = [
+            path.relative_to(context.output).as_posix()
+            for path in context.dirs["layout"].rglob("*")
+            if path.is_file() and path.suffix.lower() in {".step", ".png"}
+        ]
         layout_view_error = str(error)
 
     unresolved = []
     unresolved.extend(fabrication_archive_errors)
     if layout_view_error:
         unresolved.append("STEP/3D export failed: " + layout_view_error)
-    for key in ("pcb_quantity", "assembled_quantity", "pcb_type", "material",
-                "finished_thickness_mm", "finished_outer_copper_oz", "inner_copper_oz",
-                "surface_finish", "solder_mask", "silkscreen", "controlled_impedance"):
+    for key in (
+        "pcb_quantity",
+        "assembled_quantity",
+        "pcb_type",
+        "material",
+        "finished_thickness_mm",
+        "finished_outer_copper_oz",
+        "inner_copper_oz",
+        "surface_finish",
+        "solder_mask",
+        "silkscreen",
+        "controlled_impedance",
+    ):
         if context.pcbway.get(key) is None or context.pcbway.get(key) == "":
             unresolved.append(f"PCBWay order choice not recorded: {key}")
     for key in ("pcb_quantity", "assembled_quantity"):
         value = context.pcbway.get(key)
         if value is not None and (not isinstance(value, int) or value < 1):
             unresolved.append(f"PCBWay {key} must be a positive whole number")
-    if context.pcbway.get("controlled_impedance") and context.pcbway.get("stackup_status") != "confirmed":
-        unresolved.append("controlled impedance is enabled but the PCBWay stack-up is not confirmed")
+    if (
+        context.pcbway.get("controlled_impedance")
+        and context.pcbway.get("stackup_status") != "confirmed"
+    ):
+        unresolved.append(
+            "controlled impedance is enabled but the PCBWay stack-up is not confirmed"
+        )
     if context.pcbway.get("standard_stackup_id") is None:
         unresolved.append("PCBWay standard stack-up ID is not selected")
     if context.pcbway.get("inner_residual_copper_percent") is None:
@@ -1211,13 +1373,22 @@ def main() -> int:
     if board_statistics["width_mm"] is None or board_statistics["height_mm"] is None:
         unresolved.append("board dimensions could not be read from KiCad statistics")
     board_job = fabrication.get("gerber_job_general", {})
-    if context.pcbway.get("finished_thickness_mm") is not None and board_job.get("BoardThickness") is not None:
-        if abs(float(context.pcbway["finished_thickness_mm"]) - float(board_job["BoardThickness"])) > 0.05:
+    if (
+        context.pcbway.get("finished_thickness_mm") is not None
+        and board_job.get("BoardThickness") is not None
+    ):
+        if (
+            abs(float(context.pcbway["finished_thickness_mm"]) - float(board_job["BoardThickness"]))
+            > 0.05
+        ):
             unresolved.append("requested thickness differs from KiCad Gerber job board thickness")
     if context.pcbway.get("surface_finish") and board_job.get("Finish"):
         if str(context.pcbway["surface_finish"]).casefold() != str(board_job["Finish"]).casefold():
             unresolved.append("requested surface finish differs from KiCad Gerber job finish")
-    if context.pcbway.get("controlled_impedance") is not None and board_job.get("ImpedanceControlled") is not None:
+    if (
+        context.pcbway.get("controlled_impedance") is not None
+        and board_job.get("ImpedanceControlled") is not None
+    ):
         if bool(context.pcbway["controlled_impedance"]) != bool(board_job["ImpedanceControlled"]):
             unresolved.append("controlled-impedance choice differs from KiCad Gerber job")
 

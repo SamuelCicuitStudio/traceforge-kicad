@@ -82,8 +82,9 @@ def load_config(path: Path) -> Config:
             ChainDef(gname, cname, tuple(c["nets"]), tuple(c.get("series", ())), c.get("pair"))
             for cname, c in g["chains"].items()
         )
-        groups.append(GroupDef(gname, chains, g.get("skew_ps"), g.get("pair_skew_ps"),
-                               g.get("stub_max_ps")))
+        groups.append(
+            GroupDef(gname, chains, g.get("skew_ps"), g.get("pair_skew_ps"), g.get("stub_max_ps"))
+        )
     return Config(groups, float(data.get("pad_to_die_ps_per_mm", 6.952)))
 
 
@@ -139,8 +140,9 @@ class NetDelay:
         return self.track_ps + self.via_ps + self.die_ps
 
 
-def net_delay(geo: NetGeometry, timing: ProjectTiming, z: Mapping[str, float],
-              die_ps_per_mm: float) -> NetDelay:
+def net_delay(
+    geo: NetGeometry, timing: ProjectTiming, z: Mapping[str, float], die_ps_per_mm: float
+) -> NetDelay:
     profile = timing.profile_for_netclass(geo.netclass)
     track = via = 0.0
     complete = profile is not None
@@ -222,8 +224,9 @@ class GroupResult:
         return max(done) - min(done) if len(done) > 1 else None
 
 
-def evaluate(config: Config, delays: Mapping[str, NetDelay],
-             geometry: Mapping[str, NetGeometry]) -> list[GroupResult]:
+def evaluate(
+    config: Config, delays: Mapping[str, NetDelay], geometry: Mapping[str, NetGeometry]
+) -> list[GroupResult]:
     out = []
     track_mm = {n: sum(seg.length_mm for seg in geo.tracks) for n, geo in geometry.items()}
     for group in config.groups:
@@ -233,9 +236,11 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
             routed[c.name] = all(geometry.get(n) is not None and geometry[n].routed for n in c.nets)
         done = [totals[k] for k, ok in routed.items() if ok]
         target = max(done) if done and group.skew_ps is not None else None
-        centers = [(totals[c.name] + totals[c.pair]) / 2
-                   for c in group.chains if c.pair in totals
-                   and routed[c.name] and routed[c.pair]]
+        centers = [
+            (totals[c.name] + totals[c.pair]) / 2
+            for c in group.chains
+            if c.pair in totals and routed[c.name] and routed[c.pair]
+        ]
         centers.extend(totals[c.name] for c in group.chains if not c.pair and routed[c.name])
         center_max = max(centers, default=None)
         if center_max is not None and all(c.pair for c in group.chains):
@@ -251,12 +256,20 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
                     if group.pair_skew_ps is not None:
                         tol = group.pair_skew_ps / 2
             lower = upper = independent_ok = None
-            if c.pair in totals and routed[c.name] and routed[c.pair] and group.pair_skew_ps is not None:
+            if (
+                c.pair in totals
+                and routed[c.name]
+                and routed[c.pair]
+                and group.pair_skew_ps is not None
+            ):
                 own, mate = totals[c.name], totals[c.pair]
                 center = (own + mate) / 2
                 pair_limit = group.pair_skew_ps
-                group_floor = (center_max - group.skew_ps
-                               if center_max is not None and group.skew_ps is not None else None)
+                group_floor = (
+                    center_max - group.skew_ps
+                    if center_max is not None and group.skew_ps is not None
+                    else None
+                )
                 pair_ok = abs(own - mate) <= pair_limit + 1e-9
                 group_ok = group_floor is None or center >= group_floor - 1e-9
                 independent_ok = pair_ok and group_ok
@@ -266,24 +279,40 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
                     upper = min(upper, 2 * center_max - mate)
                 if lower > upper:
                     # Both members need to move: propose a common feasible pair window.
-                    planned = max(own, mate, (group_floor + pair_limit / 2)
-                                  if group_floor is not None else 0)
+                    planned = max(
+                        own, mate, (group_floor + pair_limit / 2) if group_floor is not None else 0
+                    )
                     lower, upper = planned - pair_limit / 2, planned + pair_limit / 2
                 tgt = min(max(own, lower), upper)
                 tol = (upper - lower) / 2
             if c.pair in totals and not routed[c.pair]:
                 tgt = tol = None
-            stub = (delays[c.stub].track_ps + delays[c.stub].via_ps
-                    if c.stub and c.stub in delays else None)
+            stub = (
+                delays[c.stub].track_ps + delays[c.stub].via_ps
+                if c.stub and c.stub in delays
+                else None
+            )
             if stub is not None and group.stub_max_ps is not None and stub > group.stub_max_ps:
                 stubs.append(c.name)
             tun = delays[c.tunable].total_ps if c.tunable in delays else 0.0
-            results.append(ChainResult(c, totals[c.name], tun, stub, routed[c.name],
-                                       tgt if routed[c.name] else None, tol, pskew,
-                                       sum(track_mm.get(n, 0.0) for n in c.nets),
-                                       track_mm.get(c.tunable, 0.0),
-                                       track_mm.get(c.stub, 0.0) if c.stub else None,
-                                       lower, upper, independent_ok))
+            results.append(
+                ChainResult(
+                    c,
+                    totals[c.name],
+                    tun,
+                    stub,
+                    routed[c.name],
+                    tgt if routed[c.name] else None,
+                    tol,
+                    pskew,
+                    sum(track_mm.get(n, 0.0) for n in c.nets),
+                    track_mm.get(c.tunable, 0.0),
+                    track_mm.get(c.stub, 0.0) if c.stub else None,
+                    lower,
+                    upper,
+                    independent_ok,
+                )
+            )
         out.append(GroupResult(group, tuple(results), target, tuple(stubs)))
     return out
 
@@ -291,8 +320,9 @@ def evaluate(config: Config, delays: Mapping[str, NetDelay],
 # ---------------------------------------------------------------- DRC targets
 
 
-def drc_rules(results: Iterable[GroupResult],
-              board_name: Optional[Mapping[str, str]] = None) -> str:
+def drc_rules(
+    results: Iterable[GroupResult], board_name: Optional[Mapping[str, str]] = None
+) -> str:
     """Rules that make KiCad's tuner bring each chain total to its group target.
 
     `board_name` maps a config net name to the board's own name ('/' inside a sheet or label name
@@ -308,20 +338,30 @@ def drc_rules(results: Iterable[GroupResult],
     for g in results:
         for c in g.chains:
             if c.chain.stub and g.group.stub_max_ps is not None:
-                lines.append(f'(rule "XSIG {g.group.name} {c.chain.name} stub"\n'
-                             f'\t(condition "{_cond(c.chain.stub)}")\n'
-                             f"\t(constraint length (max {g.group.stub_max_ps:.2f}ps)))")
+                lines.append(
+                    f'(rule "XSIG {g.group.name} {c.chain.name} stub"\n'
+                    f'\t(condition "{_cond(c.chain.stub)}")\n'
+                    f"\t(constraint length (max {g.group.stub_max_ps:.2f}ps)))"
+                )
             if c.target_ps is None or c.tolerance_ps is None:
                 continue
             opt = c.tunable_ps + (c.target_ps - c.total_ps)
-            lo = (c.tunable_ps + c.minimum_ps - c.total_ps
-                  if c.minimum_ps is not None else opt - c.tolerance_ps)
-            hi = (c.tunable_ps + c.maximum_ps - c.total_ps
-                  if c.maximum_ps is not None else opt + c.tolerance_ps)
-            lines.append(f'(rule "XSIG {g.group.name} {c.chain.name} total"\n'
-                         f'\t(condition "{_cond(c.chain.tunable)}")\n'
-                         f"\t(constraint length (min {lo:.2f}ps) (opt {opt:.2f}ps) "
-                         f"(max {hi:.2f}ps)))")
+            lo = (
+                c.tunable_ps + c.minimum_ps - c.total_ps
+                if c.minimum_ps is not None
+                else opt - c.tolerance_ps
+            )
+            hi = (
+                c.tunable_ps + c.maximum_ps - c.total_ps
+                if c.maximum_ps is not None
+                else opt + c.tolerance_ps
+            )
+            lines.append(
+                f'(rule "XSIG {g.group.name} {c.chain.name} total"\n'
+                f'\t(condition "{_cond(c.chain.tunable)}")\n'
+                f"\t(constraint length (min {lo:.2f}ps) (opt {opt:.2f}ps) "
+                f"(max {hi:.2f}ps)))"
+            )
     lines.append(DRC_END)
     return "\n".join(lines)
 
@@ -355,8 +395,9 @@ def series_ohms(value: str) -> Optional[float]:
     return x * 1000 if (m.group(2) or "").lower() == "k" else x
 
 
-def detect_chains(parts: Iterable[tuple[str, str, Mapping[str, str]]],
-                  max_ohms: float = 100.0) -> list[tuple[str, tuple[str, ...]]]:
+def detect_chains(
+    parts: Iterable[tuple[str, str, Mapping[str, str]]], max_ohms: float = 100.0
+) -> list[tuple[str, tuple[str, ...]]]:
     """Find series links: 2-pad R <= max_ohms (or 0R) and 4-pad common-mode chokes.
 
     `parts` yields (reference, value, {pad_number: net}). Returns (reference, nets) links.
@@ -401,8 +442,12 @@ def _leaf(net: str) -> str:
     return net.rstrip("/").split("/")[-1]
 
 
-def auto_config(links: Iterable[Link], netclass_of: Mapping[str, Optional[str]],
-                timed_classes: Iterable[str], die_ps_per_mm: float = 6.952) -> Config:
+def auto_config(
+    links: Iterable[Link],
+    netclass_of: Mapping[str, Optional[str]],
+    timed_classes: Iterable[str],
+    die_ps_per_mm: float = 6.952,
+) -> Config:
     """Chains found on the board: timed nets, including paths through series parts.
 
     Nets joined through any number of 2-terminal series parts form one chain. Timed nets without
@@ -427,21 +472,26 @@ def auto_config(links: Iterable[Link], netclass_of: Mapping[str, Optional[str]],
             group = sorted(classes)[0]
             name = min((_leaf(n) for n in nets), key=len)
             by_class.setdefault(group, []).append(
-                ChainDef(group, name, tuple(sorted(nets)), tuple(sorted(refs))))
+                ChainDef(group, name, tuple(sorted(nets)), tuple(sorted(refs)))
+            )
     for net, netclass in sorted(netclass_of.items()):
         if netclass in timed and net not in seen:
-            by_class.setdefault(netclass, []).append(
-                ChainDef(netclass, _leaf(net), (net,)))
+            by_class.setdefault(netclass, []).append(ChainDef(netclass, _leaf(net), (net,)))
     groups = []
     for group, chains in sorted(by_class.items()):
         # Nets on different hierarchical sheets can share a leaf name.
         counts = {}
         for chain in chains:
             counts[chain.name] = counts.get(chain.name, 0) + 1
-        chains = [ChainDef(chain.group,
-                           chain.nets[0] if counts[chain.name] > 1 else chain.name,
-                           chain.nets, chain.series)
-                  for chain in chains]
+        chains = [
+            ChainDef(
+                chain.group,
+                chain.nets[0] if counts[chain.name] > 1 else chain.name,
+                chain.nets,
+                chain.series,
+            )
+            for chain in chains
+        ]
         names = {c.name for c in chains}
         paired = []
         for c in sorted(chains, key=lambda c: c.name):
@@ -461,10 +511,22 @@ def config_to_json(config: Config) -> str:
 
     data = {"pad_to_die_ps_per_mm": config.pad_to_die_ps_per_mm, "groups": {}}
     for g in config.groups:
-        gd = {k: v for k, v in (("skew_ps", g.skew_ps), ("pair_skew_ps", g.pair_skew_ps),
-                                ("stub_max_ps", g.stub_max_ps)) if v is not None}
-        gd["chains"] = {c.name: {k: v for k, v in (("nets", list(c.nets)),
-                                                   ("series", list(c.series)),
-                                                   ("pair", c.pair)) if v} for c in g.chains}
+        gd = {
+            k: v
+            for k, v in (
+                ("skew_ps", g.skew_ps),
+                ("pair_skew_ps", g.pair_skew_ps),
+                ("stub_max_ps", g.stub_max_ps),
+            )
+            if v is not None
+        }
+        gd["chains"] = {
+            c.name: {
+                k: v
+                for k, v in (("nets", list(c.nets)), ("series", list(c.series)), ("pair", c.pair))
+                if v
+            }
+            for c in g.chains
+        }
         data["groups"][g.name] = gd
     return json.dumps(data, indent=1) + "\n"
