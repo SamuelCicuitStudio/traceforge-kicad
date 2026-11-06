@@ -100,7 +100,12 @@ jobs:
             exit 0
           fi
           PRERELEASE=$(python -c 'import json; print(str(json.load(open("pcm/publish.json"))["prerelease"]).lower())')
-          gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE"
+          TITLE=$(python -c 'import json; print(json.load(open("pcm/publish.json"))["title"])')
+          LATEST=$(python -c 'import json; print(str(json.load(open("pcm/publish.json")).get("latest",False)).lower())')
+          gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST" --title "$TITLE"
+          for OLD_TAG in $(python -c 'import json; print(" ".join(json.load(open("pcm/publish.json")).get("supersedes",[])))'); do
+            gh release edit "$OLD_TAG" --notes-file "docs/releases/${OLD_TAG#v}.md"
+          done
           gh release view "$TAG" --json url,isDraft,tagName,isPrerelease,assets > published-status.json
           python -c 'import json; d=json.load(open("published-status.json")); assert not d["isDraft"]; print(d["url"])'
           git notes --ref=release-status add -f -F published-status.json "$GITHUB_SHA"

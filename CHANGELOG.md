@@ -1,6 +1,12 @@
 # Changelog
 
-Release details: [0.12.7](docs/RELEASE-NOTES.md).
+Release details: [0.12.8](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.12.8 (2026-11-06)
+
+- Normalize release source files to LF on all build platforms.
+- Verify bundled manufacturing hashes against the actual PCM archive contents.
+- Supersede 0.12.7, whose public manufacturing bundle failed integrity checks.
 
 ## TraceForge 0.12.7 (2026-11-06)
 

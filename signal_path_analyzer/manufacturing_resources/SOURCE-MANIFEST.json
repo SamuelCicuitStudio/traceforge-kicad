@@ -1,9 +1,9 @@
 {
   "source": "pcb skill deterministic exporter scripts",
   "sha256": {
-    "scripts/export_manufacturing.py": "645b8424300c8f96a66b64fe95f28a8ec8d3189b96d620b8b590e706947bb81b",
-    "skills/kicad-pcb-power/scripts/export_package.py": "cdb16c9340f6210d086adb87b6e54802143d5356ccf79c1620af729b2e4385e5",
+    "scripts/export_manufacturing.py": "b0233ff1cbe47270aee2c363b940e5c5cee2650ee3c2a4c450d21715727c5058",
+    "skills/kicad-pcb-power/scripts/export_package.py": "0753eb9140d177c1668a5c1a505b0d03177ef19ef9be7777f8b880146779ef5c",
     "skills/kicad-pcb-power/scripts/package_preflight.py": "037603330b3e5620611f4cdd9f028ddbdc470caf0db7fa5b45be83db1f9faca9",
-    "skills/kicad-pcbway/scripts/export_package.py": "a39cb5207a5e8b68638bffe3fb0e6bae51cd4bfaff88c0abb0666da00c5a5496"
+    "skills/kicad-pcbway/scripts/export_package.py": "2558cbf8da0fb47c9c9b01ac2e672a0868936eca9ed77bc144f5eaeb7b339af0"
   }
 }

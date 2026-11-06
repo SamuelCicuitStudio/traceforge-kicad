@@ -7,6 +7,7 @@ import re
 import zipfile
 from pathlib import Path
 
+from build_pcm import canonical_bytes
 from build_pcm import main as build_pcm
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,7 +73,7 @@ def main():
             info.compress_type = zipfile.ZIP_DEFLATED
             info.create_system = 3
             info.external_attr = 0o100644 << 16
-            bundle.writestr(info, path.read_bytes())
+            bundle.writestr(info, canonical_bytes(path))
     with zipfile.ZipFile(archive) as bundle:
         if bundle.testzip():
             raise ValueError("Release archive CRC validation failed.")

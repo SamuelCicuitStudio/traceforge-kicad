@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +25,7 @@ def sync(source_root: Path) -> dict[str, str]:
             raise FileNotFoundError(source)
         destination = DESTINATION / relative_destination
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+        destination.write_bytes(source.read_bytes().replace(b"\r\n", b"\n"))
         versions[relative_destination] = hashlib.sha256(destination.read_bytes()).hexdigest()
     (DESTINATION / "SOURCE-MANIFEST.json").write_text(
         json.dumps(

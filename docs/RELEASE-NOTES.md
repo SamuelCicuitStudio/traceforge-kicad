@@ -1,3 +1,33 @@
+# TraceForge 0.12.8 - Stable KiCad 10 Windows Release
+
+Use this release instead of 0.12.7. It includes the 0.12.7 differential-matching and signal-type improvements, and corrects a packaging checksum issue found during public download verification.
+
+## Packaging correction
+- ZIP source files are normalized to LF line endings on Windows and Linux.
+- Bundled manufacturing exporter hashes are calculated against those exact bytes.
+- The PCM builder rejects a package whose exporter manifest does not match its contents.
+- Local and published packages are verified byte-for-byte before catalog submission.
+
+## Signal tools included
+- `[DIFF]` rows identify each differential member and its partner; `[SE]` identifies single-ended signals, including mixed RAM byte lanes.
+- Selecting a row explains pair-length, P/N-skew or single-track tuning and its limits.
+- Independent intra-pair and inter-pair checks, correct whole-chain series offsets, package-delay handling and pending-partner checks.
+- Source PCB limits exclude package delay; additional pad contacts are not described as dangling stubs.
+
+## Other included improvements since 0.12.1
+Manufacturing project review and PCBWay/PCBPower exporters; feature-tab shortcuts; component rotation and the existing trace, via and BGA tools.
+
+## Install
+In KiCad Manager choose **Plugin and Content Manager > Install from file** and select `TraceForge-0.12.8-KiCad10-PCM.zip`. Close all KiCad windows and reopen PCB Editor. The Windows ZIP is the alternative standalone installation; use only one installation method.
+
+## Validation and supported scope
+Release lint, unit tests, native wxPython row checks, extracted-PCM differential-matching regressions, and bundled exporter manifest verification. The release publishes checksums for both archives.
+
+This is a **stable release for Windows and KiCad 10**. Manufacturing export needs kicad-cli and a separate Python with openpyxl. Hardware timing budgets, manufacturing choices and final signoff require project review. Recompute DRC tuning windows after routing changes. A split series-net path may require nonzero local skew to achieve whole-chain matching.
+
+The GitLab catalog update is submitted separately for KiCad maintainer review. Previous stable releases remain available.
+
+
 # TraceForge 0.12.7 ? explicit signal types
 
 Signals rows show `[DIFF] DQS_P (mate: DQS_N)` for differential members and

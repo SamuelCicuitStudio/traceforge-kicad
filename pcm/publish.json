@@ -1,4 +1,9 @@
 {
-  "tag": "v0.12.7",
-  "prerelease": true
+  "tag": "v0.12.8",
+  "prerelease": false,
+  "latest": true,
+  "title": "TraceForge 0.12.8 - Stable KiCad 10 Windows Release",
+  "supersedes": [
+    "v0.12.7"
+  ]
 }
