@@ -1,3 +1,15 @@
+# TraceForge 0.12.7 ? explicit signal types
+
+Signals rows show `[DIFF] DQS_P (mate: DQS_N)` for differential members and
+`[SE] DQ0` for single-ended signals. This applies to all configured interfaces,
+including mixed RAM byte-lane groups. Selecting a row explains which native
+KiCad tuning tool to use and shows the configured P/N and group/bus limits.
+Default tools: 8 = differential pair length, 9 = differential pair skew,
+7 = single-track length. Shortcut assignments may be customized in KiCad.
+Series-net paths warn that local zero skew is not necessarily whole-chain zero.
+Display decoration never becomes the internal key used for highlighting or
+chain operations. Install using PCM and restart KiCad.
+
 # TraceForge 0.12.6 ? differential matching correction
 
 Intra-pair P/N skew and inter-pair delay spread are evaluated separately.

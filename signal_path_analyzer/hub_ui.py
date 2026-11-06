@@ -23,6 +23,7 @@ import wx.lib.agw.hypertreelist as htl
 from . import __version__
 from .api_access import ApiAccess
 from .chains import GroupResult
+from .signal_presentation import describe_signal
 
 SETTINGS = Path(os.environ.get("APPDATA", Path.home())) / "TraceForge" / "settings.json"
 DEFAULT_SHORTCUTS = {
@@ -298,7 +299,7 @@ class TraceForgePanel(wx.Frame):
             self.tree.SetBackgroundColour("#19212D")
             self.tree.SetForegroundColour("#E5EDF8")
         right = wx.ALIGN_RIGHT
-        columns = (("Group / chain", 190, wx.ALIGN_LEFT), ("Total ps", 80, right),
+        columns = (("Group / signal type / chain", 310, wx.ALIGN_LEFT), ("Total ps", 80, right),
                    ("Target ps", 80, right), ("Δ ps", 70, right), ("P−N ps", 70, right),
                    ("Source PCB ps", 95, right), ("Status", 160, wx.ALIGN_LEFT),
                    ("Chain track mm", 110, right), ("Tunable mm", 100, right),
@@ -310,6 +311,7 @@ class TraceForgePanel(wx.Frame):
         self.row_states = {}
         self.topology = None
         self.tree.GetMainWindow().Bind(wx.EVT_LEFT_UP, self.on_row_click)
+        self.tree.Bind(wx.EVT_TREE_SEL_CHANGED, self.on_signal_selection)
         self.status = wx.StaticText(root, label="Click Refresh to load timing from KiCad.")
         self.snapshot = wx.StaticText(root, label="No timing snapshot yet. Manual refresh only.")
         self.snapshot.SetForegroundColour(self.colors["pending"])
@@ -337,6 +339,8 @@ class TraceForgePanel(wx.Frame):
             self.summary[key] = chip
             legend.Add(chip, 0, wx.RIGHT, 18)
         box.Add(legend, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        self.tuning_hint = wx.StaticText(root, label="[DIFF] = differential pair: KiCad 8 for pair length, 9 for P/N skew. [SE] = single-ended: KiCad 7.")
+        box.Add(self.tuning_hint, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.tree, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
         box.Add(self.snapshot, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 6)
         box.Add(self.status, 0, wx.EXPAND | wx.ALL, 6)
@@ -603,7 +607,7 @@ class TraceForgePanel(wx.Frame):
     def render(self) -> None:
         # Keep native row objects on timing refreshes: rebuilding them resets scrolling,
         # expansion and selection, and repaints the whole table unnecessarily.
-        topology = tuple((g.group.name, tuple(c.chain.name for c in g.chains))
+        topology = tuple((g.group.name, tuple((c.chain.name, c.chain.pair) for c in g.chains))
                          for g in self.results)
         if topology == self.topology:
             self.update_rows()
@@ -623,10 +627,13 @@ class TraceForgePanel(wx.Frame):
                 for g in self.results:
                     key = (g.group.name, None)
                     gi = self.tree.AppendItem(self.tree.GetRootItem(), g.group.name)
+                    self.tree.SetItemData(gi, key)
                     self.rows[key] = gi
                     self.tree.SetItemBold(gi, True)
                     for c in g.chains:
-                        ci = self.tree.AppendItem(gi, c.chain.name)
+                        presentation = describe_signal(g.group, c.chain)
+                        ci = self.tree.AppendItem(gi, presentation["label"])
+                        self.tree.SetItemData(ci, (g.group.name, c.chain.name))
                         self.rows[g.group.name, c.chain.name] = ci
                     if first or g.group.name in expanded:
                         self.tree.Expand(gi)
@@ -692,10 +699,21 @@ class TraceForgePanel(wx.Frame):
             return
         item, _flags, _column = self.tree.GetMainWindow().HitTest(event.GetPosition())
         if item and self.tree.GetItemParent(item) != self.tree.GetRootItem():
-            group = self.tree.GetItemText(self.tree.GetItemParent(item))
-            chain = self.tree.GetItemText(item)
+            group, chain = self.tree.GetItemData(item)
             self.tree.SelectItem(item)
             self._run(lambda: f"highlighted {self.tools.highlight_chain(group, chain)} items")
+        event.Skip()
+
+    def on_signal_selection(self, event) -> None:
+        group, chain = self.tree.GetItemData(event.GetItem()) or (None, None)
+        definition = next((g.group for g in self.results if g.group.name == group), None)
+        if definition is not None and chain is not None:
+            member = next(c for c in definition.chains if c.name == chain)
+            self.tuning_hint.SetLabel(describe_signal(definition, member)['hint'])
+            self.tuning_hint.Wrap(1050)
+            self.tuning_hint.GetParent().Layout()
+        else:
+            self.tuning_hint.SetLabel('[DIFF]: KiCad 8 pair length / 9 P-N skew. [SE]: KiCad 7 single-track length.')
         event.Skip()
 
     @staticmethod
@@ -710,10 +728,7 @@ class TraceForgePanel(wx.Frame):
         item = self.tree.GetSelection()
         if not item or item == self.tree.GetRootItem():
             return None, None
-        parent = self.tree.GetItemParent(item)
-        if parent == self.tree.GetRootItem():
-            return self.tree.GetItemText(item), None
-        return self.tree.GetItemText(parent), self.tree.GetItemText(item)
+        return self.tree.GetItemData(item) or (None, None)
 
     def _run(self, fn: Callable[[], str], background: bool = True) -> None:
         if self.closing:

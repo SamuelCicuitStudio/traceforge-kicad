@@ -1,6 +1,14 @@
 # Changelog
 
-Release details: [0.12.6](docs/RELEASE-NOTES.md).
+Release details: [0.12.7](docs/RELEASE-NOTES.md).
+
+## TraceForge 0.12.7 (2026-11-06)
+
+- Label each differential member as [DIFF] with its partner; label single-ended
+  signals [SE]. DQS/CK rows in mixed RAM groups are visibly differential.
+- Show selected-signal tuning instructions and pair/group limits, including a
+  warning about local skew targets on paths split by series parts.
+- Preserve undecorated chain identifiers for highlighting, selection and actions.
 
 ## TraceForge 0.12.6 (2026-11-06)
 
