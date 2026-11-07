@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 import pcbnew
 import wx
 
+from .cancellation import checker
 from .stitching import (
     MAX_CANDIDATES,
     fence_gaps,
@@ -218,6 +219,7 @@ def ownership(board, identities, store, select=False):
 
 
 def plan(board, request):
+    cancel = checker(request.get('cancel_file'))
     started = time.monotonic()
     values, net = resolve(board, request['settings'])
     region = dict(request['region'])
@@ -306,6 +308,7 @@ def plan(board, request):
     layers = list(board.GetEnabledLayers().CuStack())
     zones, keepouts, foreign = [], [], []
     for zone in board.Zones():
+        cancel()
         if zone.GetIsRuleArea():
             if (zone.GetDoNotAllowVias() and
                     any(layer in layers for layer in zone.GetLayerSet().Seq())):
@@ -342,6 +345,7 @@ def plan(board, request):
         if drawing.GetLayer() in layers:
             items.append(drawing)
     for item in items:
+        cancel()
         if uid(item) in excluded:
             continue
         box = item.GetBoundingBox()
@@ -374,10 +378,24 @@ def plan(board, request):
         for iy in range(y0 // cell, y1 // cell + 1):
             for ix in range(x0 // cell, x1 // cell + 1):
                 buckets[ix, iy].extend(shapes)
+    from .stitching_protection_native import protection_shapes
+
+    guards = defaultdict(list)
+    protection_regions = []
+    for shape, gap, reason in protection_shapes(board, values):
+        box = shape.BBox()
+        margin = radius + gap
+        for iy in range((box.GetY()-margin)//cell, (box.GetBottom()+margin)//cell+1):
+            for ix in range((box.GetX()-margin)//cell, (box.GetRight()+margin)//cell+1):
+                guards[ix, iy].append((shape, gap, reason))
+        protection_regions.append(dict(reason=reason,
+            bounds_mm=[(box.GetX()-gap)/1e6, (box.GetY()-gap)/1e6,
+                       (box.GetRight()+gap)/1e6, (box.GetBottom()+gap)/1e6]))
     accepted, rejected = [], []
     strict = values.get('connection', 'two') == 'all'
     accepted_paths = defaultdict(list)
     for candidate_index, (x, y) in enumerate(candidates):
+        cancel()
         if fence and time.monotonic() - started > 12:
             raise ValueError('Preview exceeded its time budget; increase spacing '
                              'or narrow the region.')
@@ -391,6 +409,10 @@ def plan(board, request):
             reason = 'region boundary'
         elif any(poly.Collide(circle) for poly in keepouts):
             reason = 'via keepout'
+        elif (protected := next((why for shape, gap, why in
+                                 guards[point.x//cell, point.y//cell]
+                                 if shape.Collide(circle, gap)), None)):
+            reason = protected
         elif any(poly.Collide(circle, gap) for poly, gap in foreign):
             reason = 'other-net copper'
         elif any(shape.Collide(circle, gap)
@@ -420,6 +442,7 @@ def plan(board, request):
 
     gap_fn = open_gap if trace else fence_gaps
     return dict(settings=values, region=region, accepted=accepted, rejected=rejected,
+                protection_regions=protection_regions,
                 reasons=dict(Counter(p[2] for p in rejected)), clearance_mm=clearance / 1e6,
                 replace=request.get('replace'), name=request.get('name') or 'Ground stitching',
                 fence=(dict(spacing_mm=values['pitch_x'], contours=len(path_lengths),

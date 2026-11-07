@@ -57,6 +57,69 @@ def shortcut(action):
     return value
 
 
+def run_exact(action, focus=True):
+    board = pcbnew.GetBoard()
+    board_stem = Path(board.GetFileName()).stem if board and board.GetFileName() else ''
+    frame = next((w for w in wx.GetTopLevelWindows() if isinstance(w, wx.Frame) and
+                  (w.GetTitle().endswith('PCB Editor') or
+                   (board_stem and board_stem in w.GetTitle()))), None)
+    if frame is None:
+        return False
+    candidates = []
+    def visit(window, depth):
+        size = window.GetClientSize()
+        if (depth and window.IsShownOnScreen() and not isinstance(window, wx.Control) and
+                size.width > frame.GetClientSize().width * .4 and size.height > 200):
+            candidates.append((size.width * size.height, depth, window))
+        for child in window.GetChildren():
+            visit(child, depth + 1)
+    visit(frame, 0)
+    if not candidates:
+        raise ValueError('KiCad drawing canvas was not found for native net focus.')
+    parts = shortcut(action).split('+')
+    name = parts[-1]
+    code = ord(name.upper()) if len(name) == 1 and name.isalpha() else (
+        ord(name) if len(name) == 1 else getattr(wx, 'WXK_' + name.upper(), 0))
+    if not code:
+        raise ValueError('Unsupported native net-focus shortcut. '
+                         'Assign a character or function key.')
+    for _, _, canvas in sorted(candidates, key=lambda row: row[:2], reverse=True):
+        # KiCad ignores tool hotkeys while a properties/filter text field has
+        # focus, even when the key event is delivered directly to the canvas.
+        if focus and canvas.AcceptsFocus():
+            canvas.SetFocus()
+        event_type = wx.EVT_CHAR if len(name) == 1 else wx.EVT_CHAR_HOOK
+        event = wx.KeyEvent(event_type.typeId)
+        event.SetKeyCode(code)
+        event.SetUnicodeKey(code if len(name) == 1 else wx.WXK_NONE)
+        event.SetControlDown('Ctrl' in parts)
+        event.SetAltDown('Alt' in parts)
+        event.SetShiftDown('Shift' in parts)
+        event.SetEventObject(canvas)
+        if canvas.GetEventHandler().ProcessEvent(event):
+            # A decorative child may consume CHAR without executing the action.
+            # Continue to the drawing canvas instead of claiming a highlight.
+            active = board.IsHighLightNetON() if board else False
+            if active == (action == 'highlightNet'):
+                return True
+    return False
+
+
+def clear_exact(board):
+    """Release the renderer path used by via focus, including partial attempts."""
+    try:
+        run('clearHighlight')
+    except Exception:
+        pass
+    # Cleanup is invoked after a mouse interaction. Do not move focus back to a
+    # canvas child while KiCad is accepting the user's new selection.
+    try:
+        run_exact('clearHighlight', focus=False)
+    except Exception:
+        pass
+    board.ResetNetHighLight()
+
+
 def run(action):
     frame = next((w for w in wx.GetTopLevelWindows() if isinstance(w, wx.Frame) and
                   w.GetTitle().endswith('PCB Editor')), None)

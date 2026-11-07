@@ -1,3 +1,72 @@
+# TraceForge 0.12.9 - Stable KiCad 10 Windows Release
+
+Focus lifecycle correction: via focus now owns and releases its renderer state
+independently of a preceding wire highlight, including partially failed dimming
+attempts. Click-away and Escape release temporary visuals without restoring an
+old selection over a new PCB pick. Cleanup never steals input focus, and bounded
+post-click checks allow native selection to settle without continuous polling.
+Wire-to-via-to-blank-space transitions were exercised with a real PCB canvas click.
+
+
+Highlight regression correction: restores the shared 0.12.8 native dispatch path
+for existing signal/endpoint highlighting and zoom. Via-only dimming uses a
+separate dispatcher; an optional dimming failure no longer blocks verified native
+via selection, zoom or property editing. A build-identity handshake rejects stale
+0.12.9 helpers after installing a corrected testing package.
+
+
+Adds a global **Cancel operation** control for Via Size Manager analysis,
+stitching/RF-fencing previews, BGA previews and cleanup scans. Cancellation is
+cooperative across processes, discards unfinished previews, and terminates only
+the owned temporary-board DRC child. Atomic undoable board edits cannot be
+cancelled halfway through.
+
+
+Preset detection now reads live Board Setup via dimensions and netclass defaults,
+including sizes with zero placed vias. Target choices include these project sizes.
+A helper capability check rejects an older 0.12.9 process instead of silently
+showing the old inventory; close every KiCad window after updating.
+
+Same-diameter/drill-only growth uses local hole checks without a full routing scan
+or unnecessary zone refill. It checks annular rings, custom hole bounds and nearby
+hole/copper/edge clearances; unsupported custom rules fall back to full DRC.
+
+
+Via filter selection now **replaces KiCad's actual selection** and verifies exact
+via UUIDs after synchronization. It does not select other vias, pads or tracks
+merely because they share GND. Right-click editing uses that native selection.
+Neutral renderer dimming avoids highlighting the entire filtered net; unconnected
+net-0 copper can remain undimmed. When neutral dimming is unavailable, the tool
+reports that explicitly instead of expanding the selection to a whole net.
+
+
+Also fixes stitching/fencing near fiducials and critical footprints: optical mask
+openings, both-side courtyards, missing-courtyard bounds and configurable reference
+patterns now create previewed exclusion regions. Existing sets must be regenerated
+to use the new protections; manually placed or locked vias are not silently removed.
+
+Adds **Via Tools > Via Size Manager** for existing-via diameter/drill inventory,
+net and selection filters, PCB selection, and undoable bulk deletion with an
+explicit count confirmation and locked-via protection.
+
+Enlargement previews use the live PCB and saved project/custom rules on temporary
+copies. KiCad DRC refills zones and compares all findings against a baseline;
+conflicting candidates are removed and the final batch is tested together.
+The map and per-via reasons show what can grow and how many small drills remain,
+including whole-board counts. Apply validates that the board and rules have not
+changed, then resizes/refills in a single undoable native action.
+
+This is a **stable release for Windows and KiCad 10**. Automatic growth
+supports uniform ordinary through vias only. It is conservative and does not
+maximize every possible combination, validate electrical performance or predict
+price. Existing DRC findings remain release blockers. Save project settings before
+scanning, inspect results, and run final project DRC after applying changes.
+
+Install `TraceForge-0.12.9-KiCad10-PCM.zip` through KiCad's Plugin and Content
+Manager > Install from file. Close all KiCad windows and reopen PCB Editor.
+
+---
+
 # TraceForge 0.12.8 - Stable KiCad 10 Windows Release
 
 Use this release instead of 0.12.7. It includes the 0.12.7 differential-matching and signal-type improvements, and corrects a packaging checksum issue found during public download verification.

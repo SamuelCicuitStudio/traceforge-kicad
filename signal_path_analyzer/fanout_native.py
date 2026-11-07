@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pcbnew
 
+from .cancellation import checker
 from .fanout import candidates, fit_guidance, grid_info, matches, validate, world
 from .fanout_escape import edge_paths, paired_net
 from .stitching_native import fits, outline, point_mm, refill, transaction, uid
@@ -188,6 +189,7 @@ def clear_escape_route(route, layer, width, gap, edge, board_poly, zones,
 
 
 def plan(board, request):
+    cancel = checker(request.get('cancel_file'))
     started = time.monotonic()
     data = analyze(board, request['footprint'])
     values = dict(request['settings'])
@@ -238,6 +240,7 @@ def plan(board, request):
         items.extend(other.GraphicalItems())
     obstacles = []
     for item in items:
+        cancel()
         active = [copper for copper in copper_layers if item.IsOnLayer(copper)]
         hole = (item.GetEffectiveHoleShape()
                 if isinstance(item, (pcbnew.PAD, pcbnew.PCB_VIA)) else None)
@@ -268,6 +271,7 @@ def plan(board, request):
         abs(p['local'][0] - grid['center'][0]) + abs(p['local'][1] - grid['center'][1]),
         p['number']))
     for pad in ordered:
+        cancel()
         if time.monotonic() - started > 15:
             raise ValueError('Fanout preview exceeded its time budget; filter fewer nets/pads.')
         net = pad['net']

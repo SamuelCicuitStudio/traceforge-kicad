@@ -288,7 +288,9 @@ class FanoutPanel(wx.Panel):
             self.message(str(exc), 'error')
             return
         self.invalidate()
-        self.task(lambda: self.native('fanout_preview', **request), self.accept_preview)
+        self.host.submit_stitching(
+            lambda cancel: self.native('fanout_preview', **request, cancel_file=cancel.path),
+            self.accept_preview, self, cancellable=True)
 
     def accept_preview(self, result):
         self.preview = self.canvas.preview = result

@@ -6,7 +6,7 @@ import os
 import socket
 from pathlib import Path
 
-from . import __version__
+from . import NATIVE_BUILD_ID, __version__
 from .chains import NetGeometry, TrackSeg, ViaHop
 from .native_timeout import client_timeout
 
@@ -27,6 +27,12 @@ def check_version(info):
             f'{helper_label}. Close every KiCad window, including PCB Editor and KiCad '
             'Manager, then reopen the board. Reinstall the latest PCM ZIP if the '
             'versions still differ.')
+    if info.get('native_build_id') != NATIVE_BUILD_ID:
+        raise NativeVersionError(
+            f'TraceForge {__version__} is connected to an older testing build in PCB Editor. '
+            'Close every KiCad window, including PCB Editor and KiCad Manager, then reopen '
+            'the board to load the newly installed helper. Reinstall the updated PCM ZIP '
+            'if this message persists.')
 
 
 class NativeBridge:

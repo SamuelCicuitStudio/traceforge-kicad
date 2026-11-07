@@ -32,14 +32,20 @@ class TransientHighlight:
         self.selection = set()
         self.dim = True
         self.dim_active = False
+        self.exact_vias = False
 
     def clear(self, board, items, restore_selection=True):
         native_selection = ({it.m_Uuid.AsString() for it in pcbnew.GetCurrentSelection()}
                             if not restore_selection else set())
-        if self.dim_active and self.board == board_path(board):
-            from .net_focus import run
+        if (self.dim_active or self.exact_vias) and self.board == board_path(board):
+            if self.exact_vias:
+                from .net_focus import clear_exact
 
-            run('clearHighlight')
+                clear_exact(board)
+            else:
+                from .net_focus import run
+
+                run('clearHighlight')
             board.ResetNetHighLight()
         self.dim_active = False
         if self.board == board_path(board):
@@ -61,6 +67,7 @@ class TransientHighlight:
                         item.ClearBrightened()
         self.board, self.previous = None, {}
         self.selection = set()
+        self.exact_vias = False
 
     def apply(self, board, items, nets, refs, identities=None):
         self.clear(board, items)
@@ -150,7 +157,10 @@ class CanvasInteractionFilter(wx.EventFilter):
             window = event.GetEventObject()
             if isinstance(window, wx.Window):
                 frame = wx.GetTopLevelParent(window)
-                if isinstance(frame, wx.Frame) and frame.GetTitle().endswith('PCB Editor'):
+                if isinstance(frame, wx.Frame) and (
+                        frame.GetTitle().endswith('PCB Editor') or
+                        (_highlights.exact_vias and _highlights.board and
+                         Path(_highlights.board).stem in frame.GetTitle())):
                     if kind == wx.EVT_LEFT_DOWN.typeId:
                         self.left_start = event.GetPosition()
                     else:
@@ -164,8 +174,15 @@ class CanvasInteractionFilter(wx.EventFilter):
                         else:
                             escape = event.GetKeyCode() == wx.WXK_ESCAPE
                         # Let KiCad process selection first; navigation alone must not clear it.
-                        wx.CallLater(100, self.after_interaction, _highlights.previous,
-                                     dragged, escape)
+                        generation = _highlights.previous
+                        # Native via-group selection can settle after the first
+                        # 100 ms callback (activation/disambiguation). Recheck a
+                        # bounded number of times; never poll continuously or
+                        # let an old click clear a newer TraceForge selection.
+                        delays = (100, 350, 800) if _highlights.exact_vias else (100,)
+                        for delay in delays:
+                            wx.CallLater(delay, self.after_interaction, generation,
+                                         dragged, escape)
         return wx.EventFilter.Event_Skip
 
     def after_interaction(self, generation, dragged, escape):
@@ -178,7 +195,8 @@ class CanvasInteractionFilter(wx.EventFilter):
         if dragged and not escape and (not current or current == _highlights.selection):
             _highlights.selection = current
             return
-        if escape or current != _highlights.selection:
+        if (escape or current != _highlights.selection or
+                (_highlights.exact_vias and not dragged and not current)):
             # Native selection is authoritative. Do not restore the original selection
             # over the user's new one; only release the visual flags owned by Forge.
             _highlights.clear(board, board_items(board), restore_selection=False)
@@ -315,6 +333,42 @@ def dispatch(board, operation, payload):
             _highlights.clear(board, board_items(board))
         return fanout_dispatch(board, operation, payload)
 
+    if operation.startswith('via_manage_'):
+        from signal_path_analyzer.via_manager_native import dispatch as via_manager_dispatch
+
+        if operation in ('via_manage_apply', 'via_manage_delete'):
+            _highlights.clear(board, board_items(board))
+        result = via_manager_dispatch(board, operation, payload)
+        if operation in ('via_manage_select', 'via_manage_focus'):
+            from .exact_selection import dim_other_copper, replace
+
+            _highlights.clear(board, board_items(board))
+            chosen = replace(board, result['ids'])
+            try:
+                result['dimmed'] = (dim_other_copper(board, result['ids'])
+                                    if _highlights.dim else False)
+            except Exception as error:
+                # A renderer/hotkey failure must not block exact via selection,
+                # zoom or native property editing. Recheck the real selection.
+                chosen = replace(board, result['ids'])
+                result['dimmed'] = False
+                result['dim_warning'] = str(error)
+            pcbnew.Refresh()
+            result['zoomed'] = zoom_to_items(board, chosen, force=True) if chosen else False
+            # Only publish ownership after temporary dimming/selection operations
+            # finish. Never restore visual flags inherited from a preceding wire.
+            _highlights.board = board_path(board)
+            _highlights.previous = {item.m_Uuid.AsString(): (False, False) for item in chosen}
+            _highlights.selection = set(result['ids'])
+            _highlights.exact_vias = bool(chosen)
+            _highlights.dim_active = result['dimmed']
+            # Return the native selection count, not a predicted filter count.
+            actual = list(pcbnew.GetCurrentSelection())
+            if {item.m_Uuid.AsString() for item in actual} != set(result['ids']):
+                raise RuntimeError('KiCad selection changed while focusing vias. Select again.')
+            result['count'] = len(actual)
+        return result
+
     if operation.startswith('via_array_'):
         from signal_path_analyzer.via_array_native import dispatch as via_array_dispatch
 
@@ -331,10 +385,11 @@ def dispatch(board, operation, payload):
         return stitch_dispatch(board, operation, payload)
 
     if operation == 'info':
-        from signal_path_analyzer import __version__
+        from signal_path_analyzer import NATIVE_BUILD_ID, __version__
 
         return {'board': board.GetFileName(), 'protocol': 2,
                 'traceforge_version': __version__,
+                'native_build_id': NATIVE_BUILD_ID,
                 'helper_path': str(Path(__file__).resolve()),
                 'features': ['transient_highlight', 'native_zoom', 'streaming_stitch_grid']}
     if operation == 'snapshot':

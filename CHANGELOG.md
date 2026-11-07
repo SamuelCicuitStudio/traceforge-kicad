@@ -1,3 +1,22 @@
+## 0.12.9 (stable)
+
+- Fixed click-away/Escape cleanup after wire-to-via focus transitions, including partially activated dimming. Preserve new native selections and ignore delayed callbacks from old focus generations.
+
+- Restored the unchanged 0.12.8 shared highlight dispatcher; isolated via-only rendering and keep exact via selection/zoom operational when optional dimming fails. Reject stale helpers from older 0.12.9 testing builds.
+
+- Added global cooperative cancellation for via analysis, stitching/fencing/BGA previews and cleanup scans; stop owned DRC subprocesses and discard incomplete previews while keeping board edits atomic.
+
+- Fixed size inventory to include live project presets and netclass sizes even when unused; project sizes also populate enlargement targets.
+- Added local drill-only checks when copper diameter is unchanged, with conservative custom-rule bounds, targeted hole checks, stale-limit rejection and full-DRC fallback where needed.
+
+- Corrected via filtering to replace and verify native KiCad selection; removed whole-net expansion from via highlighting and preserved direct right-click editing.
+
+- Fixed stitching/fencing exclusion of fiducial optical areas and both-side component courtyards; added configurable critical-reference margins and previewed protection regions.
+
+- Added Via Size Manager: diameter/drill inventory, net/selection filters, native PCB selection and undoable deletion with locked-via protection.
+- Added conservative batch enlargement checked by KiCad DRC on temporary live-board snapshots, with spatial preview, blocker reasons and remaining-small-via counts.
+- Reject stale previews after PCB, project or custom-rule changes; preserve original source files until the user saves.
+
 # Changelog
 
 Release details: [0.12.8](docs/RELEASE-NOTES.md).

@@ -159,7 +159,9 @@ class TraceCleanupPanel(wx.Panel):
                          f"{len(result['fusions'])} overlap groups to fuse; "
                          f"{len(result['dangling'])} dangling tracks (unchecked); "
                          f"{len(result['partial'])} retained overlaps.", 'ok')
-        self.host.submit_stitching(lambda: self.native('cleanup_scan', net=net), done, self)
+        self.host.submit_stitching(
+            lambda cancel: self.native('cleanup_scan', net=net, cancel_file=cancel.path),
+            done, self, cancellable=True)
 
     def on_layer(self, event):
         self.fill_rows()

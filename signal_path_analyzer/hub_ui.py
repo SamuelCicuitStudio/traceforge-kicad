@@ -317,6 +317,12 @@ class TraceForgePanel(wx.Frame):
         )
         self.refresh.Bind(wx.EVT_BUTTON, self.on_refresh)
         bar.AddStretchSpacer()
+        self.active_operation = None
+        self.cancel_operation = wx.Button(self, label="Cancel operation", style=wx.BU_EXACTFIT)
+        self.cancel_operation.SetToolTip("Stop a read-only scan or preview. "
+                                         "Board edits are atomic.")
+        self.cancel_operation.Disable()
+        self.cancel_operation.Bind(wx.EVT_BUTTON, self.on_cancel_operation)
         bar.Add(self.refresh)
         refresh_id = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, self.on_refresh, id=refresh_id)
@@ -437,6 +443,10 @@ class TraceForgePanel(wx.Frame):
             self.stitching.SetBackgroundColour("#222C3A")
             self.stitching.SetForegroundColour("#E5EDF8")
         frame_box = wx.BoxSizer(wx.VERTICAL)
+        cancel_bar = wx.BoxSizer(wx.HORIZONTAL)
+        cancel_bar.AddStretchSpacer()
+        cancel_bar.Add(self.cancel_operation, 0, wx.ALL, 4)
+        frame_box.Add(cancel_bar, 0, wx.EXPAND)
         frame_box.Add(self.notebook, 1, wx.EXPAND)
         self.activity = BusyOverlay(self, self.dark)
         self.activity.Hide()
@@ -478,7 +488,7 @@ class TraceForgePanel(wx.Frame):
             not self.native_call
             or self.closing
             or self.notebook.GetSelection() in (4, 5, 6, 7)
-            or (self.notebook.GetSelection() == 1 and self.via_tools.active_index == 2)
+            or (self.notebook.GetSelection() == 1 and self.via_tools.active_index >= 2)
             or (self.notebook.GetSelection() == 3 and self.trace_tools.active_index != 0)
         ):
             return
@@ -495,7 +505,7 @@ class TraceForgePanel(wx.Frame):
         tab = self.notebook.GetSelection()
         if (
             tab in (4, 5, 6, 7)
-            or (tab == 1 and self.via_tools.active_index == 2)
+            or (tab == 1 and self.via_tools.active_index >= 2)
             or (tab == 3 and self.trace_tools.active_index != 0)
         ):
             return
@@ -881,7 +891,13 @@ class TraceForgePanel(wx.Frame):
             self.status.SetForegroundColour(self.colors["routed"])
             self.status.SetLabel(message)
 
-    def submit_stitching(self, fn, done, page):
+    def on_cancel_operation(self, event=None):
+        if self.active_operation and self.active_operation[0].cancel():
+            self.cancel_operation.Disable()
+            self.active_operation[1].message('Cancellation requested; stopping at a safe boundary.',
+                                             'warning')
+
+    def submit_stitching(self, fn, done, page, cancellable=False):
         """Serialize board operations and coalesce deferred tab checks."""
         if self.closing:
             return
@@ -891,6 +907,12 @@ class TraceForgePanel(wx.Frame):
             )
             return
         self.actions_pending += 1
+        from .cancellation import Cancellation, OperationCancelled
+
+        control = Cancellation() if cancellable else None
+        if control:
+            self.active_operation = (control, page)
+            self.cancel_operation.Enable()
         self.refresh.Disable()
         self.begin_activity("Scanning / working in KiCad...")
         page.message(
@@ -922,6 +944,9 @@ class TraceForgePanel(wx.Frame):
 
         def finished(result, error):
             self.actions_pending -= 1
+            if control:
+                self.active_operation = None
+                self.cancel_operation.Disable()
             self.end_activity()
             self.resume_auto_check()
             if self.closing:
@@ -930,7 +955,10 @@ class TraceForgePanel(wx.Frame):
                 if enabled and child:
                     child.Enable()
             self.refresh.Enable(not self.busy and not self.actions_pending)
-            if error:
+            if isinstance(error, OperationCancelled) or (control and control.cancelled):
+                page.invalidate()
+                page.message('Cancelled. No board changes were applied.', 'pending')
+            elif error:
                 page.invalidate()
                 page.message(str(error), "error")
             else:
@@ -942,10 +970,22 @@ class TraceForgePanel(wx.Frame):
 
         def work():
             try:
-                result, error = self.api.call(fn, retries=0), None
+                def execute():
+                    if control:
+                        control.check()
+                        value = fn(control)
+                        control.check()
+                        return value
+                    return fn()
+
+                result, error = self.api.call(execute, retries=0), None
             except Exception as exc:
-                logging.exception("Board tool operation failed")
+                if not (control and control.cancelled):
+                    logging.exception("Board tool operation failed")
                 result, error = None, exc
+            finally:
+                if control:
+                    control.close()
             if not self.closing:
                 wx.CallAfter(finished, result, error)
 
@@ -1056,6 +1096,8 @@ class TraceForgePanel(wx.Frame):
             handler()
 
     def on_close(self, event) -> None:
+        if self.active_operation:
+            self.active_operation[0].cancel()
         self.closing = True
         if self.auto_refresh_later:
             self.auto_refresh_later.Stop()

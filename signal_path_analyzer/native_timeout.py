@@ -1,7 +1,7 @@
 """Keep native client and PCB Editor request deadlines in sync."""
 
 LONG_OPERATIONS = ('stitch_', 'fanout_', 'tracefence_', 'endpoint_', 'pick_',
-                   'cleanup_', 'fillet_', 'rotate_')
+                   'cleanup_', 'fillet_', 'rotate_', 'via_manage_')
 
 
 def editor_timeout(operation):

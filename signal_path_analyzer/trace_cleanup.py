@@ -3,7 +3,7 @@ from collections import defaultdict
 from math import gcd, hypot
 
 
-def analyze(rows):
+def analyze(rows, check=None):
     """Only remove copper fully covered by retained, identical-property copper.
 
     No snapping tolerance, via removal, branch pruning or partial-overlap fusion.
@@ -11,6 +11,8 @@ def analyze(rows):
     """
     lines, arcs = defaultdict(list), defaultdict(list)
     for row in rows:
+        if check:
+            check()
         if row['net'] <= 0:
             continue  # Unassigned copper has no common electrical-net contract.
         base = (row['net'], row['layer'], row['width'], tuple(row['mask']))
@@ -34,12 +36,16 @@ def analyze(rows):
                     length_mm=row['length_mm'], reason=reason, keep=keep)
 
     for group in arcs.values():
+        if check:
+            check()
         group.sort(key=lambda row: (not row['protected'], row['id']))
         keeper = group[0]
         for row in group[1:]:
             if not row['protected']:
                 redundant.append(result(row, [keeper['id']], 'Duplicate arc'))
     for key, intervals in lines.items():
+        if check:
+            check()
         if len(intervals) > 2000:
             raise ValueError('Too many collinear tracks for one cleanup preview. '
                              'Narrow the scan to an individual net.')
@@ -47,8 +53,12 @@ def analyze(rows):
                                           -(entry[1] - entry[0]), entry[2]['id']))
         retained = []
         for start, end, row in intervals:
+            if check:
+                check()
             cursor, keep = start, []
             for left, right, other in sorted(retained, key=lambda entry: entry[0]):
+                if check:
+                    check()
                 if left > cursor:
                     break
                 if right > cursor:
@@ -63,6 +73,8 @@ def analyze(rows):
         # Remaining overlaps need review; neither member is safe to delete whole.
         retained.sort(key=lambda entry: entry[0])
         for i, (start, end, row) in enumerate(retained):
+            if check:
+                check()
             for left, right, other in retained[i + 1:]:
                 if left >= end:
                     break
@@ -81,10 +93,18 @@ def analyze(rows):
         if component:
             components.append(component)
         for component in components:
+            if check:
+                check()
             if len(component) < 2 or any(row['protected'] for _, _, row in component):
                 continue
-            partial_overlap = any(
-                a < c < b < d for a, b, _ in component for c, d, _ in component)
+            def crossings(members):
+                for a, b, _ in members:
+                    for c, d, _ in members:
+                        if check:
+                            check()
+                        yield a < c < b < d
+
+            partial_overlap = any(crossings(component))
             if not partial_overlap:
                 continue
             first = min(component, key=lambda entry: entry[0])

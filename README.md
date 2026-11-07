@@ -4,7 +4,7 @@
 
 **Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10 on Windows.**
 
-TraceForge 0.12.8 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
+TraceForge 0.12.9 (stable) groups signal analysis, Via Tools, BGA fanout, Trace Tools,
 PCB Rotation, Visualization, and Manufacturing in one panel. Trace Tools includes
 cleanup, teardrops, and rounded corners with persistent restore. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
@@ -81,12 +81,95 @@ folder while the junction exists leaves a broken plugin link.
 | Tab | Workflow |
 | --- | --- |
 | **Signals / xSignals** | Detect paths through series passives, inspect chain length/timing, highlight differential pairs, export CSV and write reviewed DRC targets. |
-| **Via Tools** | Use the selector at the top right to switch between Via Stitching, Via Fencing, and Via Array. Stitching previews symmetric or staggered grids and manages placed sets. Fencing follows an RF trace on either or both sides. Array evens out selected existing vias. |
+| **Via Tools** | Use the selector at the top right to switch between Via Stitching, Via Fencing, Via Array, and Via Size Manager. Stitching previews symmetric or staggered grids and manages placed sets. Fencing follows an RF trace on either or both sides. Array evens out selected existing vias. |
 | **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
 | **Trace Tools** | Use the selector at the top right for Trace Cleanup, Teardrops, or Round Corners. Cleanup previews redundant copper and dangling ends, supports bulk selection, and removes reviewed tracks with Undo. Teardrops use KiCad's native generator. Round Corners previews a selected radius across all copper layers, rounds eligible existing trace junctions, and restores selected generated corners. |
 | **PCB Rotation** | Apply an exact angle to selected components in the open PCB Editor. |
 | **Visualization** | Color net groups and individual nets live, and focus the ratsnest on selected components. |
 | **Manufacturing** | Inventory saved project files, run ERC/DRC and BOM checks, edit verified PCBWay or PCBPower export choices, build detailed single or multi-board packages, and clean up reviewed local library table entries. See [manufacturing and project maintenance](docs/MANUFACTURING-AND-PROJECT-MAINTENANCE.md). |
+
+### Cancel long scans and previews
+
+The **Cancel operation** button stays above all tabs. It is enabled for Via Size
+Manager analysis, stitching/RF-fencing previews, BGA fanout previews and trace
+cleanup scans. Cancel requests a cooperative stop in the KiCad helper and stops
+an active temporary-board DRC subprocess. Unfinished results are discarded and
+cannot be applied. Native C++ calls already in progress finish at a safe boundary
+before the cancellation is acknowledged.
+
+Apply, Delete, Replace and Remove are atomic undoable edits: cancellation stays
+disabled during these operations. Close the panel to request cancellation of an
+active read-only scan; do not terminate PCB Editor to stop a scan.
+
+### Stitching assembly protection (0.12.9)
+
+Stitching and RF fencing now protect fiducial optical openings and component
+courtyards on both sides, in addition to copper clearance and explicit via keepouts.
+Fiducials are detected by reference/value/library name. The default optical margin
+is **1.0 mm from pad copper**, increased when necessary to clear the solder-mask
+opening plus the component margin. General courtyard margin is **0.25 mm**;
+missing courtyards use physical footprint bounds without reference/value text.
+Critical references default to **X*, Y*, J*** with **0.50 mm** extra clearance.
+All margins are measured from the via's copper edge, not its center.
+
+Use **Advanced options** to change margins or add critical reference patterns
+such as `U7,RF*,ANT*`. The **Protect component courtyards** checkbox controls
+ordinary components; fiducials and explicitly critical references remain protected.
+The preview shows dotted protection bounds, skipped-site counts and reasons.
+These assembly margins are configurable project policy, not PCBWay sign-off.
+Sensitive regions without recognizable footprints still need explicit KiCad
+via keepout areas. Existing misplaced vias are not silently deleted: select a
+managed stitching set, **Edit / regenerate**, preview and replace it to apply
+these protections to the old placement.
+
+### Via Size Manager
+
+Via filter selection now **replaces KiCad's actual selection** and verifies exact
+via UUIDs after synchronization. It does not select other vias, pads or tracks
+merely because they share GND. Right-click editing uses that native selection.
+Neutral renderer dimming avoids highlighting the entire filtered net; unconnected
+net-0 copper can remain undimmed. When neutral dimming is unavailable, the tool
+reports that explicitly instead of expanding the selection to a whole net.
+
+
+In **Via Tools**, choose **Via Size Manager**, then **Refresh sizes (F5)**.
+The list merges live project presets, netclass defaults and sizes actually placed.
+Unused presets remain visible with **0 used**, and project sizes are also available
+as enlargement targets. Click **Refresh sizes (F5)** after editing Board Setup.
+Filter by a diameter/drill combination, net, or current PCB selection.
+**Select matching in PCB** highlights the matching vias; **Delete matching...**
+confirms the count, protects locked vias, and creates one undoable board edit.
+Deletion can remove connectivity and must be followed by project DRC review.
+
+When only the drill changes and the copper diameter stays the same, the tool uses
+**local hole checks** instead of full-board routing DRC: annular-ring and hole-size
+limits, nearby hole/copper clearance, and board-edge/cutout clearance. Existing
+copper clearance is unchanged. Custom bounds are applied conservatively; complex
+or geometry-dependent custom rules, backdrilling or stale zone fills fall back to
+full DRC. This is not a blanket approval for every via with the same diameter.
+The preview states which check path ran. Drill-only apply avoids zone refill when
+copper envelopes are unchanged. Changes to the live drill constraints invalidate
+that preview as well.
+
+For larger stitching vias, choose a target such as **0.60 / 0.30 mm** and click
+**Analyze enlargement**. Save project settings before scanning. The scan snapshots
+the live PCB, copies its saved project and custom rules, refills zones on temporary
+copies, and runs KiCad 10 DRC. It rejects vias associated with new or changed
+findings, then tests the remaining candidates together. It does not waive existing
+errors or prove a board ready for production. Conservative rejection can miss
+other feasible combinations; this is not a global maximum-size solver.
+
+The preview shows green eligible vias, red blocked vias, reasons, and both the
+filtered and whole-board counts still below the target drill. Click a result row
+to focus that via in PCB Editor. **Apply verified vias** resizes only the tested
+batch in one undoable transaction and refills zones. Board/project/rule changes
+invalidate the preview. No PCB source is saved automatically.
+
+Automatic enlargement supports unlocked, uniform ordinary through vias. Custom
+padstacks, microvias, blind/buried vias and shrinking targets are skipped. Physical
+design rules are checked; thermal performance, signal integrity, supplier pricing
+and final manufacturing approval still need engineering review. Larger stitching
+vias alone do not remove small drilling elsewhere on the PCB.
 
 ### Via Array
 

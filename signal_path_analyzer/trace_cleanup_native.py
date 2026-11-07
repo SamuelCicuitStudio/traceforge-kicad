@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pcbnew
 
+from .cancellation import checker
 from .trace_cleanup import analyze
 
 _preview = None
@@ -27,7 +28,7 @@ def overview(board):
                                   for layer in enabled})
 
 
-def snapshot(board, net=''):
+def snapshot(board, net='', cancel=None):
     ownership = Path(board.GetFileName()).with_suffix('.traceforge-fanout.json')
     managed = set()
     if ownership.exists():
@@ -40,6 +41,8 @@ def snapshot(board, net=''):
                              'and resolve the error before cleanup.') from exc
     rows = []
     for item in board.GetTracks():
+        if cancel:
+            cancel()
         if isinstance(item, pcbnew.PCB_VIA) or (net and item.GetNetname() != net):
             continue
         start, end = item.GetStart(), item.GetEnd()
@@ -91,15 +94,16 @@ def dispatch(board, operation, payload):
     if operation == 'cleanup_info':
         return overview(board)
     if operation == 'cleanup_scan':
+        cancel = checker(payload.get('cancel_file'))
         net = str(payload.get('net', '')).strip()
         names = {n.GetNetname() for n in board.GetNetsByNetcode().values()}
         if net and net not in names:
             raise ValueError('Net name was not found in this board. Use the exact net name.')
-        rows, digest = snapshot(board, net)
+        rows, digest = snapshot(board, net, cancel=cancel)
         info = overview(board)
         layers = info['layers']
         visibility = info['layer_visibility']
-        analysis = analyze(rows)
+        analysis = analyze(rows, check=cancel)
         for group in analysis['fusions']:
             group['id'] = 'fuse:' + hashlib.sha256(
                 '|'.join(group['ids']).encode()).hexdigest()[:20]
@@ -113,6 +117,7 @@ def dispatch(board, operation, payload):
         connectivity = board.GetConnectivity()
         dangling = []
         for row in rows:
+            cancel()
             if row['protected'] or row['net'] <= 0 or row['id'] in redundant | fused:
                 continue
             if connectivity.TestTrackEndpointDangling(by_id[row['id']], False):

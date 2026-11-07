@@ -156,6 +156,13 @@ class BoardOverview(wx.Panel):
             for coordinates in coordinates_list[::stride]:
                 dc.DrawCircle(screen(coordinates), 2)
         if self.preview:
+            dc.SetPen(wx.Pen(self.colors['pending'], 1, wx.PENSTYLE_DOT))
+            dc.SetBrush(wx.TRANSPARENT_BRUSH)
+            for region in self.preview.get('protection_regions', []):
+                rx0, ry0, rx1, ry1 = region['bounds_mm']
+                a, b = screen((rx0, ry0)), screen((rx1, ry1))
+                dc.DrawRectangle(a.x, a.y, max(1, b.x-a.x), max(1, b.y-a.y))
+            dc.SetPen(wx.TRANSPARENT_PEN)
             for key, state in (('rejected', 'warning'), ('accepted', 'ok')):
                 dc.SetBrush(wx.Brush(self.colors[state]))
                 points = self.preview[key]
@@ -246,7 +253,10 @@ class StitchingPanel(wx.Panel):
                                   ('offset_x', 'Grid offset X (mm)', '0'),
                                   ('offset_y', 'Grid offset Y (mm)', '0'),
                                   ('boundary', 'Region/copper setback (mm)', '.2'),
-                                  ('edge', 'Board-edge setback (mm)', '.5')]
+                                  ('edge', 'Board-edge setback (mm)', '.5'),
+                                  ('fiducial_clearance', 'Fiducial optical margin (mm)', '1.0'),
+                                  ('component_clearance', 'Component courtyard margin (mm)', '.25'),
+                                  ('critical_clearance', 'Critical footprint margin (mm)', '.5')]
         if trace_mode:
             fields.append(('trace_gap', 'Copper gap to signal trace (mm)', '.3'))
         for key, label, value in fields:
@@ -264,9 +274,28 @@ class StitchingPanel(wx.Panel):
                 caption = wx.StaticText(self, label=label)
                 form.Add(caption, 0, wx.ALIGN_CENTER_VERTICAL)
                 form.Add(control, 1, wx.EXPAND)
-                if not trace_mode and key in ('offset_x', 'offset_y', 'boundary', 'edge'):
+                if not trace_mode and key in ('offset_x', 'offset_y', 'boundary', 'edge',
+                                              'fiducial_clearance', 'component_clearance',
+                                              'critical_clearance'):
                     self.advanced_rows.append((caption, control))
             control.Bind(wx.EVT_TEXT, self.invalidate)
+        self.protected_refs = wx.TextCtrl(self, value='X*,Y*,J*', size=(130, -1))
+        self.protected_refs.SetToolTip('Comma-separated reference patterns, e.g. X*,Y*,J*,U7. '
+                                      'Fiducials are detected independently by reference/library.')
+        caption = wx.StaticText(self, label='Critical refs (patterns)')
+        form.Add(caption, 0, wx.ALIGN_CENTER_VERTICAL)
+        form.Add(self.protected_refs, 1, wx.EXPAND)
+        if not trace_mode:
+            self.advanced_rows.append((caption, self.protected_refs))
+        self.protected_refs.Bind(wx.EVT_TEXT, self.invalidate)
+        self.respect_courtyards = wx.CheckBox(self, label='Protect component courtyards')
+        self.respect_courtyards.SetValue(True)
+        self.respect_courtyards.SetToolTip('Protect both board sides. Missing courtyards use '
+                                         'the physical footprint bounds; fiducials and critical '
+                                         'refs remain protected when this is disabled.')
+        form.Add(self.respect_courtyards, 0, wx.ALIGN_CENTER_VERTICAL)
+        form.AddSpacer(1)
+        self.respect_courtyards.Bind(wx.EVT_CHECKBOX, self.invalidate)
         form.AddGrowableCol(1)
         left = wx.BoxSizer(wx.VERTICAL)
         left.Add(form, 0, wx.EXPAND)
@@ -413,6 +442,8 @@ class StitchingPanel(wx.Panel):
             values.update(pitch_y=values['pitch_x'], offset_x='0', offset_y='0')
         return settings(dict(net=self.net.GetValue(), size_source=self.size_source(),
                              pattern=pattern,
+                             protected_refs=self.protected_refs.GetValue(),
+                             respect_courtyards=self.respect_courtyards.GetValue(),
                              connection='all' if self.connection.GetSelection() else 'two',
                              **values))
 
@@ -466,7 +497,9 @@ class StitchingPanel(wx.Panel):
                 # contact or setback setting into a new placement.
                 values = {k: v for k, v in values.items()
                           if k in ('net', 'size_source', 'diameter', 'drill',
-                                   'pitch_x', 'pitch_y')}
+                                   'pitch_x', 'pitch_y', 'fiducial_clearance',
+                                   'component_clearance', 'critical_clearance',
+                                   'protected_refs', 'respect_courtyards')}
             self.name.ChangeValue(saved.get('name', 'Ground stitching'))
             self.net.SetValue(values.get('net', 'GND' if 'GND' in self.scene['nets'] else
                                          next(iter(self.scene['nets']), '')))
@@ -476,6 +509,8 @@ class StitchingPanel(wx.Panel):
                 index = min(int(source.split(':')[1]) + 2, self.source.GetCount() - 1)
             self.source.SetSelection(index)
             self.connection.SetSelection(int(values.get('connection') == 'all'))
+            self.protected_refs.ChangeValue(values.get('protected_refs', 'X*,Y*,J*'))
+            self.respect_courtyards.SetValue(values.get('respect_courtyards', True))
             self.pattern.SetSelection({'symmetric': 0, 'staggered': 1, 'fence': 2}.get(
                 values.get('pattern'), 0))
             self.update_pattern()
@@ -538,7 +573,9 @@ class StitchingPanel(wx.Panel):
             self.message(str(exc), 'error')
             return
         self.invalidate()
-        self.task(lambda: self.native('stitch_preview', **request), self.accept_preview)
+        self.host.submit_stitching(
+            lambda cancel: self.native('stitch_preview', **request, cancel_file=cancel.path),
+            self.accept_preview, self, cancellable=True)
 
     def accept_preview(self, result):
         if self.trace_mode:
@@ -548,7 +585,13 @@ class StitchingPanel(wx.Panel):
             self.fields[key].ChangeValue(str(result['settings'][key]))
         self.canvas.Refresh()
         count = len(result['accepted'])
-        reasons = '; '.join(f'{key}: {value}' for key, value in result['reasons'].items())
+        categories = Counter()
+        for reason, number in result['reasons'].items():
+            categories[reason.split(':', 1)[0]] += number
+        reasons = '; '.join(f'{key}: {value}' for key, value in categories.items())
+        detail = list(result['reasons'].items())
+        more = '\nAdditional protected references omitted.' if len(detail) > 50 else ''
+        self.counts.SetToolTip('\n'.join(f'{key}: {value}' for key, value in detail[:50]) + more)
         self.counts.SetLabel(f"Accepted: {count}   Skipped: {len(result['rejected'])}")
         self.apply.Enable(bool(count))
         fence = result.get('fence')

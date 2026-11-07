@@ -73,6 +73,16 @@ def rectangle(a, b):
 
 def settings(values):
     result = dict(values)
+    for key, default in (('fiducial_clearance', 1.0), ('component_clearance', .25),
+                         ('critical_clearance', .5)):
+        try:
+            result[key] = float(values.get(key, default))
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f'Enter a valid {key.replace("_", " ")} in mm.') from exc
+        if not math.isfinite(result[key]) or result[key] < 0:
+            raise ValueError(f'{key} must be finite and non-negative.')
+    result['respect_courtyards'] = bool(values.get('respect_courtyards', True))
+    result['protected_refs'] = str(values.get('protected_refs', 'X*,Y*,J*'))
     for key in ('diameter', 'drill', 'pitch_x', 'pitch_y', 'offset_x', 'offset_y',
                 'boundary', 'edge'):
         try:
