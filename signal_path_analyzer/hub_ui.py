@@ -61,6 +61,7 @@ class Tools:
     source: Callable[[], str] = lambda: ""  # e.g. "xsignals.json" or "auto-detected"
     edit_chains: Callable[[wx.Window], str] = lambda parent: "chain editor unavailable"
     zoom_selection: Callable[[], str] = lambda: "zoom unavailable"
+    highlight_groups: Optional[Callable[[list[str]], int]] = None
 
 
 class BusyOverlay(wx.Panel):
@@ -298,7 +299,7 @@ class TraceForgePanel(wx.Frame):
         bar = wx.BoxSizer(wx.HORIZONTAL)
         buttons = (
             ("Highlight chain", self.on_chain),
-            ("Highlight group", self.on_group),
+            ("Highlight groups", self.on_group),
             ("Zoom selection", self.on_zoom),
             ("Clear", self.on_clear),
             ("Write DRC targets", self.on_write),
@@ -331,7 +332,8 @@ class TraceForgePanel(wx.Frame):
         self.tree = htl.HyperTreeList(
             root,
             agwStyle=(
-                wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS | wx.TR_FULL_ROW_HIGHLIGHT | wx.TR_LINES_AT_ROOT
+                wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS | wx.TR_FULL_ROW_HIGHLIGHT
+                | wx.TR_LINES_AT_ROOT | wx.TR_MULTIPLE
             ),
         )
         if self.dark:
@@ -362,6 +364,8 @@ class TraceForgePanel(wx.Frame):
         self.snapshot = wx.StaticText(root, label="No timing snapshot yet. Manual refresh only.")
         self.snapshot.SetForegroundColour(self.colors["pending"])
         self.tree.GetMainWindow().SetToolTip(
+            "Ctrl+click to select several groups; Shift+click selects a range. "
+            "Click Highlight groups to highlight them together. "
             "Chain track mm = all tracks and arcs across every net in the chain. "
             "Tunable mm = last net; Source PCB = first net before "
             "series parts, not a dangling branch. "
@@ -706,7 +710,7 @@ class TraceForgePanel(wx.Frame):
         self.tree.Freeze()
         try:
             if topology != self.topology:
-                selected = self.selected()
+                selected = self.selected_rows()
                 expanded = {
                     name
                     for (name, chain), item in self.rows.items()
@@ -729,8 +733,9 @@ class TraceForgePanel(wx.Frame):
                         self.rows[g.group.name, c.chain.name] = ci
                     if first or g.group.name in expanded:
                         self.tree.Expand(gi)
-                if selected in self.rows:
-                    self.tree.SelectItem(self.rows[selected])
+                for key in selected:
+                    if key in self.rows:
+                        self.tree.SelectItem(self.rows[key])
                 self.topology = topology
             self.update_rows()
             main.Scroll(*view)
@@ -804,10 +809,12 @@ class TraceForgePanel(wx.Frame):
         if self.busy or self.actions_pending or self.closing:
             event.Skip()
             return
+        if event.ControlDown() or event.ShiftDown() or len(self.selected_rows()) > 1:
+            event.Skip()
+            return
         item, _flags, _column = self.tree.GetMainWindow().HitTest(event.GetPosition())
         if item and self.tree.GetItemParent(item) != self.tree.GetRootItem():
             group, chain = self.tree.GetItemData(item)
-            self.tree.SelectItem(item)
             self._run(lambda: f"highlighted {self.tools.highlight_chain(group, chain)} items")
         event.Skip()
 
@@ -838,8 +845,16 @@ class TraceForgePanel(wx.Frame):
         }.get(chain.status, "pending")
 
     # ----------------------------------------------------------- tools
+    def selected_rows(self) -> list[tuple[str, Optional[str]]]:
+        return [data for item in self.tree.GetSelections()
+                if item and item != self.tree.GetRootItem()
+                and (data := self.tree.GetItemData(item)) and data[0]]
+
     def selected(self) -> tuple[Optional[str], Optional[str]]:
-        item = self.tree.GetSelection()
+        item = self.tree.GetFocusedItem()
+        if item not in self.tree.GetSelections():
+            items = self.tree.GetSelections()
+            item = items[0] if items else None
         if not item or item == self.tree.GetRootItem():
             return None, None
         return self.tree.GetItemData(item) or (None, None)
@@ -999,9 +1014,16 @@ class TraceForgePanel(wx.Frame):
             self._run(lambda: self.tools.highlight_selection(False))
 
     def on_group(self, _=None) -> None:
-        group, _chain = self.selected()
-        if group:
-            self._run(lambda: f"highlighted {self.tools.highlight_group(group)} items")
+        groups = list(dict.fromkeys(group for group, _chain in self.selected_rows()))
+        if len(groups) > 1 and self.tools.highlight_groups:
+            self._run(lambda: f"highlighted {self.tools.highlight_groups(groups)} items "
+                      f"across {len(groups)} groups")
+        elif len(groups) > 1:
+            self.status.SetLabel(
+                "Multiple-group highlighting requires the updated board callbacks."
+            )
+        elif groups:
+            self._run(lambda: f"highlighted {self.tools.highlight_group(groups[0])} items")
         else:
             self._run(lambda: self.tools.highlight_selection(True))
 

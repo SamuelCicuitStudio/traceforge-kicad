@@ -1,3 +1,7 @@
+## 0.12.10 (stable)
+
+- Added Ctrl/Shift multi-selection in Signals / xSignals and combined highlighting of selected groups in one board operation.
+
 ## 0.12.9 (stable)
 
 - Fixed click-away/Escape cleanup after wire-to-via focus transitions, including partially activated dimming. Preserve new native selections and ignore delayed callbacks from old focus generations.

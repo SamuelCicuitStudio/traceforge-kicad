@@ -43,9 +43,14 @@ def build_tools(session: Session):
         return select_paths(nets, refs)
 
     def hl_group(group: str) -> int:
-        g = session.config.group(group)
-        return select_paths([n for c in g.chains for n in c.nets],
-                            [r for c in g.chains for r in c.series])
+        return hl_groups([group])
+
+    def hl_groups(groups: list[str]) -> int:
+        chains = [c for name in dict.fromkeys(groups)
+                  for c in session.config.group(name).chains]
+        nets = dict.fromkeys(n for c in chains for n in c.nets)
+        refs = dict.fromkeys(r for c in chains for r in c.series)
+        return select_paths(nets, refs)
 
     def hl_selection(whole_group: bool) -> str:
         selection = native.call('selection')
@@ -110,7 +115,7 @@ def build_tools(session: Session):
 
     clear = lambda: native.call('clear')  # noqa: E731
     return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,
-                 export, save, source, edit, zoom)
+                 export, save, source, edit, zoom, highlight_groups=hl_groups)
 
 
 def _log_to_file() -> None:
