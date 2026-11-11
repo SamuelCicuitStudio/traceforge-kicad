@@ -16,6 +16,7 @@ ROOT = HERE if (HERE / 'signal_path_analyzer').is_dir() else HERE.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from .python_runtime import panel_python  # noqa: E402
 from .server import start  # noqa: E402
 
 
@@ -24,25 +25,26 @@ def launch(script, tab=None):
     if board is None or not board.GetFileName():
         wx.MessageBox('Open and save a board before launching TraceForge.', 'TraceForge')
         return
-    from .net_focus import prepare_shortcut
+    if os.name == 'nt':
+        from .net_focus import prepare_shortcut
 
+        try:
+            needs_restart = prepare_shortcut()
+        except (OSError, ValueError) as exc:
+            wx.MessageBox(str(exc), 'TraceForge')
+            return
+        if needs_restart:
+            wx.MessageBox('TraceForge assigned Ctrl+Alt+Shift+F12 to KiCad\'s '
+                          'Highlight Net (selected nets) action. Restart PCB Editor '
+                          'once to load the shortcut, then open TraceForge again. '
+                          'Any existing user.hotkeys was backed up.', 'TraceForge')
+            return
     try:
-        needs_restart = prepare_shortcut()
-    except (OSError, ValueError) as exc:
+        python = panel_python(ROOT, pcbnew.__file__)
+    except (FileNotFoundError, RuntimeError, OSError) as exc:
         wx.MessageBox(str(exc), 'TraceForge')
         return
-    if needs_restart:
-        wx.MessageBox('TraceForge assigned Ctrl+Alt+Shift+F12 to KiCad\'s '
-                      'Highlight Net (selected nets) action. Restart PCB Editor '
-                      'once to load the shortcut, then open TraceForge again. '
-                      'Any existing user.hotkeys was backed up.', 'TraceForge')
-        return
     server = start()
-    python = Path(pcbnew.__file__).resolve().parents[2] / ('python.exe' if os.name == 'nt'
-                                                        else 'python3')
-    if not python.exists():
-        wx.MessageBox(f'KiCad Python was not found at {python}.', 'TraceForge')
-        return
     env = dict(os.environ)
     env['TRACEFORGE_NATIVE_ENDPOINT'] = str(server.file)
     env['TRACEFORGE_BOARD_FILE'] = board.GetFileName()

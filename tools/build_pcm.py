@@ -26,6 +26,7 @@ def canonical_bytes(path):
         ".yaml",
         ".txt",
         ".ps1",
+        ".sh",
     }:
         data = data.replace(b"\r\n", b"\n")
     return data

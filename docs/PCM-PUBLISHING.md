@@ -1,6 +1,6 @@
 # KiCad Plugin and Content Manager submission
 
-TraceForge 0.11.0 targets KiCad 10 on Windows. Its PCM package identifier is
+The 0.13.0 release adds independent Windows and macOS manual-install ZIPs; the PCM package remains Windows-only pending Mac runtime validation. The PCM package identifier is
 `com.github.samuelcicuitstudio.traceforge-kicad`; it uses the legacy `swig`
 runtime and declares KiCad 10.0 as both minimum and maximum compatible version.
 
@@ -14,12 +14,13 @@ python -m pytest -q
 python tools/build_release.py
 ```
 
-The build creates two distinct ZIPs under `dist/`:
+The build creates three distinct ZIPs under `dist/`:
 
-- `TraceForge-0.11.0-KiCad10-Windows.zip` for the existing standalone installer.
-- `TraceForge-0.11.0-KiCad10-PCM.zip` for KiCad's Plugin and Content Manager.
+- `TraceForge-0.13.0-KiCad10-Windows.zip` for the PowerShell manual installer.
+- `TraceForge-0.13.0-KiCad10-macOS.zip` for the shell manual installer (preview).
+- `TraceForge-0.13.0-KiCad10-PCM.zip` for KiCad's Plugin and Content Manager (Windows).
 
-`dist/SHA256SUMS.txt` covers both. The PCM archive has `metadata.json` and
+`dist/SHA256SUMS.txt` covers all three. The PCM archive has `metadata.json` and
 `resources/icon.png` at its root, plus the plugin and its runtime files under
 `plugins/`. It does not need the standalone PowerShell installer or junction.
 

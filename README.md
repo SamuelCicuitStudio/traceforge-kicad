@@ -2,9 +2,9 @@
 
 <img src="icons/traceforge-light-48.png" alt="TraceForge icon" width="72" height="72">
 
-**Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10 on Windows.**
+**Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10. Windows is verified; macOS manual installation is a 0.13.0 preview.**
 
-TraceForge 0.12.10 (stable) groups signal analysis, Via Tools, BGA fanout, Trace Tools,
+TraceForge 0.13.0 (prerelease) groups signal analysis, Via Tools, BGA fanout, Trace Tools,
 PCB Rotation, Visualization, and Manufacturing in one panel. Trace Tools includes
 cleanup, teardrops, and rounded corners with persistent restore. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
@@ -18,7 +18,7 @@ selected signal path is highlighted on the board.*
 
 ## Install
 
-**Requirements:** Windows and KiCad 10 with its bundled Python/scripting support.
+**Requirements:** KiCad 10 with Python scripting support. Windows is verified. The macOS standalone preview also needs Python 3 with wxPython for the separate TraceForge panel process.
 
 ### KiCad Plugin and Content Manager
 
@@ -57,6 +57,20 @@ does not require PowerShell or a manually created plugin junction.
 Cloning this repository into a permanent folder and running the same installer
 also works. The main plugin needs no separate Python installation; Manufacturing
 export needs Python with `openpyxl` as described in its workflow guide.
+
+### Standalone macOS ZIP (0.13.0 preview)
+
+1. Download `TraceForge-0.13.0-KiCad10-macOS.zip`, extract it into a permanent folder, and close KiCad.
+2. Ensure that a Python 3 interpreter can run `import wx`. If necessary, install wxPython for that interpreter. In Terminal, run the installer from the extracted folder:
+
+   ```sh
+   bash tools/install_native_bridge_macos.sh --python /absolute/path/to/python3
+   ```
+
+3. The installer links `native_bridge` into the user KiCad scripting-plugin directory. It preserves any ordinary directory at that location; use `--replace-existing` only to switch an existing TraceForge symlink. If KiCad uses a different plugin search path, pass `--plugins-dir /absolute/path`. In PCB Editor's Python console, `import pcbnew; print(pcbnew.PLUGIN_DIRECTORIES_SEARCH)` shows the actual paths.
+4. Restart KiCad 10 PCB Editor and open **Tools > External Plugins > TraceForge**. The Mac package is a preview until its live editing and Undo paths have been tested on macOS. Native teardrop menu dispatch and automatic net-focus shortcut assignment remain Windows-only.
+
+The Windows and macOS standalone ZIPs are separate downloads. Install one package per machine; the PCM ZIP remains the Windows alternative.
 
 ### Update or remove a standalone installation
 
@@ -422,7 +436,7 @@ Default shortcuts: **Ctrl+Alt+H** highlight chain, **Ctrl+Alt+G** highlight grou
 
 Run KiCad DRC after generated placement; custom-rule and RF validation are incomplete.
 Live parallel multirouting is planned, not implemented. This release targets KiCad
-10 on Windows and uses its legacy pcbnew bindings; KiCad 11 is not supported.
+10 on Windows, with macOS manual-install preview, and uses its legacy pcbnew bindings; KiCad 11 is not supported.
 See [feature scope](docs/FEATURE-SCOPE.md) and [native access](docs/NATIVE-BOARD-ACCESS.md).
 
 Development checks:
@@ -434,7 +448,7 @@ python -m compileall -q signal_path_analyzer native_bridge tools
 python tools/build_release.py
 ```
 
-The build writes a standalone ZIP and `SHA256SUMS.txt` under `dist/`, using an
+The build writes Windows and macOS standalone ZIPs, a PCM ZIP, and `SHA256SUMS.txt` under `dist/`, using an
 explicit public-file allowlist. Tests, fixtures, logs, caches, credentials and user
 boards are ignored. `tools/build_chains.py` is an optional offline chain builder;
 `tools/make_icons.py` regenerates icons with Pillow installed.

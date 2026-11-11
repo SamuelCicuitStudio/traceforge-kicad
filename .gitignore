@@ -29,6 +29,7 @@ dist/
 *.traceforge-stitching.json
 *.traceforge-fanout.json
 *.traceforge-fillets.json
+traceforge-python.txt
 xsignals.json
 *.log
 *.bak

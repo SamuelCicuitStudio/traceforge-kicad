@@ -1,3 +1,8 @@
+## 0.13.0 (prerelease)
+
+- Added a separate macOS manual-install ZIP and shell installer alongside the existing Windows ZIP and PCM asset.
+- Added platform-aware panel Python discovery and macOS packaging checks. Live KiCad 10 operation on macOS remains unverified.
+
 ## 0.12.10 (stable)
 
 - Added Ctrl/Shift multi-selection in Signals / xSignals and combined highlighting of selected groups in one board operation.

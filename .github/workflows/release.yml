@@ -10,7 +10,22 @@ permissions:
   contents: read
 
 jobs:
+  macos-package:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m compileall -q signal_path_analyzer native_bridge tools
+      - run: python tools/verify_python_runtime.py
+      - run: bash -n tools/install_native_bridge_macos.sh tools/verify_macos_installer.sh
+      - run: python tools/build_release.py
+      - run: python tools/verify_release_archives.py
+      - run: bash tools/verify_macos_installer.sh
+
   draft:
+    needs: macos-package
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -22,7 +37,9 @@ jobs:
       - run: python -m pip install --disable-pip-version-check -e ".[dev]"
       - run: python -m ruff check .
       - run: python -m compileall -q signal_path_analyzer native_bridge tools
+      - run: python tools/verify_python_runtime.py
       - run: python tools/build_release.py
+      - run: python tools/verify_release_archives.py
       - name: Create or update draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,7 +81,7 @@ jobs:
           import zipfile
           from pathlib import Path
           archives = sorted(Path('dist').glob('TraceForge-*.zip'))
-          assert len(archives) == 2, 'Expected standalone and PCM archives'
+          assert len(archives) == 3, 'Expected Windows, macOS and PCM archives'
           status = Path('release-status.json')
           data = json.loads(status.read_text())
           data['archives'] = {}

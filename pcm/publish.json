@@ -1,7 +1,7 @@
 {
-  "tag": "v0.12.10",
-  "prerelease": false,
-  "latest": true,
-  "title": "TraceForge 0.12.10 - Multi-group highlighting",
+  "tag": "v0.13.0",
+  "prerelease": true,
+  "latest": false,
+  "title": "TraceForge 0.13.0 - Windows and macOS manual installers (Mac preview)",
   "supersedes": []
 }

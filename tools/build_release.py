@@ -1,4 +1,4 @@
-"""Build a standalone Windows/KiCad distribution from an explicit public-file allowlist."""
+"""Build independent Windows and macOS standalone archives plus the PCM archive."""
 
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ from build_pcm import main as build_pcm
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def release_files():
+def release_files(platform):
+    if platform not in ('Windows', 'macOS'):
+        raise ValueError('Unknown standalone platform')
     paths = [
         ROOT / name
         for name in (
@@ -24,7 +26,6 @@ def release_files():
             "traceforge_action.py",
             "highlight_net_chain_action.py",
             "signal_path_analyzer_action.py",
-            "tools/install_native_bridge.ps1",
             "docs/NATIVE-BOARD-ACCESS.md",
             "docs/VIA-STITCHING-TESTING.md",
             "docs/FEATURE-SCOPE.md",
@@ -35,6 +36,9 @@ def release_files():
             "docs/MANUFACTURING-AND-PROJECT-MAINTENANCE.md",
         )
     ]
+    installer = ('tools/install_native_bridge.ps1' if platform == 'Windows'
+                 else 'tools/install_native_bridge_macos.sh')
+    paths.append(ROOT / installer)
     for directory in ("signal_path_analyzer", "native_bridge"):
         paths.extend((ROOT / directory).glob("*.py"))
     paths.extend(
@@ -63,32 +67,34 @@ def main():
     folder = f"TraceForge-{version}"
     output = ROOT / "dist"
     output.mkdir(exist_ok=True)
-    archive = output / f"{folder}-KiCad10-Windows.zip"
-    files = release_files()
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
-        for path in files:
-            info = zipfile.ZipInfo(
-                f"{folder}/{path.relative_to(ROOT).as_posix()}", date_time=(2026, 1, 1, 0, 0, 0)
-            )
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.create_system = 3
-            info.external_attr = 0o100644 << 16
-            bundle.writestr(info, canonical_bytes(path))
-    with zipfile.ZipFile(archive) as bundle:
-        if bundle.testzip():
-            raise ValueError("Release archive CRC validation failed.")
-        expected = {f"{folder}/{path.relative_to(ROOT).as_posix()}" for path in files}
-        if set(bundle.namelist()) != expected:
-            raise ValueError("Release archive differs from its allowlist.")
+    standalone = []
+    for platform in ('Windows', 'macOS'):
+        archive = output / f"{folder}-KiCad10-{platform}.zip"
+        files = release_files(platform)
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            for path in files:
+                info = zipfile.ZipInfo(
+                    f"{folder}/{path.relative_to(ROOT).as_posix()}", date_time=(2026, 1, 1, 0, 0, 0)
+                )
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.create_system = 3
+                info.external_attr = (0o100755 if path.suffix == '.sh' else 0o100644) << 16
+                bundle.writestr(info, canonical_bytes(path))
+        with zipfile.ZipFile(archive) as bundle:
+            if bundle.testzip():
+                raise ValueError("Release archive CRC validation failed.")
+            expected = {f"{folder}/{path.relative_to(ROOT).as_posix()}" for path in files}
+            if set(bundle.namelist()) != expected:
+                raise ValueError("Release archive differs from its allowlist.")
+        standalone.append(archive)
+        print(f"Built {archive.name}: {len(files)} public files, {archive.stat().st_size} bytes")
     pcm_archive = build_pcm()
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    pcm_digest = hashlib.sha256(pcm_archive.read_bytes()).hexdigest()
     checksum = output / "SHA256SUMS.txt"
     checksum.write_text(
-        f"{digest}  {archive.name}\n{pcm_digest}  {pcm_archive.name}\n", encoding="utf-8"
+        ''.join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+                for path in [*standalone, pcm_archive]), encoding="utf-8"
     )
-    print(f"Built {archive.name}: {len(files)} public files, {archive.stat().st_size} bytes")
-    print(f"SHA256 {digest}")
+    print(f"SHA256SUMS: {len(standalone) + 1} archives")
 
 
 if __name__ == "__main__":
