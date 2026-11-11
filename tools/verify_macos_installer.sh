@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
 [[ "$(uname -s)" == Darwin ]] || { echo 'Run this check on macOS.' >&2; exit 2; }
 
 archive=(dist/TraceForge-*-KiCad10-macOS.zip)
@@ -15,7 +15,8 @@ plugins="$temp/KiCad plugins"
 bash "${package[0]}/tools/install_native_bridge_macos.sh" --python "$fake_python" --plugins-dir "$plugins"
 destination="$plugins/traceforge_native_bridge"
 [[ -L "$destination" ]] || exit 1
-[[ "$(readlink "$destination")" == "${package[0]}/native_bridge" ]] || exit 1
+expected_source="$(cd "${package[0]}/native_bridge" && pwd -P)"
+[[ "$(readlink "$destination")" == "$expected_source" ]] || exit 1
 [[ "$(cat "${package[0]}/traceforge-python.txt")" == "$fake_python" ]] || exit 1
 bash "${package[0]}/tools/install_native_bridge_macos.sh" --python "$fake_python" --plugins-dir "$plugins"
 mkdir -p "$temp/blocked/traceforge_native_bridge"
