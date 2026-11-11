@@ -202,6 +202,17 @@ class StitchingPanel(wx.Panel):
         self.preview, self.region, self.replace = None, dict(kind='board'), None
         self.identities, self.loaded, self.filling = [], False, False
         outer = wx.BoxSizer(wx.VERTICAL)
+        self.placement_layout = wx.BoxSizer(wx.VERTICAL)
+        page = self.placement_layout
+        if not trace_mode:
+            navigation = wx.BoxSizer(wx.HORIZONTAL)
+            placement_button = wx.Button(self, label='Placement setup')
+            placement_button.Bind(wx.EVT_BUTTON, self.on_placement)
+            cleanup_button = wx.Button(self, label='Standalone via cleanup')
+            cleanup_button.Bind(wx.EVT_BUTTON, self.on_cleanup)
+            navigation.Add(placement_button, 0, wx.RIGHT, 6)
+            navigation.Add(cleanup_button)
+            outer.Add(navigation, 0, wx.EXPAND | wx.ALL, 6)
         bar = wx.BoxSizer(wx.HORIZONTAL)
         toolbar = (('Refresh board (F5)', self.on_refresh),
                               ('Use PCB selection', self.on_selected),
@@ -215,11 +226,11 @@ class StitchingPanel(wx.Panel):
             button = wx.Button(self, label=text, style=wx.BU_EXACTFIT)
             button.Bind(wx.EVT_BUTTON, handler)
             bar.Add(button, 0, wx.RIGHT, 5)
-        outer.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
+        page.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
         if not trace_mode:
-            outer.Add(wx.StaticText(self, label='X/Y spacing is the via-center grid pitch. '
-                                    'Preview skips blocked sites without changing the pitch.'),
-                      0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+            page.Add(wx.StaticText(self, label='X/Y spacing is the via-center grid pitch. '
+                                   'Preview skips blocked sites without changing the pitch.'),
+                     0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
         body = wx.BoxSizer(wx.HORIZONTAL)
         form = wx.FlexGridSizer(cols=2, vgap=5, hgap=8)
         self.advanced_rows = []
@@ -329,7 +340,7 @@ class StitchingPanel(wx.Panel):
                                    'Blue: existing sets')
         right.Add(self.counts, 0, wx.TOP, 4)
         body.Add(right, 1, wx.EXPAND | wx.ALL, 6)
-        outer.Add(body, 1, wx.EXPAND)
+        page.Add(body, 1, wx.EXPAND)
         actions = wx.BoxSizer(wx.HORIZONTAL)
         self.apply = wx.Button(self, label='Apply trace fence' if trace_mode else 'Apply stitching')
         self.apply.Enable(False)
@@ -342,12 +353,12 @@ class StitchingPanel(wx.Panel):
         actions.Add(wx.StaticText(self, label='Conservative geometry checks; run KiCad DRC '
                                  'after placement to check custom rules.'),
                     0, wx.ALIGN_CENTER_VERTICAL)
-        outer.Add(actions, 0, wx.ALL, 6)
+        page.Add(actions, 0, wx.ALL, 6)
         self.sets = wx.ListCtrl(self, style=wx.LC_REPORT, size=(-1, 105))
         for i, (label, width) in enumerate((('Stitching set', 230), ('Net', 170),
                                            ('Vias', 65), ('Status', 280))):
             self.sets.InsertColumn(i, label, width=width)
-        outer.Add(self.sets, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
+        page.Add(self.sets, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
         manage = wx.BoxSizer(wx.HORIZONTAL)
         for text, handler in (('Select set', lambda event: self.select(False)),
                               ('Select all stitching', lambda event: self.select(True)),
@@ -359,14 +370,11 @@ class StitchingPanel(wx.Panel):
             button = wx.Button(self, label=text, style=wx.BU_EXACTFIT)
             button.Bind(wx.EVT_BUTTON, handler)
             manage.Add(button, 0, wx.RIGHT, 5)
-        if not trace_mode:
-            cleanup = wx.Button(self, label='Find standalone vias', style=wx.BU_EXACTFIT)
-            cleanup.Bind(wx.EVT_BUTTON, self.on_cleanup)
-            manage.Add(cleanup, 0, wx.RIGHT, 5)
-        outer.Add(manage, 0, wx.ALL, 6)
+        page.Add(manage, 0, wx.ALL, 6)
+        outer.Add(page, 1, wx.EXPAND)
         if not trace_mode:
             self.cleanup = StitchingCleanupPanel(self, host, native)
-            self.cleanup.SetMinSize((-1, 210))
+            self.cleanup.SetMinSize((-1, 300))
             self.cleanup.Hide()
             outer.Add(self.cleanup, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
         self.status = wx.StaticText(self, label='Click Refresh board to begin. '
@@ -411,9 +419,15 @@ class StitchingPanel(wx.Panel):
         self.host.submit_stitching(fn, done, self)
 
     def on_cleanup(self, event=None):
+        self.GetSizer().Show(self.placement_layout, False, recursive=True)
         self.cleanup.Show()
         self.Layout()
         self.cleanup.on_refresh()
+
+    def on_placement(self, event=None):
+        self.cleanup.Hide()
+        self.GetSizer().Show(self.placement_layout, True, recursive=True)
+        self.Layout()
 
     def invalidate(self, event=None):
         if not self.filling:

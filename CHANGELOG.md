@@ -2,7 +2,7 @@
 
 - Report missing signal timing profiles instead of treating routed nets as 0 ps / matched; do not generate timing DRC targets for incomplete chains.
 - Remove automatic 15 ps source-net limits from detected chains; keep explicit project limits available.
-- Classify and color full, hole-overlap and annulus-only via-in-pad contact; place stitching cleanup inside Via Stitching.
+- Classify and color full, hole-overlap and annulus-only via-in-pad contact; give Via Stitching a full-height standalone-via cleanup view.
 - Detect fully covered narrow tracks under wider same-net copper, including offset and angled centerlines.
 - Explain empty KiCad Selection Filter failures in selection-based workflows.
 - Publish a Windows-only KiCad 10 PCM package with clearer installation and feature guidance.

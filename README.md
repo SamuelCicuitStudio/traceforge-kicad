@@ -50,8 +50,9 @@ extra whole-board renderer dimming pass. The scan includes partial hole or
 annulus overlap on any net, even when the via center is outside the pad;
 review intentional filled and capped vias separately.
 
-In **Via Tools > Via Stitching**, use **Find standalone vias** to expand the cleanup
-list inside the same tab. The **Avoid vias touching SMT pads** option is on by
+In **Via Tools > Via Stitching**, click **Standalone via cleanup** at the top.
+This replaces the placement form with a full-height cleanup list in the same tab;
+click **Placement setup** to return. The **Avoid vias touching SMT pads** option is on by
 default; turn it off only when placing a same-net via in a pad intentionally.
 It scans through vias with no direct track, pad, other-via or copper-drawing contact,
 including manually placed vias outside TraceForge's managed stitching sets. The list
@@ -72,7 +73,7 @@ They are not 0.13.3 assets. For this release, install the Windows PCM ZIP above.
 | Tab | Workflow |
 | --- | --- |
 | **Signals / xSignals** | Detect paths through series passives, inspect chain length/timing, highlight differential pairs, export CSV and write reviewed DRC targets. |
-| **Via Tools** | Choose Via Stitching to preview/add managed vias and find standalone vias for manual cleanup; Via Fencing to follow RF traces; Via Array to move selected vias; Via Size Manager to inspect/select/resize vias; or Via-in-Pad Inspector to classify pad overlap. |
+| **Via Tools** | Choose Via Stitching to preview/add managed vias or open its full-height standalone-via cleanup view; Via Fencing to follow RF traces; Via Array to move selected vias; Via Size Manager to inspect/select/resize vias; or Via-in-Pad Inspector to classify pad overlap. |
 | **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
 | **Trace Tools** | Use the selector at the top right for Trace Cleanup, Teardrops, or Round Corners. Cleanup previews redundant copper and dangling ends, supports bulk selection, and removes reviewed tracks with Undo. Teardrops use KiCad's native generator. Round Corners previews a selected radius across all copper layers, rounds eligible existing trace junctions, and restores selected generated corners. |
 | **PCB Rotation** | Apply an exact angle to selected components in the open PCB Editor. |

@@ -16,8 +16,9 @@ explicit limit in the Signal Chain Editor when justified by its design rules.
 The inspector now reports vias whose drilled hole or copper annulus touches an
 SMT pad, even when the via center lies outside the pad. It scans all nets and
 groups expanded results by full via-in-pad (green), partial hole overlap (red),
-and annulus-only partial overlap (amber). Stitching Cleanup is embedded inside the Via
-Stitching tab. A placement checkbox keeps vias away from SMT pads by default;
+and annulus-only partial overlap (amber). Standalone via cleanup opens a
+full-height view inside the Via Stitching tab, with a button back to placement
+setup. A placement checkbox keeps vias away from SMT pads by default;
 intentional same-net pad placement can be enabled explicitly.
 
 Trace Cleanup now detects a narrow straight track fully contained within a
