@@ -2,11 +2,10 @@
 
 <img src="icons/traceforge-light-48.png" alt="TraceForge icon" width="72" height="72">
 
-**Signal paths, trace cleanup, via stitching, via-in-pad inspection, RF fencing, BGA fanout and live net colors for KiCad 10. Windows is verified; macOS remains a testing preview.**
+**PCB analysis and editing tools for KiCad 10. Version 0.13.3 is released for Windows; the older macOS 0.13.1 build remains a testing preview.**
 
-TraceForge 0.13.3 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
-PCB Rotation, Visualization, and Manufacturing in one panel. Trace Tools includes
-cleanup, teardrops, and rounded corners with persistent restore. It reads the open board through
+TraceForge 0.13.3 groups signal analysis, five Via Tools, BGA fanout, three Trace Tools,
+PCB Rotation, Visualization, and Manufacturing in one panel. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
 tools need no IPC API setup or token. Manufacturing exports read saved files and
 need a separate Python with `openpyxl`.
@@ -15,6 +14,31 @@ need a separate Python with `openpyxl`.
 
 *Current TraceForge in PCB Editor on the 03-MANAGEMENT-SWITCH-BOARD project. The
 selected signal path is highlighted on the board.*
+
+## Features
+
+Open TraceForge from KiCad PCB Editor. Each main tab is listed below; **Via Tools**
+and **Trace Tools** have a selector at the top right for their individual tools.
+
+| Tool | What it does | Detailed use |
+| --- | --- | --- |
+| Signals / xSignals | Finds routed paths across selected series resistors and capacitors; measures copper length and, with a valid project timing profile, delay and group skew; highlights paths and differential partners; saves reviewed chains, exports CSV, and writes reviewed DRC targets. | [Signals and path detection](#signals-and-path-detection) |
+| Via Stitching | Previews and adds same-net via grids in a chosen region, with copper, clearance, keepout and assembly checks; manages generated via sets. Its cleanup view finds standalone through vias for selection and manual deletion. | [Via stitching](#via-stitching) |
+| Via Fencing | Places a row of vias beside a selected signal trace, using a separate fence net; includes an RF spacing estimate. | [Via fencing](#via-fencing) |
+| Via Array | Rearranges an existing selection of matching vias into aligned rows and columns without adding vias. | [Via Array](#via-array) |
+| Via Size Manager | Inventories presets and placed via sizes; filters, selects, deletes, or checks and enlarges eligible through vias. | [Via Size Manager](#via-size-manager) |
+| Via-in-Pad Inspector | Finds full, partial-hole and annulus-only pad overlap on any net; groups findings by component and focuses each result in PCB Editor. It reports geometry; it does not change vias. | [Via-in-Pad Inspector](#via-in-pad-inspector) |
+| BGA Fanout | Checks a selected BGA's pitch and rules, previews dogbone, via-in-pad or bounded escape routes, and applies reviewed breakouts. | [BGA fanout](#bga-fanout) |
+| Trace Cleanup | Finds duplicate, fully covered and eligible overlapping same-net tracks plus dangling ends; previews and removes reviewed findings. | [Trace Cleanup](#trace-cleanup) |
+| Teardrops | Adds or removes native KiCad teardrops at selected via, pad and track targets. | [Teardrops](#teardrops) |
+| Round Corners | Previews and rounds eligible track bends with copper arcs; restores selected or all generated bends. | [Round Corners](#round-corners) |
+| PCB Rotation | Rotates selected footprints by an exact angle in one undoable operation. | [PCB Rotation](#pcb-rotation) |
+| Visualization | Applies live net and net-group colors and controls component-focused ratsnest visibility. | [Visualization](#visualization) |
+| Manufacturing | Sets manufacturer choices, runs saved-project checks, creates PCBWay or PCBPower packages, reviews/rebuilds output, and cleans unused local library entries. | [Manufacturing](#manufacturing) |
+
+Read [installation](#install) before first use and [troubleshooting](#if-a-result-looks-wrong)
+when a scan or timing value looks unexpected. Features that edit the PCB use KiCad Undo;
+save the board after reviewing changes and run KiCad DRC before manufacture.
 
 ## Install
 
@@ -38,47 +62,13 @@ native net focus. If TraceForge asks, restart PCB Editor once more. An existing
 conflicts are reported without changing the existing binding. PCM installation
 does not require PowerShell or a manually created plugin junction.
 
-In **Via Tools > Via-in-Pad Inspector**, click **Scan live PCB**.
-Each component appears once. Results expand by contact type: **green** means the
-via annulus fits inside the pad, **red** means a partially overlapping via hole,
-and **amber** means the annulus touches the pad while the hole does not. Each
-row shows both via and pad nets, coordinates, drill and copper layer. Click a
-via to select/highlight and zoom to it in PCB Editor,
-or click the component to focus all its listed vias. The scan reads unsaved
-board edits and does not remove vias or refill zones. Inspector focus skips the
-extra whole-board renderer dimming pass. The scan includes partial hole or
-annulus overlap on any net, even when the via center is outside the pad;
-review intentional filled and capped vias separately.
-
-In **Via Tools > Via Stitching**, click **Standalone via cleanup** at the top.
-This replaces the placement form with a full-height cleanup list in the same tab;
-click **Placement setup** to return. The **Avoid vias touching SMT pads** option is on by
-default; turn it off only when placing a same-net via in a pad intentionally.
-It scans through vias with no direct track, pad, other-via or copper-drawing contact,
-including manually placed vias outside TraceForge's managed stitching sets. The list
-shows each via's net, position, drill, lock state and connected copper-layer count.
-Click a row to focus one via, or select all listed unlocked vias in PCB Editor for
-manual deletion. Zone-only vias may already be valid stitching; the optional
-"fewer than two connected copper layers" filter narrows the list to electrically
-unstitched candidates. No vias are deleted by the cleanup scan or selection.
-
 ### Older manual installers
 
 The separate Windows and macOS standalone installers belong to the archived
 [0.13.1 releases](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases).
 They are not 0.13.3 assets. For this release, install the Windows PCM ZIP above.
 
-## Choose a tool
-
-| Tab | Workflow |
-| --- | --- |
-| **Signals / xSignals** | Detect paths through series passives, inspect chain length/timing, highlight differential pairs, export CSV and write reviewed DRC targets. |
-| **Via Tools** | Choose Via Stitching to preview/add managed vias or open its full-height standalone-via cleanup view; Via Fencing to follow RF traces; Via Array to move selected vias; Via Size Manager to inspect/select/resize vias; or Via-in-Pad Inspector to classify pad overlap. |
-| **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
-| **Trace Tools** | Use the selector at the top right for Trace Cleanup, Teardrops, or Round Corners. Cleanup previews redundant copper and dangling ends, supports bulk selection, and removes reviewed tracks with Undo. Teardrops use KiCad's native generator. Round Corners previews a selected radius across all copper layers, rounds eligible existing trace junctions, and restores selected generated corners. |
-| **PCB Rotation** | Apply an exact angle to selected components in the open PCB Editor. |
-| **Visualization** | Color net groups and individual nets live, and focus the ratsnest on selected components. |
-| **Manufacturing** | Inventory saved project files, run ERC/DRC and BOM checks, edit verified PCBWay or PCBPower export choices, build detailed single or multi-board packages, and clean up reviewed local library table entries. See [manufacturing and project maintenance](docs/MANUFACTURING-AND-PROJECT-MAINTENANCE.md). |
+## How to use the panel
 
 Start each tool from an open PCB in **PCB Editor**. Use its **Refresh**, **Scan**,
 or **Analyze** button after changing the board; TraceForge does not continuously
@@ -264,6 +254,13 @@ path. Neither is an exact reproduction of KiCad's point-to-point tuner. Timing
 requires validated project propagation profiles and stackup data. Review driver
 orientation and limits before writing DRC targets.
 
+If you set an explicit **Source net max ps** value, TraceForge compares it to
+track plus via delay on the entire first net before series parts, including
+branches. It is not a point-to-point source-to-resistor measurement. Package
+pad-to-die delay remains in whole-chain timing and matching targets. Endpoint
+path previews report additional contacts separately; that notice does not
+mean the source-net limit was exceeded.
+
 ### Via stitching
 
 ![Via Stitching tab in the published 0.11.0 build on the management switch PCB](docs/screenshots/via-stitching.png)
@@ -284,6 +281,18 @@ shows the loaded code path and log location when checking an installation.
 Select, edit/regenerate or remove tool-created sets from the list. Changes support
 KiCad Undo/Redo. Read [stitching usage and checks](docs/VIA-STITCHING-TESTING.md).
 
+The **Avoid vias touching SMT pads** option is on by default; turn it off only
+when same-net pad contact is intentional and your fabrication process supports it.
+Click **Standalone via cleanup** at the top of this tab to replace the placement
+form with a full-height list; **Placement setup** returns to the form. The scan
+finds through vias with no direct track, pad, other-via or copper-drawing contact,
+including vias placed outside managed stitching sets. Results show net, position,
+drill, lock state and connected copper-layer count. Click one to focus it, or
+select all listed unlocked vias in PCB Editor for manual deletion. Zone-only
+vias can be valid stitching; the optional **fewer than two connected copper
+layers** filter narrows the list. Scanning and selecting do not delete vias or
+refill zones. After deleting in KiCad, press **B** when ready to refill.
+
 ### Via fencing
 
 ![Current Via Fencing tab on the management switch PCB](docs/screenshots/via-fencing.png)
@@ -300,6 +309,18 @@ The **RF spacing helper** estimates wavelength/10 or wavelength/20 spacing from
 frequency and dielectric data. It does not calculate impedance or choose the
 lateral copper gap. Inspect the reported largest gap after skipped locations.
 See [RF fencing](docs/VIA-FENCING.md).
+
+### Via-in-Pad Inspector
+
+In **Via Tools > Via-in-Pad Inspector**, click **Scan live PCB**. Each component
+appears once, with its vias grouped by contact type: **green** means the via
+annulus fits inside the pad, **red** means the via hole partly overlaps the pad,
+and **amber** means the annulus touches the pad while the hole does not. Each
+row shows both via and pad nets, coordinates, drill and copper layer. Click a
+via to select, highlight and zoom to it in PCB Editor, or click a component to
+focus all its listed vias. The scan includes partial overlap even when the via
+center lies outside the pad. It reads unsaved edits and does not remove vias or
+refill zones. Review intentional filled or capped vias separately.
 
 ### BGA fanout
 
@@ -330,7 +351,7 @@ Escape endpoints still need onward routing to their destination. Microvias, HDI
 layer assignment, differential-pair escape and full-board autorouting are not implemented.
 See [BGA fanout](docs/BGA-FANOUT.md).
 
-### Trace Tools
+### Trace Cleanup
 
 ![Trace Cleanup workflow showing all six copper layers on the management switch PCB](docs/screenshots/trace-cleanup.png)
 
@@ -350,6 +371,8 @@ grouped copper are preserved. A narrow straight track fully covered by a
 wider same-net track can be removed; the wider track stays unchanged. See
 [trace cleanup](docs/TRACE-CLEANUP.md).
 
+### Teardrops
+
 Choose **Teardrops** in the Trace Tools selector. Choose Add or Remove, the whole
 board or selected PCB items, and via, PTH, or SMD targets. For Add, set curved
 or straight edges, best length and width percentages, and optional maximums.
@@ -360,6 +383,8 @@ uses one specified size rule for pad and via targets. Track-to-track teardrops
 use Board Setup defaults and must be applied separately. Selected-only scope
 does not support track-to-track teardrops. Use **Open advanced KiCad dialog**
 for additional KiCad filters. Run KiCad DRC after applying.
+
+### Round Corners
 
 Choose **Round Corners** to enter a maximum radius in millimeters. By default,
 TraceForge fits a smaller radius where the full value cannot clear adjacent
@@ -379,6 +404,8 @@ sidecar with the PCB. Recheck length matching and run KiCad DRC after rounding;
 the preview is conservative but does not replace the full DRC, including zones
 and custom rules. KiCad's shove router cannot drag copper arcs.
 
+### PCB Rotation
+
 Open the **PCB Rotation** tab to rotate selected components in the open PCB Editor.
 Enter a positive angle for counterclockwise rotation, or a negative angle for
 clockwise rotation; `45` and `-45` are both valid. Components rotate around their
@@ -394,6 +421,20 @@ For quick access, use the **TraceForge: PCB Rotation** toolbar button or
 Each shortcut opens its tab in the existing TraceForge window when one is open.
 KiCad's Python ActionPlugin API does not provide a supported way to add these
 actions to the PCB canvas right-click menu.
+
+### Manufacturing
+
+Open **Manufacturing** on a saved KiCad board. Use **Set up project** and
+**Manufacturer choices** to record the PCBWay or PCBPower fabrication and
+assembly choices, then **Review project** and **Run KiCad checks** before
+generating a package. The review inventories board and schematic files,
+checks ERC/DRC and BOM inputs, and reports holds. Generate a new package or
+review and rebuild existing output; multi-board packages can include sibling
+boards. The local library cleanup lists unused table entries and makes a
+backup before removing the selected entries. Export uses saved project files,
+so save schematic and PCB changes first. See [manufacturing and project
+maintenance](docs/MANUFACTURING-AND-PROJECT-MAINTENANCE.md) for output contents,
+supported configurations and check limits.
 
 ## Keep project metadata
 
@@ -453,10 +494,3 @@ boards are ignored. `tools/build_chains.py` is an optional offline chain builder
 See [PCM publishing steps](docs/PCM-PUBLISHING.md),
 [release notes](docs/RELEASE-NOTES.md), [changelog](CHANGELOG.md) and
 [MIT license](LICENSE).
-
-If you set an explicit **Source net max ps** value, TraceForge compares it to
-track plus via delay on the entire first net before series parts, including
-branches. It is not a point-to-point source-to-resistor measurement. Package
-pad-to-die delay remains in whole-chain timing and matching targets. Endpoint
-path previews report additional contacts separately; that notice does not
-mean the source-net limit was exceeded.
