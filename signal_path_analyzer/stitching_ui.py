@@ -191,9 +191,13 @@ class BoardOverview(wx.Panel):
                 dc.DrawText('Start', pts[0].x + 4, pts[0].y + 4)
 
 
-class StitchingPanel(wx.Panel):
+class StitchingPanel(wx.ScrolledWindow):
     def __init__(self, parent, host, native, trace_mode=False):
         super().__init__(parent)
+        # The expanded form can be taller than the panel on laptop displays.
+        # Scroll the whole placement page instead of letting its rows cover
+        # Preview, Apply and the managed-set controls.
+        self.SetScrollRate(0, 12)
         if host.dark:
             self.SetBackgroundColour('#222C3A')
             self.SetForegroundColour('#E5EDF8')
@@ -383,6 +387,7 @@ class StitchingPanel(wx.Panel):
         outer.Add(self.status, 0, wx.EXPAND | wx.ALL, 6)
         self.SetSizer(outer)
         self.toggle_advanced()
+        self.FitInside()
         if host.dark:
             self.sets.SetBackgroundColour('#19212D')
             self.sets.SetForegroundColour('#E5EDF8')
@@ -408,6 +413,7 @@ class StitchingPanel(wx.Panel):
                 caption.Show(visible)
                 control.Show(visible)
             self.Layout()
+            self.FitInside()
         if event:
             event.Skip()
 
@@ -422,12 +428,14 @@ class StitchingPanel(wx.Panel):
         self.GetSizer().Show(self.placement_layout, False, recursive=True)
         self.cleanup.Show()
         self.Layout()
+        self.FitInside()
         self.cleanup.on_refresh()
 
     def on_placement(self, event=None):
         self.cleanup.Hide()
         self.GetSizer().Show(self.placement_layout, True, recursive=True)
         self.Layout()
+        self.FitInside()
 
     def invalidate(self, event=None):
         if not self.filling:
