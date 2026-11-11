@@ -52,12 +52,12 @@ jobs:
           sha256sum "$ASSET" > dist/SHA256SUMS-Windows-PCM.txt
 
           if gh release view "$TAG" --json isDraft --jq '.isDraft' > draft.txt 2>/dev/null; then
-            [[ "$(cat draft.txt)" == true ]] || { echo 'Release is already published' >&2; exit 1; }
             gh release upload "$TAG" "$ASSET" dist/SHA256SUMS-Windows-PCM.txt --clobber
           else
             gh release create "$TAG" "$ASSET" dist/SHA256SUMS-Windows-PCM.txt --draft --verify-tag \
               --title "$TITLE" --notes-file "docs/releases/$VERSION.md"
           fi
 
-          gh release edit "$TAG" --draft=false --prerelease=false --latest=true
+          gh release edit "$TAG" --notes-file "docs/releases/$VERSION.md" \
+            --draft=false --prerelease=false --latest=true
           gh release view "$TAG" --json url,isDraft,isPrerelease,assets
