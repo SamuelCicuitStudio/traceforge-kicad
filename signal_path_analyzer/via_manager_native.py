@@ -67,8 +67,53 @@ def _sidecars(source):
             for suffix in ('.kicad_pro', '.kicad_dru')}
 
 
+def scan_vias_in_pads(board, payload=None):
+    """Find via drill centers inside exposed SMT pad copper on a shared layer.
+
+    This is an inspection aid, not a claim that a via has been filled or capped.
+    KiCad pad hit testing handles rotation and non-rectangular pad shapes.
+    """
+    payload = payload or {}
+    pads = {}
+    cell = 5_000_000  # 5 mm spatial buckets; avoid comparing every via with every pad.
+    for footprint in board.GetFootprints():
+        for pad in footprint.Pads():
+            if pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+                continue
+            bounds = pad.GetBoundingBox()
+            record = (footprint.GetReference(), pad, bounds)
+            for x in range(bounds.GetX() // cell,
+                           (bounds.GetX() + bounds.GetWidth()) // cell + 1):
+                for y in range(bounds.GetY() // cell,
+                               (bounds.GetY() + bounds.GetHeight()) // cell + 1):
+                    pads.setdefault((x, y), []).append(record)
+    rows = []
+    for via in _vias(board).values():
+        check_payload(payload)
+        position = via.GetPosition()
+        via_layers = set(via.GetLayerSet().CuStack())
+        hits = []
+        for reference, pad, bounds in pads.get((position.x // cell,
+                                                position.y // cell), ()):
+            shared = via_layers.intersection(pad.GetLayerSet().CuStack())
+            if shared and bounds.Contains(position) and pad.HitTest(position):
+                hits.append(dict(reference=reference, pad=str(pad.GetNumber()),
+                                 pad_net=str(pad.GetNetname()),
+                                 layers=[pcbnew.LayerName(layer) if hasattr(pcbnew, 'LayerName')
+                                         else str(layer) for layer in sorted(shared)]))
+        if hits:
+            row = _row(via)
+            row['pads'] = hits
+            rows.append(row)
+    rows.sort(key=lambda row: (row['pads'][0]['reference'], row['pads'][0]['pad'],
+                               row['x_mm'], row['y_mm']))
+    return dict(count=len(rows), vias=rows, method='via center inside SMT pad copper')
+
+
 def dispatch(board, operation, payload):
     global _session
+    if operation == 'via_manage_pad_scan':
+        return scan_vias_in_pads(board, payload)
     if operation == 'via_manage_inventory':
         rows = [_row(via) for via in _vias(board).values()]
         ds = board.GetDesignSettings()
@@ -212,15 +257,22 @@ def dispatch(board, operation, payload):
                 else:
                     via.SetWidth(round(saved['diameter'] * 1e6))
                     via.SetDrill(round(saved['drill'] * 1e6))
-            if operation == 'via_manage_apply' and result.get('method') == 'local hole checks':
+            if operation == 'via_manage_delete':
+                # Remove first, then let the user refill once after a cleanup
+                # batch. A deletion cannot add an electrical copper short.
+                live.BuildConnectivity()
+            elif result.get('method') == 'local hole checks':
                 live.BuildConnectivity()  # Copper envelopes and zone clearances are unchanged.
             else:
                 refill(live)
             pcbnew.Refresh()
             verb = 'Deleted' if operation == 'via_manage_delete' else 'Resized'
+            suffix = ('Zones were not refilled. Press B in KiCad when ready, '
+                      'before DRC/export. '
+                      if operation == 'via_manage_delete' else '')
             return dict(count=len(identities),
                         message=f'{verb} {len(identities)} vias. '
-                                'Undo restores them; save normally.')
+                                + suffix + 'Undo restores them; save normally.')
 
         return transaction(board, apply)
     finally:

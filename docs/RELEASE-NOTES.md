@@ -1,3 +1,26 @@
+# TraceForge 0.13.1 - via inspection and faster cleanup
+
+The Via-in-Pad Inspector scans the live board for vias whose centers are inside
+exposed SMT pads. Results are grouped by component, with each pad via shown under
+its component. Click a via to select and zoom to it in PCB Editor, or click the
+component to focus all its listed vias. The scan is read-only; the user
+can inspect and edit each via with KiCad's normal tools. The Windows PCM is released
+separately from the macOS standalone preview. The Mac build requires Python 3 with
+wxPython for the separate panel and has not been exercised in a live KiCad session.
+
+Inspector row focus skips renderer dimming and its extra full-board refreshes.
+The inspector shows a local loading animation during scan and select/zoom work.
+The shared loading animation now also covers signal selection and other background
+KiCad actions. Via Stitching opens a new Stitching Cleanup view for standalone
+through vias; it can select all listed unlocked vias for manual deletion. The view
+reports actual connected-layer count so valid zone-only stitching can be distinguished
+from vias connected on fewer than two layers. It never deletes vias automatically.
+Deleting stitching vias, generated fanout items or Via Size Manager vias now defers
+zone fill; press B in KiCad when ready, before DRC/export. Placement actions still refill
+zones when their connectivity check requires filled copper.
+
+---
+
 # TraceForge 0.13.0 - independent manual installers
 
 This prerelease provides separate KiCad 10 standalone ZIPs for Windows and macOS. The Windows ZIP retains the PowerShell junction installer. The macOS ZIP adds a shell installer that links the extracted plugin into KiCad's user scripting-plugin directory and records a Python 3 interpreter able to import wxPython for the separate TraceForge panel. Both ZIPs contain the same plugin source and can be downloaded independently. The existing Windows-only PCM ZIP is also attached as an alternative installation method.

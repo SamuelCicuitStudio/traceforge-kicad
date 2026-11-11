@@ -583,6 +583,10 @@ class TraceForgePanel(wx.Frame):
             if tab == 0
             else self.via_array.table
             if tab == 1 and self.via_tools.active_index == 2
+            else self.via_tools.pad_inspector.table
+            if tab == 1 and self.via_tools.active_index == 4
+            else self.via_tools.cleanup.table
+            if tab == 1 and self.via_tools.active_index == 5
             else self.via_tools.active_page.canvas
             if tab == 1
             else self.fanout.rows
@@ -875,6 +879,7 @@ class TraceForgePanel(wx.Frame):
         self.refresh.Disable()
         self.status.SetForegroundColour(self.colors["routed"])
         self.status.SetLabel("Selecting / working in KiCad...")
+        self.begin_activity("Selecting / working in KiCad...")
 
         def work():
             logging.info("Panel action started")
@@ -893,6 +898,7 @@ class TraceForgePanel(wx.Frame):
         self.resume_auto_check()
         if decrement:
             self.actions_pending -= 1
+            self.end_activity()
         if self.closing:
             return
         self.refresh.Enable(not self.busy and not self.actions_pending)

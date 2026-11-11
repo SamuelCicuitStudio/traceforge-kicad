@@ -1,15 +1,29 @@
-name: Draft release
+name: Release
 
 on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check -e ".[dev]"
+      - run: python -m pytest -q
+      - run: python -m ruff check .
+      - run: python -m compileall -q signal_path_analyzer native_bridge tools
+      - run: python tools/verify_python_runtime.py
+      - run: python tools/build_release.py
+      - run: python tools/verify_release_archives.py
+
   macos-package:
     runs-on: macos-latest
     steps:
@@ -24,8 +38,8 @@ jobs:
       - run: python tools/verify_release_archives.py
       - run: bash tools/verify_macos_installer.sh
 
-  draft:
-    needs: macos-package
+  publish:
+    needs: [windows-package, macos-package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -35,95 +49,49 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install --disable-pip-version-check -e ".[dev]"
+      - run: python -m pytest -q
       - run: python -m ruff check .
-      - run: python -m compileall -q signal_path_analyzer native_bridge tools
-      - run: python tools/verify_python_runtime.py
       - run: python tools/build_release.py
       - run: python tools/verify_release_archives.py
-      - name: Create or update draft
+      - name: Publish Windows PCM and macOS preview separately
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
+          set -euo pipefail
           VERSION=$(python -c 'import importlib.metadata; print(importlib.metadata.version("kicad-pcb-automation-toolkit"))')
           TAG="v$VERSION"
-          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "$TAG" ]]; then
-            echo "Release tag does not match project version" >&2
-            exit 1
-          fi
-          if gh release view "$TAG" --json isDraft --jq '.isDraft' > draft-status.txt 2>/dev/null; then
-            if [[ "$(cat draft-status.txt)" != "true" ]]; then
-              echo "Refusing to replace a published release" >&2
-              exit 1
-            fi
-            gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt --clobber
-          else
-            NOTES="docs/releases/$VERSION.md"
-            [[ -f "$NOTES" ]] || NOTES="docs/RELEASE-NOTES.md"
-            gh release create "$TAG" dist/*.zip dist/SHA256SUMS.txt \
-              --draft --verify-tag --title "TraceForge $VERSION" \
-              --notes-file "$NOTES"
-          fi
-      - name: Record draft verification for SSH-only maintainers
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          VERSION=$(python -c 'import importlib.metadata; print(importlib.metadata.version("kicad-pcb-automation-toolkit"))')
-          gh release view "v$VERSION" --json url,isDraft,tagName,assets > release-status.json
-          gh api "repos/$GH_REPO" --jq '{private: .private}' > repository-status.json
-          python -c 'import json; from pathlib import Path; p=Path("release-status.json"); d=json.loads(p.read_text()); d.update(json.loads(Path("repository-status.json").read_text())); assert d["isDraft"], "Expected a draft release"; p.write_text(json.dumps(d, indent=2)+"\n")'
-          python - <<'PY'
-          import hashlib
-          import json
-          import zipfile
-          from pathlib import Path
-          archives = sorted(Path('dist').glob('TraceForge-*.zip'))
-          assert len(archives) == 3, 'Expected Windows, macOS and PCM archives'
-          status = Path('release-status.json')
-          data = json.loads(status.read_text())
-          data['archives'] = {}
-          for archive in archives:
-              with zipfile.ZipFile(archive) as bundle:
-                  assert bundle.testzip() is None
-                  manifest = {name: hashlib.sha256(bundle.read(name)).hexdigest()
-                              for name in bundle.namelist()}
-              digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-              asset = next(a for a in data['assets'] if a['name'] == archive.name)
-              assert asset['digest'] == 'sha256:' + digest
-              data['archives'][archive.name] = {'sha256': digest,
-                                                'package_manifest': manifest}
-          status.write_text(json.dumps(data, indent=2) + '\n')
-          PY
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git fetch origin refs/notes/release-status:refs/notes/release-status || true
-          git notes --ref=release-status add -f -F release-status.json "$GITHUB_SHA"
-          git push origin refs/notes/release-status
-      - name: Publish explicitly authorized tag
-        if: github.ref_type == 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          VERSION=$(python -c 'import importlib.metadata; print(importlib.metadata.version("kicad-pcb-automation-toolkit"))')
-          TAG="v$VERSION"
+          [[ "$GITHUB_REF_NAME" == "$TAG" ]] || { echo 'Tag and package version differ' >&2; exit 1; }
           APPROVED=$(python -c 'import json; print(json.load(open("pcm/publish.json"))["tag"])')
-          if [[ "$TAG" != "$APPROVED" ]]; then
-            echo "Tag has no publication authorization; keeping draft"
-            exit 0
-          fi
-          PRERELEASE=$(python -c 'import json; print(str(json.load(open("pcm/publish.json"))["prerelease"]).lower())')
+          [[ "$APPROVED" == "$TAG" ]] || { echo 'Tag lacks publication authorization' >&2; exit 1; }
+          MAC_TAG=$(python -c 'import json; print(json.load(open("pcm/publish.json"))["mac_prerelease_tag"])')
+          [[ "$MAC_TAG" == "$TAG-macos-preview" ]] || { echo 'Mac tag does not match version' >&2; exit 1; }
           TITLE=$(python -c 'import json; print(json.load(open("pcm/publish.json"))["title"])')
-          LATEST=$(python -c 'import json; print(str(json.load(open("pcm/publish.json")).get("latest",False)).lower())')
-          gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST" --title "$TITLE"
-          for OLD_TAG in $(python -c 'import json; print(" ".join(json.load(open("pcm/publish.json")).get("supersedes",[])))'); do
-            gh release edit "$OLD_TAG" --notes-file "docs/releases/${OLD_TAG#v}.md"
-          done
-          gh release view "$TAG" --json url,isDraft,tagName,isPrerelease,assets > published-status.json
-          python -c 'import json; d=json.load(open("published-status.json")); assert not d["isDraft"]; print(d["url"])'
-          git notes --ref=release-status add -f -F published-status.json "$GITHUB_SHA"
-          git push origin refs/notes/release-status
+          MAC_TITLE=$(python -c 'import json; print(json.load(open("pcm/publish.json"))["mac_prerelease_title"])')
+
+          mkdir -p release/windows release/macos
+          cp "dist/TraceForge-$VERSION-KiCad10-PCM.zip" release/windows/
+          cp "dist/TraceForge-$VERSION-KiCad10-macOS.zip" release/macos/
+          (cd release/windows && sha256sum *.zip > SHA256SUMS.txt)
+          (cd release/macos && sha256sum *.zip > SHA256SUMS.txt)
+
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' > stable-draft.txt 2>/dev/null; then
+            [[ "$(cat stable-draft.txt)" == true ]] || { echo 'Windows release is already published' >&2; exit 1; }
+            gh release upload "$TAG" release/windows/* --clobber
+          else
+            gh release create "$TAG" release/windows/* --draft --verify-tag \
+              --title "$TITLE" --notes-file "docs/releases/$VERSION.md"
+          fi
+          if gh release view "$MAC_TAG" --json isDraft --jq '.isDraft' > mac-draft.txt 2>/dev/null; then
+            [[ "$(cat mac-draft.txt)" == true ]] || { echo 'Mac preview is already published' >&2; exit 1; }
+            gh release upload "$MAC_TAG" release/macos/* --clobber
+          else
+            gh release create "$MAC_TAG" release/macos/* --draft --target "$GITHUB_SHA" \
+              --title "$MAC_TITLE" --notes-file "docs/releases/$VERSION-macos-preview.md"
+          fi
+
+          gh release edit "$TAG" --draft=false --prerelease=false --latest=true
+          gh release edit "$MAC_TAG" --draft=false --prerelease=true --latest=false
+          gh release view "$TAG" --json url,isDraft,isPrerelease,assets
+          gh release view "$MAC_TAG" --json url,isDraft,isPrerelease,assets

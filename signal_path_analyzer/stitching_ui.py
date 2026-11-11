@@ -349,6 +349,10 @@ class StitchingPanel(wx.Panel):
             button = wx.Button(self, label=text, style=wx.BU_EXACTFIT)
             button.Bind(wx.EVT_BUTTON, handler)
             manage.Add(button, 0, wx.RIGHT, 5)
+        if not trace_mode:
+            cleanup = wx.Button(self, label='Find standalone vias', style=wx.BU_EXACTFIT)
+            cleanup.Bind(wx.EVT_BUTTON, self.on_cleanup)
+            manage.Add(cleanup, 0, wx.RIGHT, 5)
         outer.Add(manage, 0, wx.ALL, 6)
         self.status = wx.StaticText(self, label='Click Refresh board to begin. '
                                    'No automatic polling.')
@@ -390,6 +394,9 @@ class StitchingPanel(wx.Panel):
                          'error')
             return
         self.host.submit_stitching(fn, done, self)
+
+    def on_cleanup(self, event=None):
+        self.GetParent().GetParent().show_cleanup()
 
     def invalidate(self, event=None):
         if not self.filling:
@@ -675,6 +682,8 @@ class StitchingPanel(wx.Panel):
 
         def done(result):
             self.accept_scene(result[1])
-            self.message(f'Removed {result[0]} stitching vias. Undo is available in KiCad.', 'ok')
+            self.message(f'Removed {result[0]} stitching vias. Zones were not '
+                         'refilled. Press B in KiCad when ready, before DRC/export. '
+                         'Undo is available.', 'ok')
 
         self.task(work, done)

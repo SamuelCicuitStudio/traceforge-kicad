@@ -344,16 +344,21 @@ def dispatch(board, operation, payload):
 
             _highlights.clear(board, board_items(board))
             chosen = replace(board, result['ids'])
-            try:
-                result['dimmed'] = (dim_other_copper(board, result['ids'])
-                                    if _highlights.dim else False)
-            except Exception as error:
-                # A renderer/hotkey failure must not block exact via selection,
-                # zoom or native property editing. Recheck the real selection.
-                chosen = replace(board, result['ids'])
-                result['dimmed'] = False
-                result['dim_warning'] = str(error)
-            pcbnew.Refresh()
+            # Inspector row clicks need only exact selection and zoom. Renderer
+            # dimming invokes several additional full-canvas refreshes, which
+            # repaint large zone fills even though no copper has changed.
+            fast_focus = operation == 'via_manage_focus' and payload.get('fast') is True
+            result['dimmed'] = False
+            if not fast_focus:
+                try:
+                    result['dimmed'] = (dim_other_copper(board, result['ids'])
+                                        if _highlights.dim else False)
+                except Exception as error:
+                    # A renderer/hotkey failure must not block exact via selection,
+                    # zoom or native property editing. Recheck the real selection.
+                    chosen = replace(board, result['ids'])
+                    result['dim_warning'] = str(error)
+                pcbnew.Refresh()
             result['zoomed'] = zoom_to_items(board, chosen, force=True) if chosen else False
             # Only publish ownership after temporary dimming/selection operations
             # finish. Never restore visual flags inherited from a preceding wire.

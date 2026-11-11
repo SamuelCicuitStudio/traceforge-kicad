@@ -61,7 +61,7 @@ def files():
     return paths
 
 
-def main():
+def main(*, local_only=False):
     metadata = json.loads(METADATA.read_text(encoding="utf-8"))
     if len(metadata["versions"]) != 1:
         raise ValueError("Packaged PCM metadata must have exactly one version")
@@ -103,6 +103,11 @@ def main():
             raise ValueError("PCM archive failed integrity or allowlist validation")
         install_size = sum(entry.file_size for entry in bundle.infolist())
 
+    if local_only:
+        print(f"Built local-only {name}: {len(content)} files, {archive.stat().st_size} bytes")
+        print(f"SHA256 {hashlib.sha256(archive.read_bytes()).hexdigest()}")
+        return archive
+
     submission = json.loads(METADATA.read_text(encoding="utf-8"))
     release = submission["versions"][0]
     release.update(
@@ -123,4 +128,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if sys.argv[1:] not in ([], ["--local-only"]):
+        raise SystemExit("Usage: build_pcm.py [--local-only]")
+    main(local_only="--local-only" in sys.argv[1:])

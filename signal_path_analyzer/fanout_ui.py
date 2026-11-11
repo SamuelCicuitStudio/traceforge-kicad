@@ -371,7 +371,8 @@ class FanoutPanel(wx.Panel):
         def done(result):
             self.accept_data(result[1])
             self.message(f"Removed {result[0]['removed']} generated items. "
-                         'Undo is available in KiCad.', 'ok')
+                         'Zones were not refilled. Press B in KiCad when ready, '
+                         'before DRC/export. Undo is available.', 'ok')
 
         self.task(work, done)
 

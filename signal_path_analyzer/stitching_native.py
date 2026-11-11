@@ -530,6 +530,10 @@ def remove_members(board, chosen):
 
 def dispatch(board, operation, payload):
     global _preview
+    if operation == 'stitch_loose_scan':
+        from .stitching_cleanup_native import scan
+
+        return scan(board, payload)
     if operation == 'stitch_net_path':
         from .trace_fence_native import read_trace
 
@@ -576,7 +580,10 @@ def dispatch(board, operation, payload):
 
         def remove(live):
             remove_members(live, chosen)
-            refill(live)
+            # A removal cannot create a new copper short. Defer expensive zone
+            # fill so several cleanup actions can be batched before one refill.
+            live.BuildConnectivity()
+            pcbnew.Refresh()
             return count
 
         _preview = None

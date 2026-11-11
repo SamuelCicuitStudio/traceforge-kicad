@@ -498,7 +498,10 @@ def dispatch(board, operation, payload):
         def remove(live):
             for item in items:
                 live.RemoveNative(item)
-            refill(live)
+            # Defer zone fill after removal; placement still fills for its
+            # copper-connectivity proof.
+            live.BuildConnectivity()
+            pcbnew.Refresh()
             return dict(removed=len(items), preserved=changed)
 
         return transaction(board, remove)

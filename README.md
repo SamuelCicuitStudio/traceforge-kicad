@@ -2,9 +2,9 @@
 
 <img src="icons/traceforge-light-48.png" alt="TraceForge icon" width="72" height="72">
 
-**Signal paths, trace cleanup, via stitching, RF fencing, BGA fanout and live net colors for KiCad 10. Windows is verified; macOS manual installation is a 0.13.0 preview.**
+**Signal paths, trace cleanup, via stitching, via-in-pad inspection, RF fencing, BGA fanout and live net colors for KiCad 10. Windows is verified; macOS remains a testing preview.**
 
-TraceForge 0.13.0 (prerelease) groups signal analysis, Via Tools, BGA fanout, Trace Tools,
+TraceForge 0.13.1 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
 PCB Rotation, Visualization, and Manufacturing in one panel. Trace Tools includes
 cleanup, teardrops, and rounded corners with persistent restore. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
@@ -20,9 +20,9 @@ selected signal path is highlighted on the board.*
 
 **Requirements:** KiCad 10 with Python scripting support. Windows is verified. The macOS standalone preview also needs Python 3 with wxPython for the separate TraceForge panel process.
 
-### KiCad Plugin and Content Manager
+### KiCad Plugin and Content Manager (local Windows and macOS package)
 
-Download `TraceForge-<version>-KiCad10-PCM.zip` from a GitHub release. In KiCad
+For Windows 0.13.1, use `TraceForge-0.13.1-KiCad10-PCM.zip`. In KiCad
 Manager, open **Plugin and Content Manager > Install from file**, select that ZIP,
 then close all KiCad windows and reopen PCB Editor. Once KiCad accepts TraceForge into its official catalog,
 you can instead install or update it directly from the Manager's Repository tab.
@@ -32,6 +32,27 @@ native net focus. If TraceForge asks, restart PCB Editor once more. An existing
 `user.hotkeys` file is backed up as `user.hotkeys.traceforge.bak`; shortcut
 conflicts are reported without changing the existing binding. PCM installation
 does not require PowerShell or a manually created plugin junction.
+
+The macOS 0.13.1 preview uses the separate standalone ZIP and shell installer below.
+It needs Python 3 with wxPython for the panel process. Live editing still needs
+verification on a Mac.
+
+In **Via Tools > Via-in-Pad Inspector**, click **Scan live PCB**.
+Each component appears once; expand it to see its pad vias with net, coordinates,
+drill and copper layer. Click a via to select/highlight and zoom to it in PCB Editor,
+or click the component to focus all its listed vias. The scan reads unsaved
+board edits and does not remove vias or refill zones. Inspector focus skips the
+extra whole-board renderer dimming pass. A hit means the via center is inside exposed
+SMT pad copper on a shared layer; review intentional filled and capped vias separately.
+
+In **Via Tools > Via Stitching**, use **Find standalone vias** to open Stitching Cleanup.
+It scans through vias with no direct track, pad, other-via or copper-drawing contact,
+including manually placed vias outside TraceForge's managed stitching sets. The list
+shows each via's net, position, drill, lock state and connected copper-layer count.
+Click a row to focus one via, or select all listed unlocked vias in PCB Editor for
+manual deletion. Zone-only vias may already be valid stitching; the optional
+"fewer than two connected copper layers" filter narrows the list to electrically
+unstitched candidates. No vias are deleted by the cleanup scan or selection.
 
 ### Standalone Windows ZIP
 
@@ -58,9 +79,9 @@ Cloning this repository into a permanent folder and running the same installer
 also works. The main plugin needs no separate Python installation; Manufacturing
 export needs Python with `openpyxl` as described in its workflow guide.
 
-### Standalone macOS ZIP (0.13.0 preview)
+### Standalone macOS ZIP (0.13.1 preview)
 
-1. Download `TraceForge-0.13.0-KiCad10-macOS.zip`, extract it into a permanent folder, and close KiCad.
+1. Download `TraceForge-0.13.1-KiCad10-macOS.zip` from the macOS preview release, extract it into a permanent folder, and close KiCad.
 2. Ensure that a Python 3 interpreter can run `import wx`. If necessary, install wxPython for that interpreter. In Terminal, run the installer from the extracted folder:
 
    ```sh

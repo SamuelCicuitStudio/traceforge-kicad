@@ -1,7 +1,9 @@
 {
-  "tag": "v0.13.0",
-  "prerelease": true,
-  "latest": false,
-  "title": "TraceForge 0.13.0 - Windows and macOS manual installers (Mac preview)",
+  "tag": "v0.13.1",
+  "prerelease": false,
+  "latest": true,
+  "title": "TraceForge 0.13.1 - Windows PCM",
+  "mac_prerelease_tag": "v0.13.1-macos-preview",
+  "mac_prerelease_title": "TraceForge 0.13.1 - macOS preview",
   "supersedes": []
 }

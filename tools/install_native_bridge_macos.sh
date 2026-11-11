@@ -6,7 +6,7 @@ usage() {
 }
 
 replace_existing=false
-plugins_dir="${TRACEFORGE_KICAD_PLUGINS_DIR:-$HOME/Library/Application Support/kicad/scripting/plugins}"
+plugins_dir="${TRACEFORGE_KICAD_PLUGINS_DIR:-$HOME/Documents/KiCad/10.0/scripting/plugins}"
 python_bin="${TRACEFORGE_PYTHON:-}"
 while (($#)); do
   case "$1" in
