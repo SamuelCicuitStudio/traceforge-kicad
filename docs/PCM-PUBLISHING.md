@@ -24,8 +24,8 @@ SHA-256 checksum. It requires the matching tag in `pcm/publish.json`.
 ## Catalog submission
 
 The [KiCad Addon Metadata repository](https://gitlab.com/kicad/addons/metadata)
-is a separate review process. The older TraceForge 0.12.10 merge request does
-not publish 0.13.3 and should not be merged as an update to this release.
-Any future catalog submission must use the published 0.13.3 ZIP's exact URL,
-SHA-256 and sizes, then pass KiCad's metadata validation. Until accepted,
-**Install from file** remains the documented installation path.
+is a separate review process. [Merge request !743](https://gitlab.com/kicad/addons/metadata/-/merge_requests/743)
+submits this Windows package to the official catalog. Its metadata must match
+the published ZIP's exact URL, SHA-256 and sizes and pass KiCad's metadata
+validation. Until accepted, **Install from file** remains the documented
+installation path.
