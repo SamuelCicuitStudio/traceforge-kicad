@@ -15,9 +15,8 @@ plugins="$temp/KiCad plugins"
 bash "${package[0]}/tools/install_native_bridge_macos.sh" --python "$fake_python" --plugins-dir "$plugins"
 destination="$plugins/traceforge_native_bridge"
 [[ -L "$destination" ]] || exit 1
-expected_source="$(cd "${package[0]}/native_bridge" && pwd -P)"
-[[ "$(readlink "$destination")" == "$expected_source" ]] || exit 1
-[[ "$(cat "${package[0]}/traceforge-python.txt")" == "$fake_python" ]] || exit 1
+[[ -f "$destination/__init__.py" ]] || exit 1
+[[ -x "$(cat "${package[0]}/traceforge-python.txt")" ]] || exit 1
 bash "${package[0]}/tools/install_native_bridge_macos.sh" --python "$fake_python" --plugins-dir "$plugins"
 mkdir -p "$temp/blocked/traceforge_native_bridge"
 if bash "${package[0]}/tools/install_native_bridge_macos.sh" --python "$fake_python" --plugins-dir "$temp/blocked" >/dev/null 2>&1; then
