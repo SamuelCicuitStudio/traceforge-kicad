@@ -26,8 +26,8 @@
   ],
   "versions": [
     {
-      "version": "0.13.1",
-      "status": "testing",
+      "version": "0.13.3",
+      "status": "stable",
       "kicad_version": "10.0",
       "kicad_version_max": "10.0",
       "platforms": [

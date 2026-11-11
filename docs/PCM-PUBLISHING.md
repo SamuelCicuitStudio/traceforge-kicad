@@ -1,57 +1,31 @@
-# KiCad Plugin and Content Manager submission
+# Windows PCM release and KiCad catalog
 
-The 0.13.0 release adds independent Windows and macOS manual-install ZIPs; the PCM package remains Windows-only pending Mac runtime validation. The PCM package identifier is
-`com.github.samuelcicuitstudio.traceforge-kicad`; it uses the legacy `swig`
-runtime and declares KiCad 10.0 as both minimum and maximum compatible version.
+TraceForge 0.13.3 is a **Windows-only, KiCad 10** PCM package. The GitHub
+release is stable; it does not include a macOS asset. The PCM identifier is
+`com.github.samuelcicuitstudio.traceforge-kicad` and the package uses KiCad's
+legacy `swig` runtime. Users install the ZIP with **Plugin and Content Manager
+> Install from file**; a GitHub release does not itself add the package to
+KiCad's official Repository tab.
 
-## Build and local verification
-
-From the repository root, run:
+## Build and verify
 
 ```powershell
 python -m ruff check .
 python -m pytest -q
-python tools/build_release.py
+python tools/build_pcm.py
 ```
 
-The build creates three distinct ZIPs under `dist/`:
+The release asset is `dist/TraceForge-0.13.3-KiCad10-PCM.zip`. Its root holds
+`metadata.json` and `resources/icon.png`; the action and runtime files are under
+`plugins/`. The release workflow builds the Windows PCM on a Windows runner,
+checks tests and package integrity, then publishes only that ZIP and its
+SHA-256 checksum. It requires the matching tag in `pcm/publish.json`.
 
-- `TraceForge-0.13.0-KiCad10-Windows.zip` for the PowerShell manual installer.
-- `TraceForge-0.13.0-KiCad10-macOS.zip` for the shell manual installer (preview).
-- `TraceForge-0.13.0-KiCad10-PCM.zip` for KiCad's Plugin and Content Manager (Windows).
+## Catalog submission
 
-`dist/SHA256SUMS.txt` covers all three. The PCM archive has `metadata.json` and
-`resources/icon.png` at its root, plus the plugin and its runtime files under
-`plugins/`. It does not need the standalone PowerShell installer or junction.
-
-`dist/pcm-submission/com.github.samuelcicuitstudio.traceforge-kicad/` contains
-the metadata and icon to copy into a fork of KiCad's
-[Package Metadata repository](https://gitlab.com/kicad/addons/metadata).
-The submission metadata includes the ZIP's direct GitHub Release URL, SHA-256,
-compressed size and installed size. Rebuild it after **any** package change.
-
-Local validation used the official KiCad metadata repository's v1/v2 schemas
-and package validator. KiCad 10 PCM accepted **Install from file** with an
-isolated KiCad configuration, installed the icon and plugin, and PCB Editor
-loaded the TraceForge toolbar action. On first launch TraceForge assigned its
-unused net-focus shortcut; after restarting PCB Editor the panel opened and
-read the disposable test board through the native bridge. The user's KiCad
-settings and project boards were not used for this installation test.
-
-## Publish and submit
-
-1. Review the release contents and commit/tag the tested version `v0.11.0`.
-   The GitHub Actions release workflow builds both ZIPs and creates a **draft**
-   release for review.
-2. Publish that GitHub release so the PCM ZIP has a public direct download URL.
-3. Verify the published PCM ZIP's SHA-256 matches `dist/SHA256SUMS.txt` and
-   the generated submission metadata. Any changed ZIP needs new metadata.
-4. Fork [KiCad Addon Metadata](https://gitlab.com/kicad/addons/metadata), create
-   `packages/com.github.samuelcicuitstudio.traceforge-kicad/`, and copy in the
-   generated `metadata.json` and `icon.png`.
-5. Run KiCad's repository validation and test the temporary PCM repository
-   produced by its CI. Submit the merge request for KiCad team review.
-
-The official catalog lists TraceForge only after KiCad accepts the merge request
-and its repository refresh completes. Until then users can install the PCM ZIP
-with **Install from file**.
+The [KiCad Addon Metadata repository](https://gitlab.com/kicad/addons/metadata)
+is a separate review process. The older TraceForge 0.12.10 merge request does
+not publish 0.13.3 and should not be merged as an update to this release.
+Any future catalog submission must use the published 0.13.3 ZIP's exact URL,
+SHA-256 and sizes, then pass KiCad's metadata validation. Until accepted,
+**Install from file** remains the documented installation path.

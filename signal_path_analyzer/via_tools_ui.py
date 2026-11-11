@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import wx
 
-from .stitching_cleanup_ui import StitchingCleanupPanel
 from .stitching_ui import StitchingPanel
 from .trace_fence_ui import TraceFencePanel
 from .via_array_ui import ViaArrayPanel
@@ -13,7 +12,7 @@ from .via_pad_ui import ViaPadPanel
 
 class ViaToolsPanel(wx.Panel):
     names = ('Via Stitching', 'Via Fencing', 'Via Array', 'Via Size Manager',
-             'Via-in-Pad Inspector', 'Stitching Cleanup')
+             'Via-in-Pad Inspector')
 
     def __init__(self, parent, host, native):
         super().__init__(parent)
@@ -35,13 +34,12 @@ class ViaToolsPanel(wx.Panel):
 
         self.book = wx.Simplebook(self)
         self.stitching = StitchingPanel(self.book, host, native)
-        self.cleanup = StitchingCleanupPanel(self.book, host, native)
         self.fencing = TraceFencePanel(self.book, host, native)
         self.array = ViaArrayPanel(self.book, host, native)
         self.manager = ViaManagerPanel(self.book, host, native)
         self.pad_inspector = ViaPadPanel(self.book, host, native)
         for page, name in zip((self.stitching, self.fencing, self.array,
-                               self.manager, self.pad_inspector, self.cleanup), self.names):
+                               self.manager, self.pad_inspector), self.names):
             self.book.AddPage(page, name)
         outer.Add(self.book, 1, wx.EXPAND)
         self.SetSizer(outer)
@@ -53,13 +51,8 @@ class ViaToolsPanel(wx.Panel):
     @property
     def active_page(self):
         return (self.stitching, self.fencing, self.array, self.manager,
-                self.pad_inspector, self.cleanup)[self.active_index]
+                self.pad_inspector)[self.active_index]
 
     def on_choice(self, event):
         self.book.SetSelection(self.active_index)
         self.host.schedule_auto_refresh()
-
-    def show_cleanup(self):
-        self.selector.SetSelection(5)
-        self.book.SetSelection(5)
-        self.cleanup.on_refresh()

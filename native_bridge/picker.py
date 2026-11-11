@@ -65,6 +65,12 @@ def capture(job):
         return
     items = list(pcbnew.GetCurrentSelection())
     if len(items) != 1:
+        if not items:
+            frame = next((w for w in wx.GetTopLevelWindows() if isinstance(w, wx.Frame)
+                          and w.GetTitle().endswith('PCB Editor')), None)
+            if frame:
+                frame.SetStatusText('No PCB item selected. Enable the needed item types '
+                                    'in KiCad Selection Filter, then click again.', 0)
         return  # Empty or ambiguous click: keep waiting for one actual selected item.
     item = items[0]
     if not isinstance(item, (pcbnew.PAD, pcbnew.PCB_TRACK, pcbnew.FOOTPRINT)):

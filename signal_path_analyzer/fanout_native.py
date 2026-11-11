@@ -85,7 +85,8 @@ def selected_footprint(board, identity=None):
             selected[uid(fp)] = fp
     if len(selected) != 1:
         raise ValueError('Select one BGA footprint or its pads in PCB Editor, '
-                         'then Analyze selection.')
+                         'then Analyze selection. Enable Footprints or Pads in KiCad '
+                         'Selection Filter if clicks select nothing.')
     return next(iter(selected.values()))
 
 

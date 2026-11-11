@@ -3,13 +3,47 @@ from collections import defaultdict
 from math import gcd, hypot
 
 
+def _inside_wider_track(narrow, wide):
+    """A straight segment's capsule fits in a wider straight capsule.
+
+    A capsule is convex, so containing both eroded endpoint disks contains the
+    whole narrow segment. Squared integer comparisons avoid rounding a marginal
+    overlap into a deletion.
+    """
+    difference = wide['width'] - narrow['width']
+    if difference <= 0:
+        return False
+    ax, ay = wide['start']
+    bx, by = wide['end']
+    dx, dy = bx - ax, by - ay
+    length_squared = dx * dx + dy * dy
+    if not length_squared:
+        return False
+    for px, py in (narrow['start'], narrow['end']):
+        ux, uy = px - ax, py - ay
+        projection = ux * dx + uy * dy
+        if projection <= 0:
+            distance_squared = ux * ux + uy * uy
+            if 4 * distance_squared > difference * difference:
+                return False
+        elif projection >= length_squared:
+            vx, vy = px - bx, py - by
+            distance_squared = vx * vx + vy * vy
+            if 4 * distance_squared > difference * difference:
+                return False
+        elif 4 * (ux * dy - uy * dx) ** 2 > difference * difference * length_squared:
+            return False
+    return True
+
+
 def analyze(rows, check=None):
     """Only remove copper fully covered by retained, identical-property copper.
 
-    No snapping tolerance, via removal, branch pruning or partial-overlap fusion.
+    No snapping tolerance, via removal or branch pruning.
     Locked/grouped objects can cover other copper but are never removed.
     """
     lines, arcs = defaultdict(list), defaultdict(list)
+    mixed_width_tracks = defaultdict(list)
     for row in rows:
         if check:
             check()
@@ -28,7 +62,9 @@ def analyze(rows, check=None):
         if dx < 0 or (dx == 0 and dy < 0):
             dx, dy = -dx, -dy
         start, end = sorted((a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy))
-        lines[base + (dx, dy, a[0] * dy - a[1] * dx)].append((start, end, row))
+        offset = a[0] * dy - a[1] * dx
+        lines[base + (dx, dy, offset)].append((start, end, row))
+        mixed_width_tracks[(row['net'], row['layer'], tuple(row['mask']))].append(row)
     redundant, partial, fusions = [], [], []
 
     def result(row, keep, reason):
@@ -122,6 +158,41 @@ def analyze(rows, check=None):
                                 - hypot(finish[0]-begin[0],finish[1]-begin[1]) / 1e6))
     fused = {identity for item in fusions for identity in item['ids']}
     redundant = [row for row in redundant if row['id'] not in fused]
+    removed = {row['id'] for row in redundant}
+    # A narrow straight copper capsule completely inside a retained wider one
+    # adds no copper, including when the centerlines have a small offset or a
+    # different angle. Preserve the wider shape and remove only the narrow one.
+    cell = 10_000_000
+    for group in mixed_width_tracks.values():
+        if check:
+            check()
+        if len(group) < 2:
+            continue
+        buckets = defaultdict(list)
+        for row in group:
+            if check:
+                check()
+            ax, ay = row['start']
+            bx, by = row['end']
+            radius = (row['width'] + 1) // 2
+            for x in range((min(ax, bx) - radius) // cell,
+                           (max(ax, bx) + radius) // cell + 1):
+                for y in range((min(ay, by) - radius) // cell,
+                               (max(ay, by) + radius) // cell + 1):
+                    buckets[x, y].append(row)
+        for row in sorted(group, key=lambda item: -item['width']):
+            if check:
+                check()
+            if row['protected'] or row['id'] in removed | fused:
+                continue
+            x, y = row['start']
+            keeper = next((other for other in buckets[x // cell, y // cell]
+                           if other['id'] not in removed | fused
+                           and _inside_wider_track(row, other)), None)
+            if keeper is not None:
+                redundant.append(result(row, [keeper['id']],
+                                        'Fully covered by wider straight track'))
+                removed.add(row['id'])
     partial = [row for row in partial if row['id'] not in fused]
     return dict(redundant=redundant, partial=partial, fusions=fusions,
                 removed_length_mm=sum(row['length_mm'] for row in redundant))

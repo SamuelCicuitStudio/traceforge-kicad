@@ -25,13 +25,16 @@ pruning potentially intentional branches.
 ## Removal criteria
 
 - Exact duplicate straight tracks, including reversed endpoints.
-- Straight tracks entirely covered by retained collinear tracks.
+- Straight tracks entirely covered by retained same-net copper. A narrower
+  straight track can be removed when its full copper shape fits inside a wider
+  straight track on the same layer, including small offsets or angles.
 - Partially overlapping straight tracks can be fused into one continuous segment
   covering the same span, with the same net, layer, width and mask settings.
   Each layer has a separate fuse group. Original objects are replaced through
   KiCad Undo; pad-to-pad continuity was checked on a synthetic route.
 - Exact duplicate arcs with identical endpoints and midpoint.
-- Identical net, copper layer, width and solder-mask properties are required.
+- Identical net, copper layer and solder-mask properties are required. Equal
+  width is required for fusion; fully covered narrow tracks may differ in width.
 - Integer geometry is compared exactly, without a snapping tolerance.
 - Locked, grouped, fanout-managed and unassigned copper is never removed.
   Vias are excluded.
@@ -41,8 +44,8 @@ is never used as the only justification for deleting another object. The copper
 shape is preserved; this is not a reroute or an endpoint-matching operation.
 
 Partial overlaps involving protected tracks are counted for review and retained.
-Different-width copper,
-near-parallel tracks and crossing routes are not automatically fused or removed.
+Different-width partial overlaps, nearby tracks that are not fully contained,
+and crossing routes are not automatically fused or removed.
 Dangling-end detection uses KiCad's native connectivity test, rather than a
 geometric guess about whether a trace touches a pad, via or zone. Removing the
 end of a multi-segment dangling branch can expose another dangling segment;

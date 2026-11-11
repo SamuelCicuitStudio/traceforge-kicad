@@ -336,6 +336,7 @@ def plan(board, request):
     # Conservative obstacle checks: even same-net pads/tracks are avoided. Index
     # bounding boxes so full-board grids do not scan every item for every candidate.
     buckets = defaultdict(list)
+    same_net_smt_pads = []
     cell = 5_000_000
     items = list(board.GetTracks())
     for fp in board.GetFootprints():
@@ -347,6 +348,11 @@ def plan(board, request):
     for item in items:
         cancel()
         if uid(item) in excluded:
+            continue
+        if (not values.get('avoid_pad', True) and isinstance(item, pcbnew.PAD)
+                and item.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+                and item.GetNetCode() == net.GetNetCode()):
+            same_net_smt_pads.append(item)
             continue
         box = item.GetBoundingBox()
         shape_layers = [layer for layer in layers if item.IsOnLayer(layer)]
@@ -411,7 +417,13 @@ def plan(board, request):
             reason = 'via keepout'
         elif (protected := next((why for shape, gap, why in
                                  guards[point.x//cell, point.y//cell]
-                                 if shape.Collide(circle, gap)), None)):
+                                 if shape.Collide(circle, gap) and not (
+                                     not values.get('avoid_pad', True)
+                                     and why.startswith('component courtyard:')
+                                     and any(pad.GetParent().GetReference() == why.split(': ', 1)[1]
+                                             and any(pad.GetEffectiveShape(layer).Collide(circle)
+                                                     for layer in pad.GetLayerSet().CuStack())
+                                             for pad in same_net_smt_pads))), None)):
             reason = protected
         elif any(poly.Collide(circle, gap) for poly, gap in foreign):
             reason = 'other-net copper'

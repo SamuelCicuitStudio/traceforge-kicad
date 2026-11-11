@@ -1,3 +1,34 @@
+# TraceForge 0.13.3 - Windows PCM release
+
+The 0.13.3 GitHub release contains the Windows KiCad 10 PCM ZIP and checksum.
+No macOS 0.13.3 asset is published.
+
+Routed chains with missing timing profiles now display "timing profile missing"
+instead of 0.0 ps / matched. They are excluded from skew targets and generated
+timing DRC rules until every chain net has a usable layer delay.
+
+Automatic chain discovery no longer creates a 15 ps source-net length limit.
+The old value measured all copper on the first net, including branches, and
+could incorrectly appear as a routing requirement or create KiCad DRC errors.
+The source-net delay remains visible for review. A project can still set an
+explicit limit in the Signal Chain Editor when justified by its design rules.
+
+The inspector now reports vias whose drilled hole or copper annulus touches an
+SMT pad, even when the via center lies outside the pad. It scans all nets and
+groups expanded results by full via-in-pad (green), partial hole overlap (red),
+and annulus-only partial overlap (amber). Stitching Cleanup is embedded inside the Via
+Stitching tab. A placement checkbox keeps vias away from SMT pads by default;
+intentional same-net pad placement can be enabled explicitly.
+
+Trace Cleanup now detects a narrow straight track fully contained within a
+wider same-net, same-layer track, including offset and angled centerlines and
+the 0.25 mm segment under a 0.6 mm segment reported by the user. The narrow
+track is offered for removal; the wider track remains unchanged. When KiCad's
+Selection Filter excludes the requested item type, selection-based tools now
+explain which filter to enable; board-wide scans remain independent of selection.
+
+---
+
 # TraceForge 0.13.1 - via inspection and faster cleanup
 
 The Via-in-Pad Inspector scans the live board for vias whose centers are inside

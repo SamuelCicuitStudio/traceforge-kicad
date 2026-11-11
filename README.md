@@ -4,7 +4,7 @@
 
 **Signal paths, trace cleanup, via stitching, via-in-pad inspection, RF fencing, BGA fanout and live net colors for KiCad 10. Windows is verified; macOS remains a testing preview.**
 
-TraceForge 0.13.1 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
+TraceForge 0.13.3 groups signal analysis, Via Tools, BGA fanout, Trace Tools,
 PCB Rotation, Visualization, and Manufacturing in one panel. Trace Tools includes
 cleanup, teardrops, and rounded corners with persistent restore. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
@@ -18,14 +18,19 @@ selected signal path is highlighted on the board.*
 
 ## Install
 
-**Requirements:** KiCad 10 with Python scripting support. Windows is verified. The macOS standalone preview also needs Python 3 with wxPython for the separate TraceForge panel process.
+**Requirements for 0.13.3:** KiCad 10 with Python scripting support on Windows.
+This release has one Windows PCM asset. The older macOS 0.13.1 preview is a
+separate release and is not updated by 0.13.3.
 
-### KiCad Plugin and Content Manager (local Windows and macOS package)
+### Install the Windows PCM package
 
-For Windows 0.13.1, use `TraceForge-0.13.1-KiCad10-PCM.zip`. In KiCad
-Manager, open **Plugin and Content Manager > Install from file**, select that ZIP,
-then close all KiCad windows and reopen PCB Editor. Once KiCad accepts TraceForge into its official catalog,
-you can instead install or update it directly from the Manager's Repository tab.
+Download `TraceForge-0.13.3-KiCad10-PCM.zip` from the
+[0.13.3 GitHub release](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/tag/v0.13.3).
+In KiCad Manager, open **Plugin and Content Manager > Install from file** and
+select the ZIP. Close all KiCad windows and reopen PCB Editor. If an older
+TraceForge remains installed, remove it in PCM first. The **About** tab and
+window title must show **0.13.3**; if not, KiCad is still loading old files.
+The GitHub ZIP is available independently of KiCad's official PCM catalog.
 
 The first launch may assign KiCad's unused **Ctrl+Alt+Shift+F12** shortcut for
 native net focus. If TraceForge asks, restart PCB Editor once more. An existing
@@ -33,19 +38,21 @@ native net focus. If TraceForge asks, restart PCB Editor once more. An existing
 conflicts are reported without changing the existing binding. PCM installation
 does not require PowerShell or a manually created plugin junction.
 
-The macOS 0.13.1 preview uses the separate standalone ZIP and shell installer below.
-It needs Python 3 with wxPython for the panel process. Live editing still needs
-verification on a Mac.
-
 In **Via Tools > Via-in-Pad Inspector**, click **Scan live PCB**.
-Each component appears once; expand it to see its pad vias with net, coordinates,
-drill and copper layer. Click a via to select/highlight and zoom to it in PCB Editor,
+Each component appears once. Results expand by contact type: **green** means the
+via annulus fits inside the pad, **red** means a partially overlapping via hole,
+and **amber** means the annulus touches the pad while the hole does not. Each
+row shows both via and pad nets, coordinates, drill and copper layer. Click a
+via to select/highlight and zoom to it in PCB Editor,
 or click the component to focus all its listed vias. The scan reads unsaved
 board edits and does not remove vias or refill zones. Inspector focus skips the
-extra whole-board renderer dimming pass. A hit means the via center is inside exposed
-SMT pad copper on a shared layer; review intentional filled and capped vias separately.
+extra whole-board renderer dimming pass. The scan includes partial hole or
+annulus overlap on any net, even when the via center is outside the pad;
+review intentional filled and capped vias separately.
 
-In **Via Tools > Via Stitching**, use **Find standalone vias** to open Stitching Cleanup.
+In **Via Tools > Via Stitching**, use **Find standalone vias** to expand the cleanup
+list inside the same tab. The **Avoid vias touching SMT pads** option is on by
+default; turn it off only when placing a same-net via in a pad intentionally.
 It scans through vias with no direct track, pad, other-via or copper-drawing contact,
 including manually placed vias outside TraceForge's managed stitching sets. The list
 shows each via's net, position, drill, lock state and connected copper-layer count.
@@ -54,74 +61,40 @@ manual deletion. Zone-only vias may already be valid stitching; the optional
 "fewer than two connected copper layers" filter narrows the list to electrically
 unstitched candidates. No vias are deleted by the cleanup scan or selection.
 
-### Standalone Windows ZIP
+### Older manual installers
 
-1. Download the **TraceForge KiCad10 Windows ZIP** from this repository's Releases
-   page. Extract it completely into a permanent folder, for example
-   `C:\Tools\TraceForge`. Do not run the plugin from inside the ZIP.
-2. Save your work and close all KiCad windows, including KiCad Manager.
-3. Open the extracted folder, right-click inside it and choose **Open in Terminal**.
-   In PowerShell run:
-
-   ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\install_native_bridge.ps1
-   ```
-
-   This applies the script policy to that process only. Administrator access is
-   normally unnecessary. The installer creates a junction at
-   `%APPDATA%\kicad\10.0\scripting\plugins\traceforge_native_bridge`
-   pointing to the extracted `native_bridge` folder. Keep the extracted files there.
-4. Start PCB Editor, open and save a board, then click the **TraceForge** toolbar
-   icon or **Tools > External Plugins > TraceForge**.
-5. Open a feature tab. Use **F5** or **Refresh** to read the open board on demand.
-
-Cloning this repository into a permanent folder and running the same installer
-also works. The main plugin needs no separate Python installation; Manufacturing
-export needs Python with `openpyxl` as described in its workflow guide.
-
-### Standalone macOS ZIP (0.13.1 preview)
-
-1. Download `TraceForge-0.13.1-KiCad10-macOS.zip` from the macOS preview release, extract it into a permanent folder, and close KiCad.
-2. Ensure that a Python 3 interpreter can run `import wx`. If necessary, install wxPython for that interpreter. In Terminal, run the installer from the extracted folder:
-
-   ```sh
-   bash tools/install_native_bridge_macos.sh --python /absolute/path/to/python3
-   ```
-
-3. The installer links `native_bridge` into the user KiCad scripting-plugin directory. It preserves any ordinary directory at that location; use `--replace-existing` only to switch an existing TraceForge symlink. If KiCad uses a different plugin search path, pass `--plugins-dir /absolute/path`. In PCB Editor's Python console, `import pcbnew; print(pcbnew.PLUGIN_DIRECTORIES_SEARCH)` shows the actual paths.
-4. Restart KiCad 10 PCB Editor and open **Tools > External Plugins > TraceForge**. The Mac package is a preview until its live editing and Undo paths have been tested on macOS. Native teardrop menu dispatch and automatic net-focus shortcut assignment remain Windows-only.
-
-The Windows and macOS standalone ZIPs are separate downloads. Install one package per machine; the PCM ZIP remains the Windows alternative.
-
-### Update or remove a standalone installation
-
-Close PCB Editor and extract the new version. If its folder differs from the old
-installation, run the installer from the new folder with:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\install_native_bridge.ps1 -ReplaceExisting
-```
-
-This switches the plugin junction and preserves the previous installation folder.
-The installer refuses to replace an ordinary folder. Restart PCB Editor afterward.
-For a Git checkout already linked by the installer, pull updates, rerun the
-installer with all KiCad windows closed, and restart PCB Editor.
-
-To uninstall, close PCB Editor and remove **only the junction** at the plugin path
-above; keep your board files and TraceForge sidecars. Removing the installation
-folder while the junction exists leaves a broken plugin link.
+The separate Windows and macOS standalone installers belong to the archived
+[0.13.1 releases](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases).
+They are not 0.13.3 assets. For this release, install the Windows PCM ZIP above.
 
 ## Choose a tool
 
 | Tab | Workflow |
 | --- | --- |
 | **Signals / xSignals** | Detect paths through series passives, inspect chain length/timing, highlight differential pairs, export CSV and write reviewed DRC targets. |
-| **Via Tools** | Use the selector at the top right to switch between Via Stitching, Via Fencing, Via Array, and Via Size Manager. Stitching previews symmetric or staggered grids and manages placed sets. Fencing follows an RF trace on either or both sides. Array evens out selected existing vias. |
+| **Via Tools** | Choose Via Stitching to preview/add managed vias and find standalone vias for manual cleanup; Via Fencing to follow RF traces; Via Array to move selected vias; Via Size Manager to inspect/select/resize vias; or Via-in-Pad Inspector to classify pad overlap. |
 | **BGA Fanout** | Analyze a selected BGA, check geometric fit, and preview dogbone, via-in-pad, or bounded escape-to-edge routes. |
 | **Trace Tools** | Use the selector at the top right for Trace Cleanup, Teardrops, or Round Corners. Cleanup previews redundant copper and dangling ends, supports bulk selection, and removes reviewed tracks with Undo. Teardrops use KiCad's native generator. Round Corners previews a selected radius across all copper layers, rounds eligible existing trace junctions, and restores selected generated corners. |
 | **PCB Rotation** | Apply an exact angle to selected components in the open PCB Editor. |
 | **Visualization** | Color net groups and individual nets live, and focus the ratsnest on selected components. |
 | **Manufacturing** | Inventory saved project files, run ERC/DRC and BOM checks, edit verified PCBWay or PCBPower export choices, build detailed single or multi-board packages, and clean up reviewed local library table entries. See [manufacturing and project maintenance](docs/MANUFACTURING-AND-PROJECT-MAINTENANCE.md). |
+
+Start each tool from an open PCB in **PCB Editor**. Use its **Refresh**, **Scan**,
+or **Analyze** button after changing the board; TraceForge does not continuously
+poll or silently apply stale previews. Actions that change copper are previewed
+first and use KiCad Undo. Save the PCB yourself after reviewing the result.
+
+### If a result looks wrong
+
+| What you see | What it means and what to do |
+| --- | --- |
+| A routed signal says **timing profile missing**, with blank ps cells | At least one net has no project tuning profile or a routed layer has no delay entry. In **Board Setup > Net Classes**, assign the net to a timed class and check its profile for every used copper layer. Save the project, restart/reopen PCB Editor if needed, then refresh TraceForge. A routed length in mm alone is not enough to calculate ps. TraceForge does not write a timing DRC target for this chain. |
+| A chain shows **Source PCB ps/mm** | This is the sum of all copper on the first net before series parts, including branches. It is shown for inspection; it is **not** a pin-to-resistor path length. TraceForge 0.13.3 does not create an automatic 15 ps source-net limit. Only a value you enter in **Signal Chain Editor > Source net max ps** makes it a checked rule. |
+| Clicking **Pick** or selecting a PCB item yields nothing | In KiCad's **Selection Filter**, enable the item type you need: Tracks, Pads, Vias or Footprints (or choose All Items). An empty filter prevents KiCad's canvas from selecting. Board-wide scans do not depend on that filter; selecting or focusing results in KiCad does. |
+| Via-in-Pad Inspector shows **full**, **hole**, or **annulus only** | These describe copper geometry, not whether fabrication has filled or capped the via. Red hole contact can be on a different net; inspect both net names before editing. The colored results are in TraceForge's list; clicking a row focuses the via in KiCad. |
+| **Find standalone vias** lists a zone-only via | A via connected only by filled zones can be intentional stitching. Inspect connected layers and choose individual rows or **Select all listed in PCB** only after reviewing. Delete in KiCad, then press **B** to refill zones when ready. The scan never deletes vias. |
+| Trace Cleanup reports a track inside another | Fully covered, same-net copper can be removed without changing the wider track. Equal-width partial collinear overlaps can be fused after preview. Different-width partial overlaps that add copper outside the wider track are preserved. Review checked findings before applying. |
+| Copper looks stale after a deletion | Delete actions deliberately avoid automatic zone refill. Press **B** in PCB Editor before DRC or manufacturing export. |
 
 ### Cancel long scans and previews
 
@@ -371,8 +344,10 @@ layers; counts show findings and scanned track objects per layer. Preview rows
 highlight in PCB Editor. Redundant copper starts checked; dangling tracks require review and start
 unchecked. **Select all** and **Unselect all** affect the shown layer's findings.
 Cleanup is undoable. **Recheck length matching** returns to Signals and
-refreshes the measurements. Partial overlaps, vias, locked and grouped copper are
-preserved. See [trace cleanup](docs/TRACE-CLEANUP.md).
+refreshes the measurements. Different-width partial overlaps, vias, locked and
+grouped copper are preserved. A narrow straight track fully covered by a
+wider same-net track can be removed; the wider track stays unchanged. See
+[trace cleanup](docs/TRACE-CLEANUP.md).
 
 Choose **Teardrops** in the Trace Tools selector. Choose Add or Remove, the whole
 board or selected PCB items, and via, PTH, or SMD targets. For Add, set curved
@@ -457,7 +432,7 @@ Default shortcuts: **Ctrl+Alt+H** highlight chain, **Ctrl+Alt+G** highlight grou
 
 Run KiCad DRC after generated placement; custom-rule and RF validation are incomplete.
 Live parallel multirouting is planned, not implemented. This release targets KiCad
-10 on Windows, with macOS manual-install preview, and uses its legacy pcbnew bindings; KiCad 11 is not supported.
+10 on Windows and uses its legacy pcbnew bindings; KiCad 11 is not supported.
 See [feature scope](docs/FEATURE-SCOPE.md) and [native access](docs/NATIVE-BOARD-ACCESS.md).
 
 Development checks:
@@ -466,11 +441,11 @@ Development checks:
 python -m pip install -e ".[dev]"
 python -m ruff check .
 python -m compileall -q signal_path_analyzer native_bridge tools
-python tools/build_release.py
+python tools/build_pcm.py
 ```
 
-The build writes Windows and macOS standalone ZIPs, a PCM ZIP, and `SHA256SUMS.txt` under `dist/`, using an
-explicit public-file allowlist. Tests, fixtures, logs, caches, credentials and user
+The build writes the Windows PCM ZIP under `dist/` using an explicit
+public-file allowlist. Tests, fixtures, logs, caches, credentials and user
 boards are ignored. `tools/build_chains.py` is an optional offline chain builder;
 `tools/make_icons.py` regenerates icons with Pillow installed.
 
@@ -478,9 +453,9 @@ See [PCM publishing steps](docs/PCM-PUBLISHING.md),
 [release notes](docs/RELEASE-NOTES.md), [changelog](CHANGELOG.md) and
 [MIT license](LICENSE).
 
-Source-segment timing limits compare PCB track plus via delay only. Package
-pad-to-die delay stays in whole-chain timing and matching targets, but must not
-make a short source-to-series-resistor PCB segment appear too long. A source
-segment is not a dangling branch. Endpoint path previews separately report
-additional contacts (including pad pass-throughs, pull-ups and overlaps); this
-informational notice does not indicate a source-segment limit violation.
+If you set an explicit **Source net max ps** value, TraceForge compares it to
+track plus via delay on the entire first net before series parts, including
+branches. It is not a point-to-point source-to-resistor measurement. Package
+pad-to-die delay remains in whole-chain timing and matching targets. Endpoint
+path previews report additional contacts separately; that notice does not
+mean the source-net limit was exceeded.

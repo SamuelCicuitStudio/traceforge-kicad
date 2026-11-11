@@ -179,6 +179,7 @@ class ChainResult:
     minimum_ps: Optional[float] = None
     maximum_ps: Optional[float] = None
     independent_ok: Optional[bool] = None
+    timing_complete: bool = True
 
     @property
     def delta_ps(self) -> Optional[float]:
@@ -188,6 +189,8 @@ class ChainResult:
     def status(self) -> str:
         if not self.routed:
             return "pending"
+        if not self.timing_complete:
+            return "unprofiled"
         if self.target_ps is None:
             return "routed"
         if self.independent_ok is True:
@@ -210,10 +213,10 @@ class GroupResult:
         seen = set()
         by_name = {c.chain.name: c for c in self.chains}
         for c in self.chains:
-            if not c.routed or c.chain.name in seen:
+            if not c.routed or not c.timing_complete or c.chain.name in seen:
                 continue
             mate = by_name.get(c.chain.pair)
-            if mate is not None and mate.routed:
+            if mate is not None and mate.routed and mate.timing_complete:
                 done.append((c.total_ps + mate.total_ps) / 2)
                 seen.add(mate.chain.name)
             elif c.chain.pair:
@@ -230,18 +233,20 @@ def evaluate(
     out = []
     track_mm = {n: sum(seg.length_mm for seg in geo.tracks) for n, geo in geometry.items()}
     for group in config.groups:
-        totals, routed = {}, {}
+        totals, routed, timed = {}, {}, {}
         for c in group.chains:
             totals[c.name] = sum(delays[n].total_ps for n in c.nets if n in delays)
             routed[c.name] = all(geometry.get(n) is not None and geometry[n].routed for n in c.nets)
-        done = [totals[k] for k, ok in routed.items() if ok]
+            timed[c.name] = routed[c.name] and all(
+                n in delays and delays[n].complete for n in c.nets)
+        done = [totals[k] for k, ok in timed.items() if ok]
         target = max(done) if done and group.skew_ps is not None else None
         centers = [
             (totals[c.name] + totals[c.pair]) / 2
             for c in group.chains
-            if c.pair in totals and routed[c.name] and routed[c.pair]
+            if c.pair in totals and timed[c.name] and timed[c.pair]
         ]
-        centers.extend(totals[c.name] for c in group.chains if not c.pair and routed[c.name])
+        centers.extend(totals[c.name] for c in group.chains if not c.pair and timed[c.name])
         center_max = max(centers, default=None)
         if center_max is not None and all(c.pair for c in group.chains):
             target = center_max if group.skew_ps is not None else None
@@ -249,7 +254,7 @@ def evaluate(
         for c in group.chains:
             tgt, tol, pskew = target, (group.skew_ps / 2 if group.skew_ps else None), None
             if c.pair and c.pair in totals:
-                if routed[c.name] and routed[c.pair]:
+                if timed[c.name] and timed[c.pair]:
                     pskew = totals[c.name] - totals[c.pair]
                     if group.skew_ps is None:  # pair-only group: match P to N
                         tgt = max(totals[c.name], totals[c.pair])
@@ -258,8 +263,8 @@ def evaluate(
             lower = upper = independent_ok = None
             if (
                 c.pair in totals
-                and routed[c.name]
-                and routed[c.pair]
+                and timed[c.name]
+                and timed[c.pair]
                 and group.pair_skew_ps is not None
             ):
                 own, mate = totals[c.name], totals[c.pair]
@@ -285,11 +290,11 @@ def evaluate(
                     lower, upper = planned - pair_limit / 2, planned + pair_limit / 2
                 tgt = min(max(own, lower), upper)
                 tol = (upper - lower) / 2
-            if c.pair in totals and not routed[c.pair]:
+            if c.pair in totals and not timed[c.pair]:
                 tgt = tol = None
             stub = (
                 delays[c.stub].track_ps + delays[c.stub].via_ps
-                if c.stub and c.stub in delays
+                if c.stub and c.stub in delays and delays[c.stub].complete
                 else None
             )
             if stub is not None and group.stub_max_ps is not None and stub > group.stub_max_ps:
@@ -311,6 +316,7 @@ def evaluate(
                     lower,
                     upper,
                     independent_ok,
+                    timed[c.name] if routed[c.name] else True,
                 )
             )
         out.append(GroupResult(group, tuple(results), target, tuple(stubs)))
@@ -337,13 +343,13 @@ def drc_rules(
     lines = [DRC_BEGIN]
     for g in results:
         for c in g.chains:
-            if c.chain.stub and g.group.stub_max_ps is not None:
+            if c.timing_complete and c.chain.stub and g.group.stub_max_ps is not None:
                 lines.append(
-                    f'(rule "XSIG {g.group.name} {c.chain.name} stub"\n'
+                    f'(rule "XSIG {g.group.name} {c.chain.name} source-net"\n'
                     f'\t(condition "{_cond(c.chain.stub)}")\n'
                     f"\t(constraint length (max {g.group.stub_max_ps:.2f}ps)))"
                 )
-            if c.target_ps is None or c.tolerance_ps is None:
+            if not c.timing_complete or c.target_ps is None or c.tolerance_ps is None:
                 continue
             opt = c.tunable_ps + (c.target_ps - c.total_ps)
             lo = (

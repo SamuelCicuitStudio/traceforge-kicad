@@ -211,12 +211,12 @@ def suggest_groups(chains: Iterable[FoundChain]) -> list[GroupSuggestion]:
             continue
         if c.group not in out:
             _, (skew, pskew, stub) = _group_for(c.name)
-            out[c.group] = GroupSuggestion(c.group, skew, pskew, stub if len(c.nets) > 1 else None)
+            # The first net is measured as all routed copper, including branches.
+            # A template delay is not a verified pin-to-series-part limit, so never
+            # create a source-net DRC rule without an explicit project setting.
+            out[c.group] = GroupSuggestion(c.group, skew, pskew, None)
         g = out[c.group]
         g.chains.append(c)
-        if len(c.nets) > 1 and g.stub_max_ps is None:
-            limits = _group_for(c.name)[1]
-            g.stub_max_ps = (limits[2] or DEFAULT_LIMITS[2]) if any(limits) else None
     for g in out.values():  # pair limit only where pairs exist; differential default 0.7 ps
         has_pair = any(c.pair for c in g.chains)
         g.pair_skew_ps = (g.pair_skew_ps or 0.7) if has_pair else None

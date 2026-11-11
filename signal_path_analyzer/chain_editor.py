@@ -111,7 +111,7 @@ class ChainEditor(wx.Dialog):
         # ---- group limits
         self.grid = gridlib.Grid(self)
         self.grid.CreateGrid(0, 4)
-        for i, name in enumerate(("Group", "Skew ps", "Pair skew ps", "Stub max ps")):
+        for i, name in enumerate(("Group", "Skew ps", "Pair skew ps", "Source net max ps")):
             self.grid.SetColLabelValue(i, name)
         self.grid.SetRowLabelSize(0)
         self.grid.SetColSize(0, 200)
@@ -136,7 +136,8 @@ class ChainEditor(wx.Dialog):
         box.Add(pick_button, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.path_preview, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         box.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
-        box.Add(wx.StaticText(self, label="Group limits (blank = not checked)"), 0, wx.ALL, 8)
+        box.Add(wx.StaticText(self, label="Group limits (blank = not checked; source net "
+                              "includes all branches)"), 0, wx.ALL, 8)
         self.grid.SetMinSize((-1, 190))  # fixed height; scrolls, leaving the chain list room
         self.grid.SetMaxSize((-1, 190))
         box.Add(self.grid, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
@@ -328,13 +329,10 @@ class ChainEditor(wx.Dialog):
         for r, g in enumerate(groups):
             if g not in self.limits:
                 members = [c for c in self.chains if c.group == g and c.keep]
-                skew, pair, stub = _group_for(members[0].name)[1] if members[0].name else (
+                skew, pair, _stub = _group_for(members[0].name)[1] if members[0].name else (
                     DEFAULT_LIMITS)
                 has_pair = any(c.pair for c in members)
-                has_stub = any(len(c.nets) > 1 for c in members)
-                self.limits[g] = (skew, pair if has_pair else None,
-                                  (stub or DEFAULT_LIMITS[2])
-                                  if has_stub and any((skew, pair, stub)) else None)
+                self.limits[g] = (skew, pair if has_pair else None, None)
             self.grid.SetCellValue(r, 0, g)
             self.grid.SetReadOnly(r, 0)
             for col, v in enumerate(self.limits[g], 1):
@@ -401,7 +399,7 @@ class ChainEditor(wx.Dialog):
         groups: dict[str, GroupSuggestion] = {}
         for c in self.chains:
             if c.keep:
-                lim = self.limits.get(c.group, DEFAULT_LIMITS)
+                lim = self.limits.get(c.group, (DEFAULT_LIMITS[0], DEFAULT_LIMITS[1], None))
                 groups.setdefault(c.group, GroupSuggestion(c.group, *lim)).chains.append(c)
         cfg = merge_into(None, groups.values(), self.die)
         # keep pair links only inside the same group

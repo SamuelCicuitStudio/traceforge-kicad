@@ -207,7 +207,9 @@ def detect(board, payload):
     if (len(selected) != 2 or any(not isinstance(t, supported) for t in selected) or
             identity(selected[0]) == identity(selected[1])):
         raise ValueError('Select exactly two pads, vias, tracks/arcs or footprints as endpoints '
-                         'in PCB Editor. Select endpoints, not every item along the route.')
+                         'in PCB Editor. If clicks select nothing, enable those item types '
+                         'in KiCad Selection Filter. Select endpoints, not every item '
+                         'along the route.')
     if any(isinstance(t, pcbnew.FOOTPRINT) for t in selected):
         candidates = [list(t.Pads()) if isinstance(t, pcbnew.FOOTPRINT) else [t]
                       for t in selected]

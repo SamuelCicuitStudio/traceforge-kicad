@@ -1,3 +1,12 @@
+## 0.13.3 (stable, Windows PCM)
+
+- Report missing signal timing profiles instead of treating routed nets as 0 ps / matched; do not generate timing DRC targets for incomplete chains.
+- Remove automatic 15 ps source-net limits from detected chains; keep explicit project limits available.
+- Classify and color full, hole-overlap and annulus-only via-in-pad contact; place stitching cleanup inside Via Stitching.
+- Detect fully covered narrow tracks under wider same-net copper, including offset and angled centerlines.
+- Explain empty KiCad Selection Filter failures in selection-based workflows.
+- Publish a Windows-only KiCad 10 PCM package with clearer installation and feature guidance.
+
 ## 0.13.0 (prerelease)
 
 - Added a separate macOS manual-install ZIP and shell installer alongside the existing Windows ZIP and PCM asset.

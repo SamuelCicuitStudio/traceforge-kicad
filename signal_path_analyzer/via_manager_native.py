@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import secrets
 import shutil
@@ -67,11 +68,28 @@ def _sidecars(source):
             for suffix in ('.kicad_pro', '.kicad_dru')}
 
 
+def _annulus_inside_pad(via, pad, layers):
+    """Check the via's circular copper boundary against the pad on each layer."""
+    center = via.GetPosition()
+    for layer in layers:
+        shape = pad.GetEffectiveShape(layer)
+        radius = via.GetWidth(layer) / 2
+        if not shape.PointInside(center):
+            return False
+        for step in range(72):
+            angle = 2 * math.pi * step / 72
+            point = pcbnew.VECTOR2I(round(center.x + radius * math.cos(angle)),
+                                    round(center.y + radius * math.sin(angle)))
+            if not shape.PointInside(point):
+                return False
+    return True
+
+
 def scan_vias_in_pads(board, payload=None):
-    """Find via drill centers inside exposed SMT pad copper on a shared layer.
+    """Find vias whose drilled hole or annulus touches SMT pad copper.
 
     This is an inspection aid, not a claim that a via has been filled or capped.
-    KiCad pad hit testing handles rotation and non-rectangular pad shapes.
+    Shape collisions handle rotated pads and via centers outside pad outlines.
     """
     payload = payload or {}
     pads = {}
@@ -90,15 +108,32 @@ def scan_vias_in_pads(board, payload=None):
     rows = []
     for via in _vias(board).values():
         check_payload(payload)
-        position = via.GetPosition()
         via_layers = set(via.GetLayerSet().CuStack())
+        hole = via.GetEffectiveHoleShape()
+        hole_bounds = hole.BBox() if hole else None
+        annulus_bounds = via.GetBoundingBox()
         hits = []
-        for reference, pad, bounds in pads.get((position.x // cell,
-                                                position.y // cell), ()):
+        candidates = {}
+        for x in range(annulus_bounds.GetX() // cell,
+                       annulus_bounds.GetRight() // cell + 1):
+            for y in range(annulus_bounds.GetY() // cell,
+                           annulus_bounds.GetBottom() // cell + 1):
+                for reference, pad, bounds in pads.get((x, y), ()):
+                    candidates[uid(pad)] = (reference, pad, bounds)
+        for reference, pad, bounds in candidates.values():
             shared = via_layers.intersection(pad.GetLayerSet().CuStack())
-            if shared and bounds.Contains(position) and pad.HitTest(position):
+            if not shared or not bounds.Intersects(annulus_bounds):
+                continue
+            hole_touch = bool(hole and hole_bounds.Intersects(bounds) and any(
+                hole.Collide(pad.GetEffectiveShape(layer)) for layer in shared))
+            copper_touch = any(via.GetEffectiveShape(layer).Collide(
+                pad.GetEffectiveShape(layer)) for layer in shared)
+            if hole_touch or copper_touch:
+                contact = ('full' if _annulus_inside_pad(via, pad, shared) else
+                           'hole' if hole_touch else 'partial')
                 hits.append(dict(reference=reference, pad=str(pad.GetNumber()),
                                  pad_net=str(pad.GetNetname()),
+                                 contact=contact,
                                  layers=[pcbnew.LayerName(layer) if hasattr(pcbnew, 'LayerName')
                                          else str(layer) for layer in sorted(shared)]))
         if hits:
@@ -107,7 +142,8 @@ def scan_vias_in_pads(board, payload=None):
             rows.append(row)
     rows.sort(key=lambda row: (row['pads'][0]['reference'], row['pads'][0]['pad'],
                                row['x_mm'], row['y_mm']))
-    return dict(count=len(rows), vias=rows, method='via center inside SMT pad copper')
+    return dict(count=len(rows), vias=rows,
+                method='full, hole-overlap or annulus-only partial SMT pad contact')
 
 
 def dispatch(board, operation, payload):

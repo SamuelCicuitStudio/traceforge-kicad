@@ -3,6 +3,12 @@ from __future__ import annotations
 
 import wx
 
+CONTACT_TYPES = {
+    'full': ('Full via in pad', wx.Colour(45, 155, 75)),
+    'hole': ('Partial: hole touches pad', wx.Colour(210, 70, 70)),
+    'partial': ('Partial: annulus only', wx.Colour(215, 145, 35)),
+}
+
 
 class ViaPadPanel(wx.Panel):
     def __init__(self, parent, host, native):
@@ -10,7 +16,7 @@ class ViaPadPanel(wx.Panel):
         self.host, self.native = host, native
         outer = wx.BoxSizer(wx.VERTICAL)
         bar = wx.BoxSizer(wx.HORIZONTAL)
-        bar.Add(wx.StaticText(self, label='Via centers inside exposed SMT pads'),
+        bar.Add(wx.StaticText(self, label='Via hole or annulus touching SMT pads (all nets)'),
                 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
         refresh = wx.Button(self, label='Scan live PCB (F5)')
         refresh.Bind(wx.EVT_BUTTON, self.on_refresh)
@@ -19,6 +25,12 @@ class ViaPadPanel(wx.Panel):
         bar.Add(self.loader, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 12)
         self.loader.Hide()
         outer.Add(bar, 0, wx.ALL, 9)
+        legend = wx.BoxSizer(wx.HORIZONTAL)
+        for title, colour in CONTACT_TYPES.values():
+            label = wx.StaticText(self, label=title)
+            label.SetForegroundColour(colour)
+            legend.Add(label, 0, wx.RIGHT, 20)
+        outer.Add(legend, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 9)
         self.table = wx.TreeCtrl(self, style=wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS |
                                 wx.TR_LINES_AT_ROOT | wx.TR_SINGLE)
         self.root = self.table.AddRoot('Via-in-pad results')
@@ -71,17 +83,33 @@ class ViaPadPanel(wx.Panel):
             for reference, entries in sorted(groups.items()):
                 ids = list(dict.fromkeys(via['uuid'] for via, _ in entries))
                 component = self.table.AppendItem(self.root,
-                                                   f'{reference} — {len(ids)} vias')
+                                                   f'{reference} - {len(ids)} vias')
                 self.table.SetItemData(component, ids)
-                for via, pad in entries:
-                    label = (f"Pad {pad['pad']} | {via['net']} | "
-                             f"X {via['x_mm']:.3f}, Y {via['y_mm']:.3f} mm | "
-                             f"drill {via['drill_mm']:.3f} mm | "
-                             f"{', '.join(pad['layers'])}")
-                    child = self.table.AppendItem(component, label)
-                    self.table.SetItemData(child, [via['uuid']])
-            self.message(f"{result['count']} via centers in {len(groups)} components. "
-                         'Expand a component; click a via to highlight and zoom to it. '
+                for contact, (title, colour) in CONTACT_TYPES.items():
+                    matching = [(via, pad) for via, pad in entries
+                                if pad['contact'] == contact]
+                    if not matching:
+                        continue
+                    section = self.table.AppendItem(component,
+                                                    f'{title} - {len(matching)} contacts')
+                    self.table.SetItemTextColour(section, colour)
+                    self.table.SetItemData(section,
+                                           list(dict.fromkeys(via['uuid'] for via, _ in matching)))
+                    for via, pad in sorted(matching, key=lambda pair: (
+                            pair[1]['pad'], pair[0]['x_mm'], pair[0]['y_mm'])):
+                        label = (f"Pad {pad['pad']} | "
+                                 f"via: {via['net']} / pad: {pad['pad_net']} | "
+                                 f"X {via['x_mm']:.3f}, Y {via['y_mm']:.3f} mm | "
+                                 f"drill {via['drill_mm']:.3f} mm | "
+                                 f"{', '.join(pad['layers'])}")
+                        child = self.table.AppendItem(section, label)
+                        self.table.SetItemTextColour(child, colour)
+                        self.table.SetItemData(child, [via['uuid']])
+                self.table.Expand(component)
+            self.table.ExpandAll()
+            self.message(f"{result['count']} vias touching pads in {len(groups)} components. "
+                         'Colored rows show full, hole-overlap and annulus-only contact. '
+                         'Click a via to highlight and zoom to it. '
                          'Scan is read-only.', 'warning' if result['count'] else 'ok')
 
         self.call('via_manage_pad_scan', done)

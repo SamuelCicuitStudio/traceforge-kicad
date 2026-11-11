@@ -43,7 +43,8 @@ LABELS = {
     "toggle_panel": "Show / hide this panel",
 }
 # Status text and symbols remain visible alongside semantic row colours.
-MARK = {"ok": "✔", "short": "▲", "long": "▼", "pending": "…", "routed": "•"}
+MARK = {"ok": "✔", "short": "▲", "long": "▼", "pending": "…", "routed": "•",
+        "unprofiled": "✖"}
 
 
 @dataclass
@@ -585,8 +586,6 @@ class TraceForgePanel(wx.Frame):
             if tab == 1 and self.via_tools.active_index == 2
             else self.via_tools.pad_inspector.table
             if tab == 1 and self.via_tools.active_index == 4
-            else self.via_tools.cleanup.table
-            if tab == 1 and self.via_tools.active_index == 5
             else self.via_tools.active_page.canvas
             if tab == 1
             else self.fanout.rows
@@ -773,12 +772,14 @@ class TraceForgePanel(wx.Frame):
             priority = ("error", "warning", "pending", "routed")
             state = next((k for k in priority if k in states), "ok")
             label = {
-                "error": "\u2716 source segment too long",
+                "error": "\u2716 configured source-net limit exceeded",
                 "warning": "\u25b2 needs tuning",
                 "pending": "\u2026 pending",
                 "routed": "\u25cf routed",
                 "ok": "\u2714 matched",
             }[state]
+            if any(c.status == "unprofiled" for c in g.chains):
+                label = "\u2716 timing profile missing"
             self.set_cells(
                 self.rows[key],
                 ((2, fmt(g.target_ps)), (3, f"spread {fmt(g.spread_ps)}"), (6, label)),
@@ -787,14 +788,16 @@ class TraceForgePanel(wx.Frame):
             for c in g.chains:
                 key = (g.group.name, c.chain.name)
                 status = f"{MARK.get(c.status, '')} {c.status}"
+                if c.status == "unprofiled":
+                    status = "\u2716 timing profile missing"
                 if c.chain.name in g.stub_violations:
-                    status = "\u2716 source segment too long"
+                    status = "\u2716 configured source-net limit exceeded"
                 cells = (
-                    fmt(c.total_ps),
+                    fmt(c.total_ps) if c.timing_complete else "",
                     fmt(c.target_ps),
-                    fmt(c.delta_ps, True),
-                    fmt(c.pair_skew_ps, True),
-                    fmt(c.stub_ps),
+                    fmt(c.delta_ps, True) if c.timing_complete else "",
+                    fmt(c.pair_skew_ps, True) if c.timing_complete else "",
+                    fmt(c.stub_ps) if c.timing_complete else "",
                     status,
                     "" if c.length_mm is None else f"{c.length_mm:.3f}",
                     "" if c.tunable_mm is None else f"{c.tunable_mm:.3f}",
@@ -838,6 +841,8 @@ class TraceForgePanel(wx.Frame):
 
     @staticmethod
     def chain_color(chain, group) -> str:
+        if chain.status == "unprofiled":
+            return "error"
         if chain.chain.name in group.stub_violations:
             return "error"
         return {

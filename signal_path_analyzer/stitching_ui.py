@@ -6,6 +6,7 @@ from collections import Counter
 import wx
 
 from .stitching import polygon, rectangle, settings
+from .stitching_cleanup_ui import StitchingCleanupPanel
 
 
 class BoardOverview(wx.Panel):
@@ -290,6 +291,15 @@ class StitchingPanel(wx.Panel):
         self.protected_refs.Bind(wx.EVT_TEXT, self.invalidate)
         self.respect_courtyards = wx.CheckBox(self, label='Protect component courtyards')
         self.respect_courtyards.SetValue(True)
+        self.avoid_pad = wx.CheckBox(self, label='Avoid vias touching SMT pads')
+        self.avoid_pad.SetValue(True)
+        self.avoid_pad.SetToolTip('Default: skip SMT pads. Uncheck only when your fab '
+                                  'supports filled and capped via-in-pad; special '
+                                  'optical/mechanical guards remain protected.')
+        self.avoid_pad.Bind(wx.EVT_CHECKBOX, self.invalidate)
+        if not trace_mode:
+            form.Add(self.avoid_pad, 0, wx.EXPAND)
+            form.AddSpacer(1)
         self.respect_courtyards.SetToolTip('Protect both board sides. Missing courtyards use '
                                          'the physical footprint bounds; fiducials and critical '
                                          'refs remain protected when this is disabled.')
@@ -354,6 +364,11 @@ class StitchingPanel(wx.Panel):
             cleanup.Bind(wx.EVT_BUTTON, self.on_cleanup)
             manage.Add(cleanup, 0, wx.RIGHT, 5)
         outer.Add(manage, 0, wx.ALL, 6)
+        if not trace_mode:
+            self.cleanup = StitchingCleanupPanel(self, host, native)
+            self.cleanup.SetMinSize((-1, 210))
+            self.cleanup.Hide()
+            outer.Add(self.cleanup, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
         self.status = wx.StaticText(self, label='Click Refresh board to begin. '
                                    'No automatic polling.')
         self.status.SetForegroundColour(host.colors['pending'])
@@ -396,7 +411,9 @@ class StitchingPanel(wx.Panel):
         self.host.submit_stitching(fn, done, self)
 
     def on_cleanup(self, event=None):
-        self.GetParent().GetParent().show_cleanup()
+        self.cleanup.Show()
+        self.Layout()
+        self.cleanup.on_refresh()
 
     def invalidate(self, event=None):
         if not self.filling:
@@ -451,6 +468,7 @@ class StitchingPanel(wx.Panel):
                              pattern=pattern,
                              protected_refs=self.protected_refs.GetValue(),
                              respect_courtyards=self.respect_courtyards.GetValue(),
+                             avoid_pad=self.avoid_pad.GetValue(),
                              connection='all' if self.connection.GetSelection() else 'two',
                              **values))
 
@@ -518,6 +536,7 @@ class StitchingPanel(wx.Panel):
             self.connection.SetSelection(int(values.get('connection') == 'all'))
             self.protected_refs.ChangeValue(values.get('protected_refs', 'X*,Y*,J*'))
             self.respect_courtyards.SetValue(values.get('respect_courtyards', True))
+            self.avoid_pad.SetValue(values.get('avoid_pad', True))
             self.pattern.SetSelection({'symmetric': 0, 'staggered': 1, 'fence': 2}.get(
                 values.get('pattern'), 0))
             self.update_pattern()

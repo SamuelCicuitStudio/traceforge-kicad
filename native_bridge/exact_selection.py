@@ -43,6 +43,7 @@ def replace(board, identities):
             item.ClearSelected()
         pcbnew.Refresh()
         raise RuntimeError('KiCad did not select exactly the matching vias. '
+                           'Enable Vias in the PCB Editor Selection Filter and retry. '
                            'Selection was cleared; no successful count is reported.')
     return [items[key] for key in sorted(wanted)]
 
