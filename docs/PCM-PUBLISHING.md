@@ -24,7 +24,9 @@ SHA-256 checksum. It requires the matching tag in `pcm/publish.json`.
 ## Catalog submission
 
 The [KiCad Addon Metadata repository](https://gitlab.com/kicad/addons/metadata)
-is a separate review process. The new 0.16.5 merge request replaces the earlier [!743](https://gitlab.com/kicad/addons/metadata/-/merge_requests/743) submission. Its metadata must match
+is a separate review process. [Merge request !752](https://gitlab.com/kicad/addons/metadata/-/merge_requests/752)
+submits 0.16.5 and preserves the existing catalog versions. It replaces the closed
+[!743](https://gitlab.com/kicad/addons/metadata/-/merge_requests/743) submission. Its metadata must match
 the published ZIP's exact URL, SHA-256 and sizes and pass KiCad's metadata
 validation. Until accepted, **Install from file** remains the documented
 installation path.
