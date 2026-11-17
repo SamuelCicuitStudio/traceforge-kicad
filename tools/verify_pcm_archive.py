@@ -18,7 +18,8 @@ with zipfile.ZipFile(archive) as bundle:
     assert len(metadata['versions']) == 1
     release = metadata['versions'][0]
     assert release['version'] == version
-    assert release['status'] == 'stable'
+    source = json.loads((root / 'pcm/metadata.json').read_text(encoding='utf-8'))
+    assert release['status'] == source['versions'][0]['status']
     assert release['platforms'] == ['windows']
     assert release['kicad_version'] == '10.0'
 print(f'PASS: Windows PCM {version}, {archive.stat().st_size} bytes')

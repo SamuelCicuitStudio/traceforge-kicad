@@ -63,6 +63,7 @@ class Tools:
     edit_chains: Callable[[wx.Window], str] = lambda parent: "chain editor unavailable"
     zoom_selection: Callable[[], str] = lambda: "zoom unavailable"
     highlight_groups: Optional[Callable[[list[str]], int]] = None
+    routing_configuration: Callable[[], dict] = lambda: {}
 
 
 class BusyOverlay(wx.Panel):
@@ -240,7 +241,7 @@ class TraceForgePanel(wx.Frame):
 
     def __init__(self, tools: Tools, stitching=None, endpoints=None, native_info=None):
         style = wx.DEFAULT_FRAME_STYLE | wx.FRAME_TOOL_WINDOW
-        super().__init__(None, title=f"TraceForge {__version__}", size=(1160, 520), style=style)
+        super().__init__(None, title=f"TraceForge {__version__}", size=(1160, 760), style=style)
         self.tools, self.results = tools, []
         self.endpoints = endpoints
         from .refresh_policy import RefreshPolicy
@@ -378,6 +379,19 @@ class TraceForgePanel(wx.Frame):
 
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
+        self.stackup_display = wx.StaticText(
+            root, label="Stackup: refresh to load board construction")
+        box.Add(self.stackup_display, 0, wx.EXPAND | wx.ALL, 6)
+        self.routing_geometry = wx.ListCtrl(root, style=wx.LC_REPORT, size=(-1, 145))
+        for index, (title, width) in enumerate([
+                ("Computed profile", 185), ("Netclasses", 140), ("Type", 80),
+                ("Target ohms", 90), ("Signal layer", 90), ("Reference plane", 120),
+                ("Width mm", 100), ("Pair gap mm", 100), ("Source / status", 220)]):
+            self.routing_geometry.InsertColumn(index, title, width=width)
+        box.Add(self.routing_geometry, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
+        self.geometry_note = wx.StaticText(root, label="")
+        box.Add(self.geometry_note, 0, wx.EXPAND | wx.ALL, 6)
+
         detect = wx.Button(root, label="Detect path between 2 selected PCB items...")
         detect.Enable(endpoints is not None)
         detect.Bind(wx.EVT_BUTTON, self.on_endpoints)
@@ -444,6 +458,18 @@ class TraceForgePanel(wx.Frame):
 
         self.about = AboutPanel(self.notebook, self.dark, native_info)
         self.notebook.AddPage(self.about, "About")
+        from .traceforge_layout_clone import create_tab
+
+        self.layout_clone = create_tab(self.notebook, stitching)
+        self.notebook.AddPage(self.layout_clone, "Layout Clone")
+        from .traceforge_auto_text import create_tab as create_auto_text_tab
+
+        self.auto_text = create_auto_text_tab(self.notebook, self, stitching)
+        self.notebook.AddPage(self.auto_text, "Auto Text")
+        from .unrouted_ui import UnroutedPanel
+
+        self.unrouted = UnroutedPanel(self.notebook, self, stitching)
+        self.notebook.AddPage(self.unrouted, "Unrouted")
         if self.dark:
             self.stitching.SetBackgroundColour("#222C3A")
             self.stitching.SetForegroundColour("#E5EDF8")
@@ -473,6 +499,8 @@ class TraceForgePanel(wx.Frame):
     def on_tab_open(self, event):
         event.Skip()
         self.position_activity()
+        if self.notebook.GetSelection() == 10:
+            wx.CallAfter(self.unrouted.on_refresh)
         if self.notebook.GetSelection() == 5 and not self.visualization.nets:
             wx.CallAfter(self.visualization.on_refresh)
         self.schedule_auto_refresh()
@@ -484,6 +512,8 @@ class TraceForgePanel(wx.Frame):
     def on_activate(self, event):
         event.Skip()
         if event.GetActive():
+            if self.notebook.GetSelection() == 10 and not self.actions_pending and not self.busy:
+                wx.CallAfter(self.unrouted.on_refresh)
             self.schedule_auto_refresh()
 
     def schedule_auto_refresh(self):
@@ -492,7 +522,7 @@ class TraceForgePanel(wx.Frame):
         if (
             not self.native_call
             or self.closing
-            or self.notebook.GetSelection() in (4, 5, 6, 7)
+            or self.notebook.GetSelection() in (4, 5, 6, 7, 8, 9, 10)
             or (self.notebook.GetSelection() == 1 and self.via_tools.active_index >= 2)
             or (self.notebook.GetSelection() == 3 and self.trace_tools.active_index != 0)
         ):
@@ -509,7 +539,7 @@ class TraceForgePanel(wx.Frame):
         self.auto_check_deferred = False
         tab = self.notebook.GetSelection()
         if (
-            tab in (4, 5, 6, 7)
+            tab in (4, 5, 6, 7, 8, 9, 10)
             or (tab == 1 and self.via_tools.active_index >= 2)
             or (tab == 3 and self.trace_tools.active_index != 0)
         ):
@@ -600,6 +630,8 @@ class TraceForgePanel(wx.Frame):
             if tab == 4
             else self.visualization.group_list
             if tab == 5
+            else self.unrouted.table
+            if tab == 10
             else self.about
         )
         bounds = target.GetScreenRect()
@@ -632,6 +664,31 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
+        if self.notebook.GetSelection() == 10:
+            self.unrouted.on_refresh()
+            return
+        if self.notebook.GetSelection() == 0:
+            try:
+                geometry = self.tools.routing_configuration()
+                self.stackup_display.SetLabel(geometry.get('stackup', 'Stackup unavailable'))
+                self.stackup_display.Wrap(max(400, self.GetClientSize().width - 40))
+                self.routing_geometry.DeleteAllItems()
+                for row in geometry.get('rows', []):
+                    index = self.routing_geometry.InsertItem(self.routing_geometry.GetItemCount(),
+                                                             str(row[0]))
+                    for col, value in enumerate(row[1:], 1):
+                        self.routing_geometry.SetItem(index, col, str(value))
+                self.geometry_note.SetLabel(geometry.get('note', ''))
+                self.geometry_note.Wrap(max(400, self.GetClientSize().width - 40))
+                self.stackup_display.GetParent().Layout()
+            except (OSError, ValueError, KeyError) as exc:
+                self.stackup_display.SetLabel('Cannot read saved stackup: ' + str(exc))
+                self.routing_geometry.DeleteAllItems()
+        if self.notebook.GetSelection() == 9:
+            self.auto_text.on_refresh()
+            return
+        if self.notebook.GetSelection() == 8:
+            return
         if self.notebook.GetSelection() == 6:
             return
         if self.notebook.GetSelection() == 5:

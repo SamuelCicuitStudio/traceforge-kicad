@@ -272,6 +272,42 @@ def zoom_to_items(board, chosen, force=False):
 
 def dispatch(board, operation, payload):
     """Called only on the editor thread; no IPC API or file reload is involved."""
+    if operation.startswith('unrouted_'):
+        from signal_path_analyzer import unrouted_native
+
+        if operation == 'unrouted_scan':
+            return unrouted_native.scan(board, payload)
+        if operation == 'unrouted_clear':
+            _highlights.clear(board, board_items(board))
+            pcbnew.Refresh()
+            return dict(cleared=True)
+        if operation == 'unrouted_focus':
+            result = unrouted_native.focus(board, payload)
+            if result['resolved']:
+                return result
+            nets = {result['net']} if payload.get('whole_net') else set()
+            chosen = _highlights.apply(board, board_items(board), nets, set(), set(result['ids']))
+            points = []
+            for xy in result['points']:
+                point = pcbnew.PAD(None)
+                point.SetPosition(pcbnew.VECTOR2I(*(pcbnew.FromMM(v) for v in xy)))
+                points.append(point)
+            result['zoomed'] = zoom_to_items(board, points, force=True)
+            result['highlighted'] = len(chosen)
+            pcbnew.Refresh()
+            return result
+        raise ValueError('Unknown unrouted operation: ' + operation)
+
+    if operation.startswith('text_layout_'):
+        from signal_path_analyzer.traceforge_auto_text import native_dispatch
+
+        return native_dispatch(board, operation, payload)
+
+    if operation.startswith('layout_clone_'):
+        from signal_path_analyzer.traceforge_layout_clone import dispatch as clone_dispatch
+
+        return clone_dispatch(board, operation, payload)
+
     if operation.startswith('teardrop_'):
         from signal_path_analyzer.teardrop_native import dispatch as teardrop_dispatch
 

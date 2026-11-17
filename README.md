@@ -2,10 +2,10 @@
 
 <img src="icons/traceforge-light-48.png" alt="TraceForge icon" width="72" height="72">
 
-**PCB analysis and editing tools for KiCad 10. Version 0.13.3 is released for Windows; the older macOS 0.13.1 build remains a testing preview.**
+**PCB analysis and editing tools for KiCad 10. Version 0.16.5 is released for Windows; the older macOS 0.13.1 build remains a testing preview.**
 
-TraceForge 0.13.3 groups signal analysis, five Via Tools, BGA fanout, three Trace Tools,
-PCB Rotation, Visualization, and Manufacturing in one panel. It reads the open board through
+TraceForge 0.16.5 groups signal analysis, five Via Tools, BGA fanout, three Trace Tools,
+PCB Rotation, Visualization, Manufacturing, Layout Clone, Auto Text, and Unrouted in one panel. It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
 tools need no IPC API setup or token. Manufacturing exports read saved files and
 need a separate Python with `openpyxl`.
@@ -15,6 +15,8 @@ need a separate Python with `openpyxl`.
 *Current TraceForge in PCB Editor on the 03-MANAGEMENT-SWITCH-BOARD project. The
 selected signal path is highlighted on the board.*
 
+See [what changed in 0.16.5](docs/releases/0.16.5.md) for Layout Clone modes and interactive preview, Auto Text, saved routing geometry and the Unrouted navigator.
+
 ## Features
 
 Open TraceForge from KiCad PCB Editor. Each main tab is listed below; **Via Tools**
@@ -22,7 +24,7 @@ and **Trace Tools** have a selector at the top right for their individual tools.
 
 | Tool | What it does | Detailed use |
 | --- | --- | --- |
-| Signals / xSignals | Finds routed paths across selected series resistors and capacitors; measures copper length and, with a valid project timing profile, delay and group skew; highlights paths and differential partners; saves reviewed chains, exports CSV, and writes reviewed DRC targets. | [Signals and path detection](#signals-and-path-detection) |
+| Signals / xSignals | Displays saved stackup/profile widths, gaps and reference planes; finds routed paths across selected series resistors and capacitors; measures copper length and, with a valid project timing profile, delay and group skew; highlights paths and differential partners; saves reviewed chains, exports CSV, and writes reviewed DRC targets. | [Signals and path detection](#signals-and-path-detection) |
 | Via Stitching | Previews and adds same-net via grids in a chosen region, with copper, clearance, keepout and assembly checks; manages generated via sets. Its cleanup view finds standalone through vias for selection and manual deletion. | [Via stitching](#via-stitching) |
 | Via Fencing | Places a row of vias beside a selected signal trace, using a separate fence net; includes an RF spacing estimate. | [Via fencing](#via-fencing) |
 | Via Array | Rearranges an existing selection of matching vias into aligned rows and columns without adding vias. | [Via Array](#via-array) |
@@ -33,6 +35,9 @@ and **Trace Tools** have a selector at the top right for their individual tools.
 | Teardrops | Adds or removes native KiCad teardrops at selected via, pad and track targets. | [Teardrops](#teardrops) |
 | Round Corners | Previews and rounds eligible track bends with copper arcs; restores selected or all generated bends. | [Round Corners](#round-corners) |
 | PCB Rotation | Rotates selected footprints by an exact angle in one undoable operation. | [PCB Rotation](#pcb-rotation) |
+| Layout Clone | Match repeated circuits without hierarchy; copy placement, routing or both, with optional graphics/keepouts and target-net remapping. | [Layout Clone](docs/layout-clone.md) |
+| Auto Text | Previews and arranges references on selected silkscreen, fabrication or user layers; aligned reference banks, uniform height/stroke, grid snapping and optional visible values or hidden-reference visibility. | [Auto Text](docs/auto-text.md) |
+| Unrouted | Lists live remaining connections; click to highlight endpoints and zoom to the missing section, with search and Next/Previous navigation. | [Unrouted navigator](docs/unrouted.md) |
 | Visualization | Applies live net and net-group colors and controls component-focused ratsnest visibility. | [Visualization](#visualization) |
 | Manufacturing | Sets manufacturer choices, runs saved-project checks, creates PCBWay or PCBPower packages, reviews/rebuilds output, and cleans unused local library entries. | [Manufacturing](#manufacturing) |
 
@@ -42,18 +47,18 @@ save the board after reviewing changes and run KiCad DRC before manufacture.
 
 ## Install
 
-**Requirements for 0.13.3:** KiCad 10 with Python scripting support on Windows.
+**Requirements for 0.16.5:** KiCad 10 with Python scripting support on Windows.
 This release has one Windows PCM asset. The older macOS 0.13.1 preview is a
-separate release and is not updated by 0.13.3.
+separate release and is not updated by 0.16.5.
 
 ### Install the Windows PCM package
 
-Download `TraceForge-0.13.3-KiCad10-PCM.zip` from the
-[0.13.3 GitHub release](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/tag/v0.13.3).
+Download `TraceForge-0.16.5-KiCad10-PCM.zip` from the
+[0.16.5 GitHub release](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/tag/v0.16.5).
 In KiCad Manager, open **Plugin and Content Manager > Install from file** and
 select the ZIP. Close all KiCad windows and reopen PCB Editor. If an older
 TraceForge remains installed, remove it in PCM first. The **About** tab and
-window title must show **0.13.3**; if not, KiCad is still loading old files.
+window title must show **0.16.5**; if not, KiCad is still loading old files.
 The GitHub ZIP is available independently of KiCad's official PCM catalog.
 
 The first launch may assign KiCad's unused **Ctrl+Alt+Shift+F12** shortcut for
@@ -66,7 +71,7 @@ does not require PowerShell or a manually created plugin junction.
 
 The separate Windows and macOS standalone installers belong to the archived
 [0.13.1 releases](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases).
-They are not 0.13.3 assets. For this release, install the Windows PCM ZIP above.
+They are not 0.16.5 assets. For this release, install the Windows PCM ZIP above.
 
 ## How to use the panel
 
@@ -80,7 +85,7 @@ first and use KiCad Undo. Save the PCB yourself after reviewing the result.
 | What you see | What it means and what to do |
 | --- | --- |
 | A routed signal says **timing profile missing**, with blank ps cells | At least one net has no project tuning profile or a routed layer has no delay entry. In **Board Setup > Net Classes**, assign the net to a timed class and check its profile for every used copper layer. Save the project, restart/reopen PCB Editor if needed, then refresh TraceForge. A routed length in mm alone is not enough to calculate ps. TraceForge does not write a timing DRC target for this chain. |
-| A chain shows **Source PCB ps/mm** | This is the sum of all copper on the first net before series parts, including branches. It is shown for inspection; it is **not** a pin-to-resistor path length. TraceForge 0.13.3 does not create an automatic 15 ps source-net limit. Only a value you enter in **Signal Chain Editor > Source net max ps** makes it a checked rule. |
+| A chain shows **Source PCB ps/mm** | This is the sum of all copper on the first net before series parts, including branches. It is shown for inspection; it is **not** a pin-to-resistor path length. TraceForge 0.16.5 does not create an automatic 15 ps source-net limit. Only a value you enter in **Signal Chain Editor > Source net max ps** makes it a checked rule. |
 | Clicking **Pick** or selecting a PCB item yields nothing | In KiCad's **Selection Filter**, enable the item type you need: Tracks, Pads, Vias or Footprints (or choose All Items). An empty filter prevents KiCad's canvas from selecting. Board-wide scans do not depend on that filter; selecting or focusing results in KiCad does. |
 | Via-in-Pad Inspector shows **full**, **hole**, or **annulus only** | These describe copper geometry, not whether fabrication has filled or capped the via. Red hole contact can be on a different net; inspect both net names before editing. The colored results are in TraceForge's list; clicking a row focuses the via in KiCad. |
 | **Find standalone vias** lists a zone-only via | A via connected only by filled zones can be intentional stitching. Inspect connected layers and choose individual rows or **Select all listed in PCB** only after reviewing. Delete in KiCad, then press **B** to refill zones when ready. The scan never deletes vias. |
@@ -494,3 +499,11 @@ boards are ignored. `tools/build_chains.py` is an optional offline chain builder
 See [PCM publishing steps](docs/PCM-PUBLISHING.md),
 [release notes](docs/RELEASE-NOTES.md), [changelog](CHANGELOG.md) and
 [MIT license](LICENSE).
+
+
+### Unrouted connections
+
+The **Unrouted** tab lists remaining copper gaps. Click to highlight and zoom to
+the endpoints, or use Next/Previous to walk through the list. Search by net,
+reference or netclass. It reads live connectivity without running DRC. See
+[the Unrouted guide](docs/unrouted.md) for zone-fill and endpoint-tree details.

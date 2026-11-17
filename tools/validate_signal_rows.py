@@ -27,6 +27,17 @@ app = wx.App(False)
 TraceForgePanel.register_shortcuts = lambda *a: None
 frame = TraceForgePanel(Tools(lambda: results, *([lambda *a: None] * 6)))
 try:
+    frame.tools.routing_configuration = lambda: dict(
+        stackup='4 layers | F.Cu 0.035 mm | dielectric 0.18 mm Er=4.2 | In1.Cu',
+        rows=[['USB90', 'USB', 'DIFF', '90', 'F.Cu', 'In1.Cu', '0.2520', '0.2000',
+               'Saved profile geometry']], note='Last saved board/project')
+    frame.busy = True
+    frame.on_refresh()
+    frame.busy = False
+    assert frame.routing_geometry.GetItemCount() == 1
+    assert frame.routing_geometry.GetItemText(0, 6) == '0.2520'
+    assert frame.routing_geometry.GetItemText(0, 7) == '0.2000'
+    assert '0.18 mm' in frame.stackup_display.GetLabel()
     frame.overlay.Stop()
     frame.activity_timer.Stop()
     frame.results = results

@@ -1,3 +1,80 @@
+## 0.16.5 (Windows PCM release)
+
+First public release after 0.13.3; includes the local 0.14-0.16.4 additions below.
+See [complete 0.16.5 release notes](docs/releases/0.16.5.md).
+
+- New Unrouted tab: live remaining-connection list, search, click-to-highlight and
+  gap-centred zoom, Next/Previous navigation and optional whole-net highlighting.
+- Uses native copper clusters without DRC, file reload, zone refill or copper edits.
+  Rechecks whether a focused connection has already been routed.
+- Refreshes when opening the tab or returning from PCB Editor; no polling loop.
+
+## 0.16.4 (local testing build)
+
+- Read-only interactive Layout Clone result preview beside the matching table.
+- Preview placement, tracks, arcs, vias, zone outlines and optional graphics with
+  Apply's target transform; layer filters, before/after overlay, zoom, pan and Fit.
+- Routing-only previews the unmoved target placement and flags blocked plans.
+
+## 0.16.3 (local testing build)
+
+- Layout Clone Apply captures and automatically matches the selected target group;
+  correspondence-row selection and the separate preview are optional.
+- Electrically interchangeable duplicate parts match automatically.
+- Rotated target anchors transform placement, routing and graphics together;
+  routing-only validates the rigid placement and never moves footprints.
+- Copper preflight rejects collisions before editing the live board.
+- Visible saved stackup/profile geometry in Signals / xSignals.
+- Separate version prevents activating the older 0.16.2 panel after installation.
+
+## 0.16.2 (local testing build)
+
+- Remove Layout Clone's dependency on the standalone-only CreateEmptyBoard factory, which returns None inside PCB Editor; load an isolated temporary board through the native loader instead.
+- Placement-only recording skips routing serialization entirely; source capture follows the selected clone mode and graphics checkbox.
+- Exercise capture with CreateEmptyBoard returning None and the BOARD constructor disabled.
+
+## 0.16.1 (local testing build)
+
+- Fix Layout Clone source recording in embedded PCB Editor by calling CreateEmptyBoard directly instead of the double-wrapping BOARD constructor.
+- Add a native capture regression that rejects use of the problematic constructor.
+
+## 0.16.0 (local testing build)
+
+- Add placement-only, routing-only and placement-plus-routing modes to Layout Clone.
+- Record explicitly selected tracks, arcs, vias, zones, graphics and keepouts, including nested selections.
+- Remap cloned copper through matched numbered pads; preserve source layout and target net identities.
+- Copy native reference/value text positioning and style with the graphics option, preserving strings and visibility.
+- Require prealigned targets for routing-only; reject missing net mappings, existing target copper and duplicate assets.
+- Check copied tracks/vias against foreign-net copper shapes inside the undo transaction; refill zones afterward.
+
+## 0.15.2 (local testing build)
+
+- Discover and arrange dynamic `${REFERENCE}` footprint text copies, including front-board fabrication labels.
+- Add explicit text-only editing on locked footprints while preserving placement and component locks; individually locked fields stay protected.
+- Report hidden/locked-field counts when a selection contains no editable text.
+- Verify copy discovery/apply and locked-component handling with KiCad-native fixtures.
+
+## 0.15.1 (local testing build)
+
+- Align repeated reference banks in physical component order, with shared rows or columns.
+- Add uniform/custom typography, stroke control and placement-grid settings; use upright new placements.
+- Respect configured silkscreen minima and pad solder-mask expansion; protect existing markings.
+- Document adjustable defaults and the silkscreen practices informing placement.
+
+## 0.15.0 (local testing build)
+
+- Add Auto Text: arrange selected components or the entire PCB on a chosen silkscreen, fabrication or user drawing layer.
+- Default to reference text; optionally arrange visible values, reveal hidden references and standardize text size.
+- Preview conservative collision checks; preserve crowded labels for manual cleanup and reserve their original positions.
+- Recheck board/text state before applying through the native undo transaction. Preserve component placement, pads, routing and nets.
+
+## 0.14.0 (local testing build)
+
+- Add Layout Clone: record selected footprint placement, match a new circuit selection by geometry, values and pin connectivity, then apply without hierarchical sheet dependencies.
+- Propagate circuit roles through repeated RC branches; require manual correspondence for electrically indistinguishable parts.
+- Preserve the selected target anchor, component identities and nets; reject stale previews, locked targets and existing routing; refill zones inside the native undo transaction.
+- Save/load placement templates and keep them available for successive target groups. Default to complete groups and matching values.
+
 ## 0.13.3 (stable, Windows PCM)
 
 - Report missing signal timing profiles instead of treating routed nets as 0 ps / matched; do not generate timing DRC targets for incomplete chains.

@@ -77,7 +77,7 @@ class Listener:
                         self.on_activate(None)
                     elif command.startswith(_TAB_MAGIC):
                         value = command[len(_TAB_MAGIC):].strip()
-                        if value in tuple(str(i).encode() for i in range(7)):
+                        if value in tuple(str(i).encode() for i in range(11)):
                             conn.sendall(b"ok\n")
                             self.on_activate(int(value))
             except OSError:

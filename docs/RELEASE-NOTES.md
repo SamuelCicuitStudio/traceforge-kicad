@@ -1,3 +1,52 @@
+# TraceForge 0.16.5 - KiCad 10 Windows release
+
+This Windows PCM release includes all additions since the public 0.13.3 release.
+The intermediate 0.14-0.16.4 versions were local testing builds.
+
+## Layout Clone: repeated circuits without hierarchy
+
+- Record a selected circuit, select another component group, then **Apply to selected group**. Matching is automatic; selecting a correspondence row or running Preview first is optional.
+- Copy **placement only**, **routing only**, or **placement + routing**. Record selected tracks, arcs, vias and zones with the source. Optionally include selected graphics, keepouts and reference/value text formatting.
+- Match components using numbered pad geometry, values and circuit connectivity, including electrically interchangeable duplicate parts. Nested PCB groups are expanded; source/target references and net identities remain distinct.
+- Preserve the target anchor's position and orientation. Rotate the entire copied arrangement and routing around it to accommodate rotated repeated groups. Mirroring across copper sides is not supported.
+- Routing-only preserves component placement and requires an already matching arrangement. Choose placement + routing when components need alignment too. Unresolved electrical ambiguity, missing net mappings, disabled layers, duplicate assets and incompatible placements are reported before Apply.
+- Copper preflight checks prospective target geometry before editing. Collision messages identify the item, net and coordinates. The operation uses KiCad's undo transaction; the source remains untouched.
+- Embedded source capture now works when KiCad's standalone empty-board factory returns None. Placement-only capture does not serialize unused routing.
+
+## Interactive Layout Clone preview
+
+See the proposed result inside the Layout Clone tab: component pads and outlines, tracks, arcs, vias, zone outlines and optional graphics. Compare a grey before overlay, filter copper layers, zoom with the wheel, pan and Fit. Routing-only previews actual unmoved target components and displays blocked plans. Preview is read-only and uses the same transform as Apply.
+
+## Auto Text
+
+- Arrange selected footprints or the entire PCB on a chosen silkscreen, fabrication or user drawing layer. References are the default; visible values and hidden-reference visibility are optional.
+- Discover dynamic `${REFERENCE}` footprint text copies, including fabrication labels.
+- Use consistent text height, stroke, upright orientation and grid spacing; align repeated component banks in physical order on shared rows or columns.
+- Respect configured silkscreen minima, solder-mask clearance and protected polarity/pin-1 markings. Preview reports move/keep/unplaced results; crowded labels remain for manual cleanup.
+- Optionally edit text on locked footprints while retaining component placement and locks. Individually locked text remains protected. Apply checks for a stale preview and changes text only in an undoable operation.
+
+## Saved stackup and routing geometry
+
+Signals / xSignals now displays the selected saved stackup, copper/dielectric thickness, material and dielectric constant, and assigned impedance-profile geometry by layer. Read the target impedance, trace width, differential gap and reference planes directly in the tab. Values come from saved project profiles, not generic recommendations or DRC output. Missing geometry is explicitly **NOT COMPUTED**. This view does not solve impedance or revalidate an old profile after a stackup change.
+
+## Unrouted connection navigator
+
+The new **Unrouted** tab lists remaining connections using live native copper connectivity. Search by net, netclass or component. Click a row to highlight its endpoints and zoom to the missing section; use Next/Previous, optional whole-net highlighting, or F5 to refresh. The list refreshes when opening the tab or returning from PCB Editor and rechecks completed connections before focus. It does not run DRC, refill zones, reload/save files or change copper.
+
+KiCad's Python API does not expose the native ratsnest-edge iterator. The navigator constructs shortest anchor links between disconnected clusters; equivalent endpoint choices can differ from KiCad's displayed ratsnest. Separate filled-zone islands remain distinct, but pure orphan islands with no pad/track/via terminal are not listed separately. Both native airwire and navigator counts are visible. Refill stale pours in KiCad when needed.
+
+## Install and compatibility
+
+Download **TraceForge-0.16.5-KiCad10-PCM.zip** and use **KiCad Manager > Plugin and Content Manager > Install from file**. Remove an older TraceForge installation if necessary, close all KiCad windows, and reopen PCB Editor. The title and About tab must show **0.16.5**. A version/build identity check prevents pairing an older panel with the new native helper.
+
+This release targets **KiCad 10 on Windows** and publishes the PCM ZIP and SHA-256 checksum. It does not update the older macOS preview. Official KiCad catalog availability is subject to the separate metadata merge request.
+
+## Validation and limits
+
+Repository-wide lint and unit tests pass. KiCad-native fixtures verify source capture, rotated placement/routing, net remapping, routing-only preservation, reference-only edits, partial routes, resolved connections and separate zone islands. wxPython checks exercise automatic Apply, preview drawing/filtering and Unrouted navigation. Archive integrity and bundled exporter checksums are verified. Native headless fixtures substitute the edit transaction; they do not establish interactive Undo/Redo behavior on every KiCad installation. Review cloned copper and run KiCad DRC before manufacturing.
+
+---
+
 # TraceForge 0.13.3 - Windows PCM release
 
 The 0.13.3 GitHub release contains the Windows KiCad 10 PCM ZIP and checksum.

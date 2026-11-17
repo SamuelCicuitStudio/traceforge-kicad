@@ -113,9 +113,12 @@ def build_tools(session: Session):
                            selection_items=lambda: native.call('selection'),
                            pick_endpoint=EndpointService(session).pick)
 
+    from signal_path_analyzer.routing_configuration import routing_configuration
+
     clear = lambda: native.call('clear')  # noqa: E731
     return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,
-                 export, save, source, edit, zoom, highlight_groups=hl_groups)
+                 export, save, source, edit, zoom, highlight_groups=hl_groups,
+                 routing_configuration=lambda: routing_configuration(session.board_file))
 
 
 def _log_to_file() -> None:
@@ -136,7 +139,7 @@ def main() -> int:
     try:
         tab_text = os.environ.get('TRACEFORGE_START_TAB', '')
         start_tab = int(tab_text) if tab_text else None
-        if start_tab is not None and not 0 <= start_tab < 7:
+        if start_tab is not None and not 0 <= start_tab < 11:
             raise ValueError('Invalid TraceForge tab requested by the PCB Editor.')
         if try_activate_existing(PORT, tab=start_tab):
             return 0
