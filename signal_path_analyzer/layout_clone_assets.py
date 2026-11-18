@@ -67,8 +67,6 @@ def _check_asset(item):
         raise ValueError('Unsupported selected layout item: ' + type(item).__name__)
     if item.GetLayer() in (k.Edge_Cuts, k.Margin):
         raise ValueError('Board outline/margin items are not circuit-layout assets; deselect them.')
-    if kind == 'graphics' and item.IsOnCopperLayer():
-        raise ValueError('Unnetted copper graphics cannot be remapped. Use tracks or netted zones.')
     return kind
 
 
@@ -223,7 +221,7 @@ def prepare(board, template, target, plan, mode, graphics):
             continue
         clone = _duplicate(item)
         clone.SetParent(board)
-        if hasattr(item, 'GetNetname') and not keepout:
+        if hasattr(item, 'GetNetname') and not keepout and (routing or item.GetNetname()):
             name = str(item.GetNetname())
             if not name or name not in mapping or mapping[name] not in target_nets:
                 raise ValueError('Cannot resolve selected copper net through matched pads: ' + name)

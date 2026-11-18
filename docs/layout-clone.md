@@ -147,3 +147,22 @@ role; IDC1 and IDC2 remain distinct. Component values and labels are never rewri
 Placement-only cloning can retain differing target pin connectivity and shows a
 warning. Routing cloning still requires matching connectivity and safe net remapping.
 Matching caches physical geometry while evaluating network roles for large BGAs.
+
+## Clearance override and copper artwork
+
+**Check copper clearance** is enabled by default. Uncheck it to bypass the clone's
+native copper-clearance preflight for Apply. This does not disable KiCad DRC or
+change project rules; it lets you copy a layout and resolve its violations afterward.
+Net mapping, matching, stale snapshots, target routing/movement guards, locked parts,
+duplicate detection and board-layer validation still apply. The preview status shows
+when the clearance check is disabled.
+
+With **Also copy selected graphics / keepouts**, selected top-level F.Cu/B.Cu artwork
+copies with its shape/layer and transform. Unnetted copper artwork remains unnetted;
+TraceForge does not guess a power or ground net for it. Tracks, vias and netted zones
+still remap through matched component pads. Footprint-owned graphics remain part of
+the matched footprint rather than separate board graphics.
+
+Validated on the supplied FPGA PSU selection: 30 footprints, 135 tracks, 43 vias and
+33 copper graphics copied on a disposable board. The default clearance call was
+confirmed blocking; the unchecked option bypassed that call. No user PCB was written.

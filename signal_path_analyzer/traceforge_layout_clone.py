@@ -620,7 +620,8 @@ def _apply_to_board(board, payload):
         fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(entry['x']),
                                      pcbnew.FromMM(entry['y'])))
         prospective[entry['target_id']] = fp
-    assets.check_copper_clearance(board, additions, prospective)
+    if payload.get("check_clearance", True):
+        assets.check_copper_clearance(board, additions, prospective)
     # All preflight validation ends above; edit only matched footprints, atomically.
     def job(live):
         refreshed = {_uuid(fp): fp for fp in live.GetFootprints()}
@@ -755,7 +756,14 @@ def create_tab(parent, native_call):
             self.include_graphics = wx.CheckBox(
                 self, label='Also copy selected graphics / keepouts')
             self.include_graphics.Bind(wx.EVT_CHECKBOX, self.on_option)
-            mode_row.Add(self.include_graphics, 0, wx.ALIGN_CENTER_VERTICAL)
+            mode_row.Add(self.include_graphics, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 16)
+            self.check_clearance = wx.CheckBox(self, label='Check copper clearance')
+            self.check_clearance.SetValue(True)
+            self.check_clearance.SetToolTip(
+                'Uncheck to copy despite copper clearance violations. This controls the clone '
+                'preflight, not full KiCad DRC. Net mapping and identity guards remain enabled.')
+            self.check_clearance.Bind(wx.EVT_CHECKBOX, self.on_option)
+            mode_row.Add(self.check_clearance, 0, wx.ALIGN_CENTER_VERTICAL)
             root.Add(mode_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
             scope_row = wx.BoxSizer(wx.HORIZONTAL)
             scope_row.Add(wx.StaticText(self, label='Scope:'), 0,
@@ -914,6 +922,8 @@ def create_tab(parent, native_call):
             details += (f'Clone mode: {self.clone_mode.GetStringSelection()}; '
                         f'recorded assets: {self.template.get("assets", {}).get("counts", {})}\n')
             notices = list(self.plan.get('warnings', []))
+            if not self.check_clearance.GetValue():
+                notices.append('Copper clearance check disabled; run KiCad DRC after cloning.')
             if self.plan['missing'] and self.allow_partial.GetValue():
                 notices.append('Partial: missing ' + ', '.join(self.plan['missing']))
             if self.plan['extra'] and self.allow_partial.GetValue():
@@ -1033,7 +1043,8 @@ def create_tab(parent, native_call):
                                    accept_value_changes=self.allow_values.GetValue(),
                                    allow_partial=self.allow_partial.GetValue(),
                                    mode=assets.MODES[self.clone_mode.GetSelection()],
-                                   include_graphics=self.include_graphics.GetValue())
+                                   include_graphics=self.include_graphics.GetValue(),
+                                   check_clearance=self.check_clearance.GetValue())
                 self.apply_btn.Enable(self.call is not None)
                 self.target = None
                 self.plan = None
