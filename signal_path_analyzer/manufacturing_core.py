@@ -17,10 +17,67 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from .cancellation import OperationCancelled
+
+_cancel_state = threading.local()
+
+
+@contextmanager
+def cancel_scope(event, atomic=False):
+    previous = getattr(_cancel_state, "current", None)
+    _cancel_state.current = (event, atomic)
+    try:
+        if event.is_set():
+            raise OperationCancelled("Manufacturing task cancelled before starting")
+        yield
+    finally:
+        _cancel_state.current = previous
+
+
+def _run_process(command, **kwargs):
+    current = getattr(_cancel_state, "current", None)
+    if not current or current[1]:
+        return subprocess.run(command, **kwargs)
+    event, _atomic = current
+    if event.is_set():
+        raise OperationCancelled("Manufacturing checks cancelled")
+    options = dict(kwargs)
+    check = options.pop("check", False)
+    timeout = options.pop("timeout", None)
+    payload = options.pop("input", None)
+    if options.pop("capture_output", False):
+        options["stdout"], options["stderr"] = subprocess.PIPE, subprocess.PIPE
+    if payload is not None:
+        options["stdin"] = subprocess.PIPE
+    process = subprocess.Popen(command, **options)
+    started = time.monotonic()
+    try:
+        while True:
+            if event.is_set():
+                raise OperationCancelled("Manufacturing checks cancelled")
+            if timeout is not None and time.monotonic() - started >= timeout:
+                raise subprocess.TimeoutExpired(command, timeout)
+            try:
+                out, err = process.communicate(payload, timeout=0.1)
+                break
+            except subprocess.TimeoutExpired:
+                payload = None
+        if check and process.returncode:
+            raise subprocess.CalledProcessError(process.returncode, command, out, err)
+        return subprocess.CompletedProcess(command, process.returncode, out, err)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate()
+
 
 RESOURCES = Path(__file__).resolve().parent / "manufacturing_resources"
 WRAPPER = RESOURCES / "scripts" / "export_manufacturing.py"
@@ -785,10 +842,8 @@ def engineering_preview(preview: dict[str, Any], checks: list[dict[str, Any]] | 
         if state["exists"] and state["managed"]:
             release = package_release_state(Path(board["output"]), board["quote_unknowns"])
             lines.append(
-                
-                    f"   Release: "
-                    f"{'HOLD - ' + '; '.join(release['reasons'][:3]) if release['hold'] else 'export checks passed; CAM approval pending'}"  # noqa: E501 - composed report text or resource path
-                
+                f"   Release: "
+                f"{'HOLD - ' + '; '.join(release['reasons'][:3]) if release['hold'] else 'export checks passed; CAM approval pending'}"  # noqa: E501 - composed report text or resource path
             )
         if board["manufacturer"] == "pcbpower":
             lines.append(
@@ -800,10 +855,8 @@ def engineering_preview(preview: dict[str, Any], checks: list[dict[str, Any]] | 
             if mechanical:
                 source = (Path(board["config"]).parent / mechanical).resolve()
                 lines.append(
-                    
-                        f"   Mechanical files: "
-                        f"{sum(path.is_file() for path in source.rglob('*')) if source.is_dir() else 0} linked"  # noqa: E501 - composed report text or resource path
-                    
+                    f"   Mechanical files: "
+                    f"{sum(path.is_file() for path in source.rglob('*')) if source.is_dir() else 0} linked"  # noqa: E501 - composed report text or resource path
                 )
         else:
             order = config["pcbway"]
@@ -874,7 +927,7 @@ def find_export_python() -> Path:
         if found:
             candidates.append(Path(found))
     for candidate in dict.fromkeys(candidates):
-        result = subprocess.run(
+        result = _run_process(
             [str(candidate), "-c", "import openpyxl"], capture_output=True, timeout=8, check=False
         )
         if result.returncode == 0:
@@ -896,7 +949,7 @@ def run_cli_preflight(preview: dict[str, Any], cli: Path) -> dict[str, Any]:
         ):
             report = Path(temporary) / f"{label}.rpt"
             source = inventory["schematic"] if label == "ERC" else inventory["board"]
-            result = subprocess.run(
+            result = _run_process(
                 [str(cli), *command, str(report), source],
                 cwd=inventory["project"],
                 capture_output=True,
@@ -997,7 +1050,7 @@ def _bom_position_preflight(
     )
     failures = []
     for command in commands:
-        result = subprocess.run(
+        result = _run_process(
             command,
             cwd=inventory["project"],
             capture_output=True,
@@ -1133,7 +1186,7 @@ def export_package(preview: dict[str, Any], replace: bool = False) -> dict[str, 
     if replace:
         command.append("--replace-output")
     with log.open("w", encoding="utf-8") as stream:
-        result = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, check=False)
+        result = _run_process(command, stdout=stream, stderr=subprocess.STDOUT, check=False)
     after = preview_package(preview["manufacturer"], Path(preview["config"]))
     stale_during_export = after["input_hash"] != preview["input_hash"]
     output = Path(preview["output"])
@@ -1205,7 +1258,7 @@ def export_bundle(preview: dict[str, Any], replace: bool = False) -> dict[str, A
     if replace:
         command.append("--replace-output")
     with log.open("w", encoding="utf-8") as stream:
-        result = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, check=False)
+        result = _run_process(command, stdout=stream, stderr=subprocess.STDOUT, check=False)
     after = preview_bundle(preview["manufacturer"], Path(preview["manifest"]))
     stale = after["input_hash"] != preview["input_hash"]
     release = []

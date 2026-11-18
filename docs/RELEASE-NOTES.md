@@ -1,3 +1,7 @@
+# TraceForge 0.18.1 ? Windows release
+
+See [0.18.1 release notes](releases/0.18.1.md) for combined LCSC/JLCPCB research, Basic/Extended filtering, BOM purchase costing, compatible passive assignment, visible loading and cancellation, incremental updates and Layout Clone preview fixes.
+
 # TraceForge 0.16.5 - KiCad 10 Windows release
 
 This Windows PCM release includes all additions since the public 0.13.3 release.

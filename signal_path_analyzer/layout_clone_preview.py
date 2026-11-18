@@ -137,7 +137,19 @@ def create_preview(parent):
 
         def paint(self, _event):
             dc = wx.AutoBufferedPaintDC(self)
-            self.draw(dc, self.GetClientSize())
+            size = self.GetClientSize()
+            if size.width <= 0 or size.height <= 0:
+                return
+            # KiCad's wx bindings accept MemoryDC in GCDC, but reject
+            # AutoBufferedPaintDC. Render through the supported DC, then copy
+            # the finished frame to the actual paint surface.
+            bitmap = wx.Bitmap(size.width, size.height)
+            buffer = wx.MemoryDC(bitmap)
+            try:
+                self.draw(buffer, size)
+            finally:
+                buffer.SelectObject(wx.NullBitmap)
+            dc.DrawBitmap(bitmap, 0, 0, False)
 
         def draw(self, dc, size):
             dc.SetBackground(wx.Brush('#101923'))

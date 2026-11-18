@@ -2,23 +2,29 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
-from . import lcsc_retail
+from . import component_schema, lcsc_retail
+from .cancellation import wait_future
 
 CACHE = Path(os.environ.get("APPDATA", Path.home())) / "TraceForge/lcsc-retail"
-LCSC_KEYS = ("LCSC Part #", "LCSC", "LCSC Part", "LCSC Code", "LCSC Part Number", "JLCPCB Part #")
+LCSC_KEYS = tuple(["LCSC Part #"] + component_schema.SCHEMA["fields"]["LCSC Part #"]["aliases"])
 
 
 def property_value(properties, keys):
-    folded = {k.casefold(): str(v).strip() for k, v in properties.items()}
-    return next((folded[k.casefold()] for k in keys if folded.get(k.casefold())), "")
+    def normalize(key):
+        return re.sub(r"[^a-z0-9]", "", key.casefold())
+
+    folded = {normalize(k): str(v).strip() for k, v in properties.items()}
+    return next((folded[normalize(k)] for k in keys if folded.get(normalize(k))), "")
 
 
 def group_parts(parts):
@@ -54,6 +60,9 @@ def group_parts(parts):
                 manufacturer=first["manufacturer"],
                 references=sorted(p["reference"] for p in group),
                 per_board=len(group),
+                identity_source="; ".join(
+                    sorted({p.get("identity_source", "saved supplier field") for p in group})
+                ),
                 conflict=len(code_mpns[first["lcsc"]]) > 1,
             )
         )
@@ -72,6 +81,11 @@ def price_line(line, quote, boards=1, spares_percent=0):
         line,
         fitted_quantity=fitted,
         demand_quantity=demand,
+        requested_spares=demand - fitted,
+        minimum_order=None,
+        order_multiple=None,
+        leftover_quantity=None,
+        moq_extra_quantity=None,
         order_quantity=demand,
         status="unpriced",
         unit_price_usd=None,
@@ -93,10 +107,22 @@ def price_line(line, quote, boards=1, spares_percent=0):
         return out
     minimum = quote.get("minimum_order")
     multiple = quote.get("order_multiple")
+    out.update(minimum_order=minimum, order_multiple=multiple)
+    if quote.get("quantity_schema") == 2 and not (
+        isinstance(minimum, int) and minimum > 0 and isinstance(multiple, int) and multiple > 0
+    ):
+        out["status"] = "supplier minimum order / order multiple unavailable"
+        return out
     order = max(demand, minimum if isinstance(minimum, int) and minimum > 0 else demand)
     if isinstance(multiple, int) and multiple > 0:
         order = ((order + multiple - 1) // multiple) * multiple
-    out["order_quantity"] = order
+    out.update(
+        order_quantity=order,
+        minimum_order=minimum,
+        order_multiple=multiple,
+        leftover_quantity=order - fitted,
+        moq_extra_quantity=order - demand,
+    )
     tiers = []
     for tier in quote.get("price_tiers_usd", []):
         try:
@@ -127,9 +153,10 @@ def cached_quote(code, refresh=False, cache_dir=None):
     path = Path(cache_dir or CACHE) / (code + ".json")
     if not refresh and path.exists():
         data = json.loads(path.read_text())
-        if data.get("lcsc_code") == code:
+        if data.get("lcsc_code") == code and data.get("quantity_schema") == 2:
             return dict(data, cache_status="cached")
     data = lcsc_retail.lookup_pricing(code, lambda message: None)
+    lcsc_retail.check_cancelled()
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(".tmp")
     temp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -146,45 +173,118 @@ def estimate(
     progress=None,
     lookup=cached_quote,
 ):
-    groups, excluded = group_parts(parts)
-    quotes = {}
-    lines = []
-    for index, group in enumerate(groups):
-        if cancel and cancel.is_set():
-            raise RuntimeError(
-                "BOM pricing cancelled; incomplete totals were not presented as complete"
-            )
-        quote = {}
-        error = None
-        code = group["lcsc"]
-        if code and not group["conflict"]:
-            if code not in quotes:
-                try:
-                    quotes[code] = lookup(code, refresh=refresh)
-                except (OSError, ValueError, lcsc_retail.LookupError) as exc:
-                    quotes[code] = {"error": str(exc)}
-            quote = quotes[code]
-            error = quote.get("error")
-        row = price_line(group, quote, boards, spares_percent)
-        if error:
-            row["status"] = "price unavailable: " + error
-        row["cache_status"] = quote.get("cache_status", "")
-        lines.append(row)
-        if progress:
-            progress(index + 1, len(groups), code)
-    priced = [x for x in lines if x["extended_usd"] is not None]
-    total = sum((Decimal(x["extended_usd"]) for x in priced), Decimal(0))
-    return dict(
-        currency="USD",
-        boards=boards,
-        spares_percent=spares_percent,
-        lines=lines,
-        priced_lines=len(priced),
-        unpriced_lines=len(lines) - len(priced),
-        known_parts_subtotal_usd=str(total),
-        complete_parts_total_usd=str(total) if len(priced) == len(lines) else None,
-        excluded_references=excluded,
-        quotes=quotes,
-        generated_at=datetime.now(timezone.utc).isoformat(),
-        scope="LCSC retail parts only; excludes fabrication, assembly, shipping, taxes and fees",
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="bom-quote") if cancel else None
+
+    def retrieve(code):
+        with lcsc_retail.cancel_requests(cancel):
+            return lookup(code, refresh=refresh)
+
+    try:
+        groups, excluded = group_parts(parts)
+        quotes = {}
+        lines = []
+        for index, group in enumerate(groups):
+            if cancel and cancel.is_set():
+                raise RuntimeError(
+                    "BOM pricing cancelled; incomplete totals were not presented as complete"
+                )
+            quote = {}
+            error = None
+            code = group["lcsc"]
+            if code and not group["conflict"]:
+                if code not in quotes:
+                    try:
+                        quotes[code] = (
+                            wait_future(pool.submit(retrieve, code), cancel)
+                            if pool
+                            else lookup(code, refresh=refresh)
+                        )
+                    except (OSError, ValueError, lcsc_retail.LookupError) as exc:
+                        quotes[code] = {"error": str(exc)}
+                quote = quotes[code]
+                error = quote.get("error")
+            row = price_line(group, quote, boards, spares_percent)
+            if error:
+                row["status"] = "price unavailable: " + error
+            row["cache_status"] = quote.get("cache_status", "")
+            lines.append(row)
+            if progress:
+                progress(index + 1, len(groups), code)
+        priced = [x for x in lines if x["extended_usd"] is not None]
+        total = sum((Decimal(x["extended_usd"]) for x in priced), Decimal(0))
+        return dict(
+            currency="USD",
+            boards=boards,
+            spares_percent=spares_percent,
+            lines=lines,
+            priced_lines=len(priced),
+            unpriced_lines=len(lines) - len(priced),
+            known_parts_subtotal_usd=str(total),
+            complete_parts_total_usd=str(total) if len(priced) == len(lines) else None,
+            excluded_references=excluded,
+            quotes=quotes,
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            scope=(
+                "LCSC retail parts only; excludes fabrication, assembly, shipping, taxes and fees"
+            ),
+        )
+    finally:
+        if pool:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+
+def availability_state(row):
+    if not row.get("lcsc"):
+        return "Unassigned"
+    if row.get("conflict") or "mismatch" in row.get("status", ""):
+        return "Identity conflict"
+    stock = row.get("stock")
+    if isinstance(stock, int) and stock < row.get("order_quantity", 0):
+        return "Stock short"
+    if row.get("extended_usd") is None:
+        return "Price missing"
+    if stock is None:
+        return "Stock unknown"
+    return "Ready"
+
+
+def update_assignment(report, references, properties, cancel=None, lookup=cached_quote):
+    """Reprice changed SKU groups without re-exporting or resolving the whole BOM."""
+    refs = set(references)
+    source = copy.deepcopy(report["source_parts"])
+    parts = copy.deepcopy(report.get("resolved_parts", source))
+    if "resolved_parts" not in report:
+        identities = {ref: row for row in report["lines"] for ref in row["references"]}
+        for part in parts:
+            row = identities.get(part["reference"])
+            if row:
+                part.setdefault("properties", {}).update(
+                    {"LCSC Part #": row["lcsc"], "MPN": row["mpn"]}
+                )
+    for collection in (source, parts):
+        for part in collection:
+            if part["reference"] in refs:
+                part.setdefault("properties", {}).update(properties)
+                part["identity_source"] = "explicit LCSC assignment"
+    quotes = dict(report.get("quotes", {}))
+
+    def reuse(code, refresh=False):
+        if code not in quotes:
+            quotes[code] = lookup(code, refresh=False)
+        return quotes[code]
+
+    updated = estimate(
+        parts, report["boards"], report["spares_percent"], cancel=cancel, lookup=reuse
     )
+    result = dict(report, **updated)
+    result.update(source_parts=source, resolved_parts=parts)
+    result["identity_resolution"] = {
+        p["reference"]: p.get("identity_source", "saved supplier field") for p in parts
+    }
+    # Keep unchanged row objects and their observations intact.
+    old = {tuple(row["references"]): row for row in report["lines"]}
+    result["lines"] = [
+        old.get(tuple(row["references"]), row) if old.get(tuple(row["references"])) == row else row
+        for row in result["lines"]
+    ]
+    return result

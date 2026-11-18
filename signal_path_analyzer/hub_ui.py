@@ -43,8 +43,7 @@ LABELS = {
     "toggle_panel": "Show / hide this panel",
 }
 # Status text and symbols remain visible alongside semantic row colours.
-MARK = {"ok": "✔", "short": "▲", "long": "▼", "pending": "…", "routed": "•",
-        "unprofiled": "✖"}
+MARK = {"ok": "✔", "short": "▲", "long": "▼", "pending": "…", "routed": "•", "unprofiled": "✖"}
 
 
 @dataclass
@@ -321,10 +320,13 @@ class TraceForgePanel(wx.Frame):
         self.refresh.Bind(wx.EVT_BUTTON, self.on_refresh)
         bar.AddStretchSpacer()
         self.active_operation = None
+        self.refresh_cancelled = False
         self.cancel_operation = wx.Button(self, label="Cancel operation", style=wx.BU_EXACTFIT)
-        self.cancel_operation.SetToolTip("Stop a read-only scan or preview. "
-                                         "Board edits are atomic.")
-        self.cancel_operation.Disable()
+        self.cancel_operation.SetToolTip(
+            "Cancel active research, BOM pricing, checks or previews. "
+            "An atomic edit finishes safely."
+        )
+        self.cancel_operation.Enable()
         self.cancel_operation.Bind(wx.EVT_BUTTON, self.on_cancel_operation)
         bar.Add(self.refresh)
         refresh_id = wx.NewIdRef()
@@ -334,8 +336,11 @@ class TraceForgePanel(wx.Frame):
         self.tree = htl.HyperTreeList(
             root,
             agwStyle=(
-                wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS | wx.TR_FULL_ROW_HIGHLIGHT
-                | wx.TR_LINES_AT_ROOT | wx.TR_MULTIPLE
+                wx.TR_HIDE_ROOT
+                | wx.TR_HAS_BUTTONS
+                | wx.TR_FULL_ROW_HIGHLIGHT
+                | wx.TR_LINES_AT_ROOT
+                | wx.TR_MULTIPLE
             ),
         )
         if self.dark:
@@ -380,13 +385,23 @@ class TraceForgePanel(wx.Frame):
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
         self.stackup_display = wx.StaticText(
-            root, label="Stackup: refresh to load board construction")
+            root, label="Stackup: refresh to load board construction"
+        )
         box.Add(self.stackup_display, 0, wx.EXPAND | wx.ALL, 6)
         self.routing_geometry = wx.ListCtrl(root, style=wx.LC_REPORT, size=(-1, 145))
-        for index, (title, width) in enumerate([
-                ("Computed profile", 185), ("Netclasses", 140), ("Type", 80),
-                ("Target ohms", 90), ("Signal layer", 90), ("Reference plane", 120),
-                ("Width mm", 100), ("Pair gap mm", 100), ("Source / status", 220)]):
+        for index, (title, width) in enumerate(
+            [
+                ("Computed profile", 185),
+                ("Netclasses", 140),
+                ("Type", 80),
+                ("Target ohms", 90),
+                ("Signal layer", 90),
+                ("Reference plane", 120),
+                ("Width mm", 100),
+                ("Pair gap mm", 100),
+                ("Source / status", 220),
+            ]
+        ):
             self.routing_geometry.InsertColumn(index, title, width=width)
         box.Add(self.routing_geometry, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
         self.geometry_note = wx.StaticText(root, label="")
@@ -428,15 +443,16 @@ class TraceForgePanel(wx.Frame):
         from .workspace_ui import ToolWorkspace, utility_window
         from .workspaces import tool_id
 
-        self.signals_workspace = ToolWorkspace(self.notebook, self, ['Paths / timing', 'Unrouted'])
-        self.signals_workspace.add(root, 'Paths / timing')
+        self.signals_workspace = ToolWorkspace(self.notebook, self, ["Paths / timing", "Unrouted"])
+        self.signals_workspace.add(root, "Paths / timing")
         from .unrouted_ui import UnroutedPanel
 
         self.unrouted = UnroutedPanel(self.signals_workspace.book, self, stitching)
-        self.signals_workspace.add(self.unrouted, 'Unrouted')
-        self.notebook.AddPage(self.signals_workspace, 'Signals')
-        self.layout_workspace = ToolWorkspace(self.notebook, self,
-                                              ['Layout Clone', 'Rotation', 'References'])
+        self.signals_workspace.add(self.unrouted, "Unrouted")
+        self.notebook.AddPage(self.signals_workspace, "Signals")
+        self.layout_workspace = ToolWorkspace(
+            self.notebook, self, ["Layout Clone", "Rotation", "References"]
+        )
         from .board_rotate_ui import BoardRotatePanel
         from .traceforge_auto_text import create_tab as create_auto_text_tab
         from .traceforge_layout_clone import create_tab
@@ -444,45 +460,49 @@ class TraceForgePanel(wx.Frame):
         self.layout_clone = create_tab(self.layout_workspace.book, stitching)
         self.rotation = BoardRotatePanel(self.layout_workspace.book, self, stitching)
         self.auto_text = create_auto_text_tab(self.layout_workspace.book, self, stitching)
-        for page, label in [(self.layout_clone, 'Layout Clone'), (self.rotation, 'Rotation'),
-                            (self.auto_text, 'References')]:
+        for page, label in [
+            (self.layout_clone, "Layout Clone"),
+            (self.rotation, "Rotation"),
+            (self.auto_text, "References"),
+        ]:
             self.layout_workspace.add(page, label)
-        self.notebook.AddPage(self.layout_workspace, 'Layout')
+        self.notebook.AddPage(self.layout_workspace, "Layout")
         self.via_tools = ViaToolsPanel(self.notebook, self, stitching)
         self.stitching = self.via_tools.stitching
         self.trace_fence = self.via_tools.fencing
         self.via_array = self.via_tools.array
-        self.notebook.AddPage(self.via_tools, 'Vias')
+        self.notebook.AddPage(self.via_tools, "Vias")
         from .trace_tools_ui import TraceToolsPanel
 
         self.trace_tools = TraceToolsPanel(self.notebook, self, stitching)
         self.trace_cleanup = self.trace_tools.cleanup
         self.fanout = self.trace_tools.fanout
-        self.notebook.AddPage(self.trace_tools, 'Routing')
+        self.notebook.AddPage(self.trace_tools, "Routing")
         from .components_ui import ComponentsPanel
 
-        board_file = (native_info or {}).get('board')
+        board_file = (native_info or {}).get("board")
         self.components = ComponentsPanel(self.notebook, self, stitching, board_file)
-        self.notebook.AddPage(self.components, 'Components')
+        self.notebook.AddPage(self.components, "Components")
         from .bom_cost_ui import BomCostPanel
         from .manufacturing_ui import ManufacturingPanel
 
-        self.manufacturing_workspace = ToolWorkspace(self.notebook, self,
-                                                     ['Manufacturing', 'BOM Cost'])
+        self.manufacturing_workspace = ToolWorkspace(
+            self.notebook, self, ["Manufacturing", "BOM Cost"]
+        )
         self.manufacturing = ManufacturingPanel(self.manufacturing_workspace.book, self, board_file)
         self.bom_cost = BomCostPanel(self.manufacturing_workspace.book, self, stitching, board_file)
-        self.manufacturing_workspace.add(self.manufacturing, 'Manufacturing')
-        self.manufacturing_workspace.add(self.bom_cost, 'BOM Cost')
-        self.notebook.AddPage(self.manufacturing_workspace, 'Manufacturing')
+        self.manufacturing_workspace.add(self.manufacturing, "Manufacturing")
+        self.manufacturing_workspace.add(self.bom_cost, "BOM Cost")
+        self.notebook.AddPage(self.manufacturing_workspace, "Manufacturing")
         from .about_ui import AboutPanel
         from .visualization_ui import VisualizationPanel
 
-        self.view_window = utility_window(self, 'TraceForge - View')
+        self.view_window = utility_window(self, "TraceForge - View")
         self.visualization = VisualizationPanel(self.view_window, self, stitching, board_file)
         view_box = wx.BoxSizer(wx.VERTICAL)
         view_box.Add(self.visualization, 1, wx.EXPAND)
         self.view_window.SetSizer(view_box)
-        self.about_window = utility_window(self, 'About TraceForge')
+        self.about_window = utility_window(self, "About TraceForge")
         self.about = AboutPanel(self.about_window, self.dark, native_info)
         about_box = wx.BoxSizer(wx.VERTICAL)
         about_box.Add(self.about, 1, wx.EXPAND)
@@ -494,7 +514,7 @@ class TraceForgePanel(wx.Frame):
             self.stitching.SetForegroundColour("#E5EDF8")
         frame_box = wx.BoxSizer(wx.VERTICAL)
         cancel_bar = wx.BoxSizer(wx.HORIZONTAL)
-        for title, target in [('View', 'view'), ('About / Settings', 'about')]:
+        for title, target in [("View", "view"), ("About / Settings", "about")]:
             utility = wx.Button(self, label=title)
             utility.Bind(wx.EVT_BUTTON, lambda event, target=target: self.activate_tool(target))
             cancel_bar.Add(utility, 0, wx.ALL, 4)
@@ -519,37 +539,44 @@ class TraceForgePanel(wx.Frame):
         self.Bind(wx.EVT_ACTIVATE, self.on_activate)
         try:
             preferences = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
-            for name, workspace in [('signals', self.signals_workspace),
-                                    ('layout', self.layout_workspace), ('vias', self.via_tools),
-                                    ('routing', self.trace_tools),
-                                    ('components', self.components),
-                                    ('manufacturing', self.manufacturing_workspace)]:
-                index = preferences.get('workspace_tools', {}).get(name, 0)
+            for name, workspace in [
+                ("signals", self.signals_workspace),
+                ("layout", self.layout_workspace),
+                ("vias", self.via_tools),
+                ("routing", self.trace_tools),
+                ("components", self.components),
+                ("manufacturing", self.manufacturing_workspace),
+            ]:
+                index = preferences.get("workspace_tools", {}).get(name, 0)
                 if isinstance(index, int) and 0 <= index < workspace.selector.GetCount():
                     workspace.selector.SetSelection(index)
                     workspace.book.SetSelection(index)
-            self.activate_tool(preferences.get('workspace', 'signals.paths'))
+            self.activate_tool(preferences.get("workspace", "signals.paths"))
         except (OSError, ValueError):
-            logging.exception('Cannot restore workspace preferences')
+            logging.exception("Cannot restore workspace preferences")
         wx.CallAfter(self.schedule_auto_refresh)
 
     def current_tool(self):
         index = self.notebook.GetSelection()
         if index == 0:
-            return ('signals.paths', 'signals.unrouted')[self.signals_workspace.active_index]
+            return ("signals.paths", "signals.unrouted")[self.signals_workspace.active_index]
         if index == 1:
-            return ('layout.clone', 'layout.rotate', 'layout.references')[
-                self.layout_workspace.active_index]
+            return ("layout.clone", "layout.rotate", "layout.references")[
+                self.layout_workspace.active_index
+            ]
         if index == 2:
-            return ('vias.stitching', 'vias.fencing', 'vias.array', 'vias.sizes',
-                    'vias.inspector')[self.via_tools.active_index]
+            return ("vias.stitching", "vias.fencing", "vias.array", "vias.sizes", "vias.inspector")[
+                self.via_tools.active_index
+            ]
         if index == 3:
-            return ('routing.cleanup', 'routing.teardrops', 'routing.corners',
-                    'routing.fanout')[self.trace_tools.active_index]
+            return ("routing.cleanup", "routing.teardrops", "routing.corners", "routing.fanout")[
+                self.trace_tools.active_index
+            ]
         if index == 4:
-            return ('components.search', 'components.assets', 'components.library')[
-                self.components.selector.GetSelection()]
-        return ('manufacturing', 'manufacturing.cost')[self.manufacturing_workspace.active_index]
+            return ("components.search", "components.assets", "components.library")[
+                self.components.selector.GetSelection()
+            ]
+        return ("manufacturing", "manufacturing.cost")[self.manufacturing_workspace.active_index]
 
     def legacy_tab(self):
         from .workspaces import legacy_index
@@ -557,51 +584,66 @@ class TraceForgePanel(wx.Frame):
         return legacy_index(self.current_tool())
 
     def workspace_changed(self):
-        if not hasattr(self, 'activity'):
+        if not hasattr(self, "activity"):
             return
         self.remember_workspace()
         self.position_activity()
-        if self.current_tool() == 'signals.unrouted':
+        if self.current_tool() == "signals.unrouted":
             wx.CallAfter(self.unrouted.on_refresh)
         self.schedule_auto_refresh()
 
     def remember_workspace(self):
         try:
             data = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
-            data['workspace'] = self.current_tool()
-            data['workspace_tools'] = {
-                'signals': self.signals_workspace.active_index,
-                'layout': self.layout_workspace.active_index,
-                'vias': self.via_tools.active_index,
-                'routing': self.trace_tools.active_index,
-                'components': self.components.selector.GetSelection(),
-                'manufacturing': self.manufacturing_workspace.active_index}
+            data["workspace"] = self.current_tool()
+            data["workspace_tools"] = {
+                "signals": self.signals_workspace.active_index,
+                "layout": self.layout_workspace.active_index,
+                "vias": self.via_tools.active_index,
+                "routing": self.trace_tools.active_index,
+                "components": self.components.selector.GetSelection(),
+                "manufacturing": self.manufacturing_workspace.active_index,
+            }
             SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-            SETTINGS.write_text(json.dumps(data, indent=2) + '\n')
+            SETTINGS.write_text(json.dumps(data, indent=2) + "\n")
         except (OSError, ValueError):
-            logging.exception('Cannot save workspace preferences')
+            logging.exception("Cannot save workspace preferences")
 
     def activate_tool(self, target):
         from .workspaces import tool_id
 
         target = tool_id(target)
-        if target in ('view', 'about'):
-            window = self.view_window if target == 'view' else self.about_window
-            window.Show()
-            window.Raise()
-            if target == 'view' and not self.visualization.nets:
+        if target in ("view", "about"):
+            from .workspace_ui import show_utility
+
+            window = self.view_window if target == "view" else self.about_window
+            show_utility(self, window)
+            if target == "view" and not self.visualization.nets:
                 self.visualization.on_refresh()
             return
-        group, index = ({
-            'signals.paths': (0, 0), 'signals.unrouted': (0, 1),
-            'layout.clone': (1, 0), 'layout.rotate': (1, 1), 'layout.references': (1, 2),
-            'vias.stitching': (2, 0), 'vias.fencing': (2, 1), 'vias.array': (2, 2),
-            'vias.sizes': (2, 3), 'vias.inspector': (2, 4),
-            'routing.cleanup': (3, 0), 'routing.teardrops': (3, 1),
-            'routing.corners': (3, 2), 'routing.fanout': (3, 3),
-            'components.search': (4, 0), 'components.assets': (4, 1),
-            'components.library': (4, 2), 'manufacturing': (5, 0),
-            'manufacturing.cost': (5, 1)})[target]
+        group, index = (
+            {
+                "signals.paths": (0, 0),
+                "signals.unrouted": (0, 1),
+                "layout.clone": (1, 0),
+                "layout.rotate": (1, 1),
+                "layout.references": (1, 2),
+                "vias.stitching": (2, 0),
+                "vias.fencing": (2, 1),
+                "vias.array": (2, 2),
+                "vias.sizes": (2, 3),
+                "vias.inspector": (2, 4),
+                "routing.cleanup": (3, 0),
+                "routing.teardrops": (3, 1),
+                "routing.corners": (3, 2),
+                "routing.fanout": (3, 3),
+                "components.search": (4, 0),
+                "components.assets": (4, 1),
+                "components.library": (4, 2),
+                "manufacturing": (5, 0),
+                "manufacturing.cost": (5, 1),
+            }
+        )[target]
         if group in (0, 1):
             (self.signals_workspace if group == 0 else self.layout_workspace).select(index)
         elif group in (2, 3):
@@ -797,19 +839,20 @@ class TraceForgePanel(wx.Frame):
         if self.legacy_tab() == 0:
             try:
                 geometry = self.tools.routing_configuration()
-                self.stackup_display.SetLabel(geometry.get('stackup', 'Stackup unavailable'))
+                self.stackup_display.SetLabel(geometry.get("stackup", "Stackup unavailable"))
                 self.stackup_display.Wrap(max(400, self.GetClientSize().width - 40))
                 self.routing_geometry.DeleteAllItems()
-                for row in geometry.get('rows', []):
-                    index = self.routing_geometry.InsertItem(self.routing_geometry.GetItemCount(),
-                                                             str(row[0]))
+                for row in geometry.get("rows", []):
+                    index = self.routing_geometry.InsertItem(
+                        self.routing_geometry.GetItemCount(), str(row[0])
+                    )
                     for col, value in enumerate(row[1:], 1):
                         self.routing_geometry.SetItem(index, col, str(value))
-                self.geometry_note.SetLabel(geometry.get('note', ''))
+                self.geometry_note.SetLabel(geometry.get("note", ""))
                 self.geometry_note.Wrap(max(400, self.GetClientSize().width - 40))
                 self.stackup_display.GetParent().Layout()
             except (OSError, ValueError, KeyError) as exc:
-                self.stackup_display.SetLabel('Cannot read saved stackup: ' + str(exc))
+                self.stackup_display.SetLabel("Cannot read saved stackup: " + str(exc))
                 self.routing_geometry.DeleteAllItems()
         if self.legacy_tab() == 9:
             self.auto_text.on_refresh()
@@ -836,6 +879,7 @@ class TraceForgePanel(wx.Frame):
         if self.busy or self.actions_pending or self.closing:
             return
         self.busy = True
+        self.refresh_cancelled = False
         self.refresh.Disable()
         self.begin_activity("Reading signal lengths...")
         self.status.SetLabel("Refreshing timing from KiCad...")
@@ -860,6 +904,10 @@ class TraceForgePanel(wx.Frame):
         if self.closing:
             return
         self.refresh.Enable(not self.actions_pending)
+        if self.refresh_cancelled:
+            self.refresh_cancelled = False
+            self.status.SetLabel("Refresh cancelled. Previous signal values retained.")
+            return
         if error:
             self.status.SetForegroundColour(self.colors["warning"])
             self.status.SetLabel(
@@ -1039,9 +1087,14 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- tools
     def selected_rows(self) -> list[tuple[str, Optional[str]]]:
-        return [data for item in self.tree.GetSelections()
-                if item and item != self.tree.GetRootItem()
-                and (data := self.tree.GetItemData(item)) and data[0]]
+        return [
+            data
+            for item in self.tree.GetSelections()
+            if item
+            and item != self.tree.GetRootItem()
+            and (data := self.tree.GetItemData(item))
+            and data[0]
+        ]
 
     def selected(self) -> tuple[Optional[str], Optional[str]]:
         item = self.tree.GetFocusedItem()
@@ -1102,10 +1155,41 @@ class TraceForgePanel(wx.Frame):
             self.status.SetLabel(message)
 
     def on_cancel_operation(self, event=None):
+        handled = False
+        finishing = False
+        if self.auto_refresh_later:
+            self.auto_refresh_later.Stop()
+        self.auto_check_deferred = False
         if self.active_operation and self.active_operation[0].cancel():
-            self.cancel_operation.Disable()
-            self.active_operation[1].message('Cancellation requested; stopping at a safe boundary.',
-                                             'warning')
+            self.active_operation[1].message(
+                "Cancellation requested; stopping at a safe boundary.", "warning"
+            )
+            handled = True
+        components = self.components
+        research = components.catalog_panel
+        pending = bool(research.requests) or any(not f.done() for f in research.image_requests)
+        assignment = components.assignment
+        if components.working or pending or (assignment and assignment.applying):
+            components.on_cancel()
+            handled = True
+            finishing = components.committing or bool(assignment and assignment.committing)
+        handled = self.bom_cost.on_cancel() or handled
+        if self.manufacturing.working:
+            cancelled = self.manufacturing.on_cancel()
+            handled = handled or cancelled
+            finishing = finishing or not cancelled
+        if self.busy:
+            self.refresh_cancelled = True
+            handled = True
+        if self.actions_pending and not self.active_operation:
+            finishing = True
+        self.status.SetLabel(
+            "Cancellation requested; the current atomic edit will finish safely."
+            if finishing
+            else "Cancellation requested. Pending results will not be applied."
+            if handled
+            else "No operation is running."
+        )
 
     def submit_stitching(self, fn, done, page, cancellable=False):
         """Serialize board operations and coalesce deferred tab checks."""
@@ -1156,7 +1240,7 @@ class TraceForgePanel(wx.Frame):
             self.actions_pending -= 1
             if control:
                 self.active_operation = None
-                self.cancel_operation.Disable()
+                self.cancel_operation.Enable()
             self.end_activity()
             self.resume_auto_check()
             if self.closing:
@@ -1167,7 +1251,7 @@ class TraceForgePanel(wx.Frame):
             self.refresh.Enable(not self.busy and not self.actions_pending)
             if isinstance(error, OperationCancelled) or (control and control.cancelled):
                 page.invalidate()
-                page.message('Cancelled. No board changes were applied.', 'pending')
+                page.message("Cancelled. No board changes were applied.", "pending")
             elif error:
                 page.invalidate()
                 page.message(str(error), "error")
@@ -1180,6 +1264,7 @@ class TraceForgePanel(wx.Frame):
 
         def work():
             try:
+
                 def execute():
                     if control:
                         control.check()
@@ -1211,8 +1296,12 @@ class TraceForgePanel(wx.Frame):
     def on_group(self, _=None) -> None:
         groups = list(dict.fromkeys(group for group, _chain in self.selected_rows()))
         if len(groups) > 1 and self.tools.highlight_groups:
-            self._run(lambda: f"highlighted {self.tools.highlight_groups(groups)} items "
-                      f"across {len(groups)} groups")
+            self._run(
+                lambda: (
+                    f"highlighted {self.tools.highlight_groups(groups)} items "
+                    f"across {len(groups)} groups"
+                )
+            )
         elif len(groups) > 1:
             self.status.SetLabel(
                 "Multiple-group highlighting requires the updated board callbacks."
@@ -1259,10 +1348,9 @@ class TraceForgePanel(wx.Frame):
             self.kicad_pid = _kicad_pid()
         fg = _foreground_pid()
         want = fg is not None and fg in (self.kicad_pid, os.getpid())
-        if want != self.on_top:
-            style = self.GetWindowStyle()
-            self.SetWindowStyle(style | wx.STAY_ON_TOP if want else style & ~wx.STAY_ON_TOP)
-            self.on_top = want
+        from .workspace_ui import sync_overlay_order
+
+        sync_overlay_order(self, want)
 
     def on_shortcuts(self, _=None) -> None:
         dlg = ShortcutDialog(self, load_shortcuts())
@@ -1309,7 +1397,7 @@ class TraceForgePanel(wx.Frame):
             "export_paths": self.on_export,
         }.get(action)
         if handler:
-            self.activate_tool('signals.paths')
+            self.activate_tool("signals.paths")
             handler()
 
     def on_close(self, event) -> None:
@@ -1358,8 +1446,10 @@ def run(
 
 
 def _bring_front(panel: wx.Frame, tab=None) -> None:
-    if tab is not None:
-        panel.activate_tool(tab)
     panel.Show()
     panel.Iconize(False)
     panel.Raise()
+    if tab is not None:
+        # Tool activation may show a child window. Do it after raising the
+        # owner, so an About/View shortcut cannot immediately cover its result.
+        panel.activate_tool(tab)

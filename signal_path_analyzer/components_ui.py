@@ -6,6 +6,7 @@ import json
 import re
 import shutil
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -13,6 +14,7 @@ import wx
 
 from . import component_library as library
 from . import component_runtime as runtime
+from . import component_schema as schema
 from . import lcsc_retail
 
 
@@ -27,9 +29,13 @@ class ComponentsPanel(wx.Panel):
         self.project = None
         self.stage = None
         self.plan = None
+        self.last_symbol_id = ""
+        self.assignment = None
         self.research = None
         self.candidates = []
         self.closed = self.working = self.installing = False
+        self.committing = False
+        self.commit_lock = threading.Lock()
         self.worker = None
         self.executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="traceforge-components"
@@ -37,7 +43,7 @@ class ComponentsPanel(wx.Panel):
         self.config = runtime.settings()
         outer = wx.BoxSizer(wx.VERTICAL)
         bar = wx.BoxSizer(wx.HORIZONTAL)
-        self.project_label = wx.StaticText(self, label="Project: open a saved PCB")
+        self.project_label = wx.StaticText(self, label="Project: choose a saved schematic or PCB")
         bar.Add(self.project_label, 1, wx.ALIGN_CENTER_VERTICAL)
         self.selector = wx.Choice(
             self, choices=["Search / details", "Assets / import", "Project library"]
@@ -84,45 +90,195 @@ class ComponentsPanel(wx.Panel):
         from .component_update_ui import ComponentUpdatePanel
 
         window = wx.Frame(
-            self.host, title="TraceForge — selected footprint library updates", size=(940, 680)
+            self.host,
+            title="TraceForge — selected footprint library updates",
+            size=(940, 680),
+            style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT,
         )
         panel = ComponentUpdatePanel(window, self.host, self.native)
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(panel, 1, wx.EXPAND)
         window.SetSizer(box)
-        window.Show()
+        from .workspace_ui import show_utility
+
+        show_utility(self.host, window)
 
     def build_search(self):
-        outer = wx.BoxSizer(wx.VERTICAL)
-        row = wx.BoxSizer(wx.HORIZONTAL)
-        self.supplier = wx.Choice(
-            self.search_page, choices=["LCSC", "Mouser", "DigiKey", "element14"]
+        from .lcsc_research_ui import ResearchPanel
+
+        box = wx.BoxSizer(wx.VERTICAL)
+        self.assignment_bar = wx.Panel(self.search_page)
+        banner = wx.BoxSizer(wx.HORIZONTAL)
+        self.assignment_label = wx.StaticText(
+            self.assignment_bar, label="", style=wx.ST_ELLIPSIZE_END
         )
-        self.supplier.SetSelection(0)
-        row.Add(self.supplier, 0, wx.RIGHT, 6)
-        self.query = wx.SearchCtrl(self.search_page, style=wx.TE_PROCESS_ENTER)
-        self.query.Bind(wx.EVT_TEXT_ENTER, self.on_search)
-        row.Add(self.query, 1, wx.RIGHT, 6)
-        for label, handler in [
-            ("Search", self.on_search),
-            ("Inspect selected", self.on_inspect),
-            ("Supplier page", self.on_show_browser),
-            ("Datasheet", self.on_datasheet),
-        ]:
-            button = wx.Button(self.search_page, label=label)
-            button.Bind(wx.EVT_BUTTON, handler)
-            row.Add(button, 0, wx.RIGHT, 4)
-        outer.Add(row, 0, wx.EXPAND | wx.ALL, 6)
-        self.results = wx.ListCtrl(self.search_page, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self.results.InsertColumn(0, "Part", width=360)
-        self.results.InsertColumn(1, "Supplier page", width=480)
-        self.results.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_inspect)
-        outer.Add(self.results, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 6)
-        self.details = wx.TextCtrl(
-            self.search_page, style=wx.TE_MULTILINE | wx.TE_READONLY, size=(-1, 180)
+        self.assignment_label.SetMinSize((1, -1))
+        self.assignment_label.SetForegroundColour("#7dcfff")
+        banner.Add(self.assignment_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        back = wx.Button(self.assignment_bar, label="Return to BOM")
+        back.Bind(wx.EVT_BUTTON, self.return_to_bom)
+        banner.Add(back)
+        self.assignment_bar.SetSizer(banner)
+        box.Add(self.assignment_bar, 0, wx.EXPAND | wx.ALL, 6)
+        self.assignment_bar.Hide()
+        self.catalog_panel = ResearchPanel(self.search_page, self.on_research_part)
+        self.catalog_panel.cancel_action = self.on_cancel
+        box.Add(self.catalog_panel, 1, wx.EXPAND)
+        self.search_page.SetSizer(box)
+
+    def on_research_part(self, part):
+        if self.assignment:
+            self.assignment.set_part(part)
+        else:
+            self.use_research_part(part)
+
+    def begin_bom_assignment(self, report, row, replacement=False):
+        from .bom_part_research_ui import BomAssignmentSession
+
+        if self.assignment and not self.assignment.detach():
+            return
+        self.status.SetForegroundColour("#e5edf8")
+        self.assignment = BomAssignmentSession(report, self, row)
+        self.catalog_panel.reset_context("" if replacement else (row["mpn"] or row["lcsc"]))
+        self.host.activate_tool("components.search")
+        if replacement:
+            self.prepare_replacement(row)
+        elif self.catalog_panel.query.GetValue():
+            self.catalog_panel.search()
+        self.message(
+            "Select the exact part, then Set information. Only the displayed references change."
         )
-        outer.Add(self.details, 1, wx.EXPAND | wx.ALL, 6)
-        self.search_page.SetSizer(outer)
+
+    def prepare_replacement(self, row):
+        from . import lcsc_research_backend as catalog
+        from . import replacement_search as replacement
+
+        panel, session = self.catalog_panel, self.assignment
+        self.message("Loading replacement criteria from the current part...")
+
+        def work(cancel):
+            supplier = None
+            if row.get("lcsc"):
+                try:
+                    candidate = panel.backend.exact(row["lcsc"], cancel)
+                    if not row.get("mpn") or candidate.mpn.casefold() == row["mpn"].casefold():
+                        supplier = candidate
+                except catalog.Cancelled:
+                    raise
+                except catalog.LCSCError:
+                    pass
+            if supplier is None and row.get("mpn"):
+                try:
+                    matches = panel.backend.search(catalog.Query(keyword=row["mpn"]), cancel).parts
+                    maker = row.get("manufacturer", "")
+                    exact = [
+                        part
+                        for part in matches
+                        if part.mpn.casefold() == row["mpn"].casefold()
+                        and maker
+                        and schema.fold(part.manufacturer) == schema.fold(maker)
+                    ]
+                    if exact:
+                        supplier = panel.backend.details(exact[0], cancel)
+                except catalog.Cancelled:
+                    raise
+                except catalog.LCSCError:
+                    pass
+            settings = replacement.current_settings(session.expected, supplier)
+            categories = panel.backend.categories(cancel)[0]
+            category = replacement.find_category(
+                categories, settings["kind"], settings["category_hint"]
+            )
+            query = catalog.Query(
+                in_stock=True,
+                category_id=category.id if category else None,
+                category_ids=catalog.category_leaves(categories, category.id) if category else (),
+            )
+            groups = panel.backend.filter_groups(query, cancel)[0]
+            pending, applied, unmatched = replacement.choose_filters(groups, settings)
+            return categories, query, groups, pending, applied, unmatched
+
+        def done(data):
+            if self.assignment is not session or session.closed:
+                return
+            categories, query, groups, pending, applied, unmatched = data
+            panel.set_categories(categories)
+            panel.category_id, panel.category_ids = query.category_id, query.category_ids
+            panel.pending = pending
+            panel.stock.SetValue(True)
+            panel.show_filters(groups)
+            panel.search()
+            text = "Replacement filters: " + (
+                "; ".join(applied) or "choose the required specifications"
+            )
+            if unmatched:
+                text += ". Review fields not preset: " + "; ".join(unmatched)
+            self.message(text)
+
+        panel.task("replacement", work, done)
+
+    def return_to_bom(self, event=None):
+        if self.assignment and not self.assignment.detach():
+            return
+        self.host.activate_tool("manufacturing.cost")
+
+    def use_research_part(self, part):
+        self.research = dict(
+            part.cad_record(),
+            product_url=part.product_url,
+            datasheet=part.datasheet_url,
+            package=part.package,
+        )
+        for key, value in (
+            ("lcsc", part.code),
+            ("mpn", part.mpn),
+            ("manufacturer", part.manufacturer),
+            ("Package", part.package),
+        ):
+            self.fields[key].SetValue(value if value != "Unknown" else "")
+        known = schema.properties(
+            dict(part.specs, Datasheet=part.datasheet_url, Description=part.description)
+        )
+        for key in self.fields:
+            if key not in ("lcsc", "mpn", "manufacturer", "value", "Package"):
+                self.fields[key].SetValue(known.get(key, ""))
+        category = part.category.casefold()
+        passive = next(
+            (
+                i
+                for i, token in (
+                    (1, "resistor"),
+                    (2, "capacitor"),
+                    (3, "inductor"),
+                    (4, "ferrite"),
+                    (5, "led"),
+                )
+                if token in category
+            ),
+            0,
+        )
+        self.reuse_symbol.SetSelection(0)
+        self.reuse_footprint.SetSelection(0)
+        self.category.SetSelection(passive)
+        self.on_category()
+        value = next(
+            (
+                v
+                for k, v in part.specs.items()
+                if k.casefold()
+                in ("resistance", "capacitance", "inductance", "impedance", "impedance @ frequency")
+            ),
+            part.mpn,
+        )
+        self.fields["value"].SetValue(str(value))
+        self.stage = None
+        self.checked.SetValue(False)
+        self.model_checked.SetValue(False)
+        self.selector.SetSelection(1)
+        self.book.SetSelection(1)
+        self.message(
+            "LCSC identity copied to Assets / import. Review package and select assets to stage."
+        )
 
     def build_assets(self):
         outer = wx.BoxSizer(wx.VERTICAL)
@@ -141,6 +297,11 @@ class ComponentsPanel(wx.Panel):
             ("Current", "Current"),
             ("Dielectric", "Dielectric"),
             ("Package", "Package"),
+            ("Saturation Current", "Saturation current"),
+            ("DCR", "DC resistance"),
+            ("Impedance Frequency", "Impedance frequency"),
+            ("Datasheet", "Datasheet URL"),
+            ("Description", "Description"),
         ]:
             form.Add(wx.StaticText(self.asset_page, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
             control = wx.TextCtrl(self.asset_page)
@@ -256,6 +417,10 @@ class ComponentsPanel(wx.Panel):
             self.asset_page, style=wx.TE_MULTILINE | wx.TE_READONLY, size=(-1, 180)
         )
         outer.Add(self.plan_text, 1, wx.EXPAND | wx.ALL, 8)
+        self.copy_symbol = wx.Button(self.asset_page, label="Copy symbol ID for Place Symbol (A)")
+        self.copy_symbol.Bind(wx.EVT_BUTTON, self.on_copy_symbol)
+        self.copy_symbol.Disable()
+        outer.Add(self.copy_symbol, 0, wx.ALL, 8)
         self.asset_page.SetSizer(outer)
 
     def message(self, text, level=None):
@@ -273,6 +438,9 @@ class ComponentsPanel(wx.Panel):
 
     def on_changed(self, event=None):
         self.invalidate()
+        self.last_symbol_id = ""
+        if hasattr(self, "copy_symbol"):
+            self.copy_symbol.Disable()
         if event:
             event.Skip()
 
@@ -282,6 +450,7 @@ class ComponentsPanel(wx.Panel):
             self.category.GetSelection()
         ]
         suggestion = library.suggest_generic(self.reuse_symbol.GetStrings(), category)
+        suggestion = suggestion or schema.passive_symbol(category)
         if suggestion:
             self.reuse_symbol.SetStringSelection(suggestion)
             self.message("Suggested " + suggestion + "; select and verify compatible pad geometry.")
@@ -298,6 +467,8 @@ class ComponentsPanel(wx.Panel):
             self.message("No exact manufacturer/MPN entry in this project's catalog or libraries.")
             return
         if record.get("status") == "ambiguous":
+            self.last_symbol_id = ""
+            self.copy_symbol.Disable()
             self.plan_text.SetValue(json.dumps(record, indent=2))
             self.message(
                 "Several customized definitions match; select the intended existing asset."
@@ -317,11 +488,16 @@ class ComponentsPanel(wx.Panel):
             if asset and not control.SetStringSelection(asset):
                 self.message("Existing mapping uses another destination: " + asset)
                 return
+        self.last_symbol_id = record.get("symbol", "")
+        self.copy_symbol.Enable(bool(self.last_symbol_id))
         self.plan_text.SetValue(json.dumps(record, indent=2))
         self.message("Existing exact mapping selected; shared library assets are preserved.")
 
     def load_project(self):
         self.invalidate()
+        self.project = None
+        self.last_symbol_id = ""
+        self.copy_symbol.Disable()
         try:
             self.project = library.discover(self.board_file)
             self.project_label.SetLabel("Project: " + Path(self.board_file).stem)
@@ -347,7 +523,12 @@ class ComponentsPanel(wx.Panel):
             sym, fp = self.destinations()
             names = library.symbol_names(sym["path"])
             fps = library.footprint_names(fp["path"])
-            self.reuse_symbol.Set([""] + [sym["nickname"] + ":" + n for n in names])
+            builtins = [
+                schema.passive_symbol(c)
+                for c in schema.SCHEMA["categories"]
+                if schema.passive_symbol(c)
+            ]
+            self.reuse_symbol.Set([""] + [sym["nickname"] + ":" + n for n in names] + builtins)
             self.reuse_symbol.SetSelection(0)
             self.reuse_footprint.Set([""] + [fp["nickname"] + ":" + n for n in fps])
             self.reuse_footprint.SetSelection(0)
@@ -358,7 +539,8 @@ class ComponentsPanel(wx.Panel):
                 + fp["path"]
                 + "\n\n"
                 + f"{len(names)} symbols; {len(fps)} footprints\n\n"
-                + json.dumps(library.catalog(self.project["root"]), indent=2)
+                + "Registered exact parts: "
+                + str(len(library.catalog(self.project["root"]).get("parts", {})))
             )
         except (OSError, ValueError, KeyError, IndexError) as exc:
             self.message(str(exc))
@@ -395,6 +577,7 @@ class ComponentsPanel(wx.Panel):
                 return
             self.working = False
             self.installing = False
+            self.committing = False
             if error:
                 self.message(str(error))
             elif worker.cancel.is_set():
@@ -405,11 +588,16 @@ class ComponentsPanel(wx.Panel):
         self.executor.submit(work)
 
     def on_cancel(self, event=None):
-        if self.installing:
-            self.message("Finishing the recoverable library transaction...")
+        self.catalog_panel.cancel_pending()
+        if self.assignment and self.assignment.applying:
+            self.assignment.request_cancel()
             return
-        if self.worker:
-            self.worker.cancel.set()
+        with self.commit_lock:
+            if self.committing:
+                self.message("Finishing the recoverable library transaction...")
+                return
+            if self.worker:
+                self.worker.cancel.set()
         self.invalidate()
         self.message("Cancellation requested; active libraries are preserved.")
 
@@ -435,101 +623,8 @@ class ComponentsPanel(wx.Panel):
             self.message("Runtime paths saved for this user; KiCad Python was not modified.")
         dialog.Destroy()
 
-    def site(self):
-        return ["lcsc", "mouser", "digikey", "element14"][self.supplier.GetSelection()]
-
-    def on_search(self, event=None):
-        query, site = self.query.GetValue().strip(), self.site()
-        if not query:
-            self.message("Enter an MPN, LCSC C-number or part search.")
-            return
-        if site == "lcsc" and re.fullmatch(r"C[0-9]{2,}", query, re.I):
-            code = query.upper()
-            before = {key: c.GetValue() for key, c in self.fields.items()}
-
-            def exact_done(result):
-                self.research = result
-                self.candidates = []
-                self.results.DeleteAllItems()
-                self.show_details(result)
-                for key in ("mpn", "manufacturer"):
-                    if result.get(key) and self.fields[key].GetValue() == before[key]:
-                        self.fields[key].SetValue(result[key])
-                if self.fields["lcsc"].GetValue() == before["lcsc"]:
-                    self.fields["lcsc"].SetValue(code)
-                if result.get("package") and self.fields["Package"].GetValue() == before["Package"]:
-                    self.fields["Package"].SetValue(result["package"])
-                self.message("Exact LCSC record loaded; review package before staging CAD.")
-
-            self.submit(
-                lambda worker: lcsc_retail.lookup_pricing(code, lambda message: None), exact_done
-            )
-            return
-
-        def work(worker):
-            worker.browser("select_supplier", site=site)
-            return worker.browser("find_components", query=query, limit=10)
-
-        def done(result):
-            self.research = result
-            self.candidates = result.get("candidates", [])
-            self.results.DeleteAllItems()
-            for row in self.candidates:
-                i = self.results.InsertItem(self.results.GetItemCount(), row.get("name", ""))
-                self.results.SetItem(i, 1, row.get("url", ""))
-            self.show_details(result)
-
-        self.submit(work, done)
-
     def show_details(self, result):
-        self.details.SetValue(json.dumps(result, indent=2, ensure_ascii=False))
-        self.message(
-            result.get("reason") or ("Supplier status: " + str(result.get("status", "ready")))
-        )
-
-    def on_inspect(self, event=None):
-        index = self.results.GetFirstSelected()
-        if index < 0:
-            self.message("Select a search result first.")
-            return
-        candidate = self.candidates[index]
-        expected = self.fields["mpn"].GetValue().strip()
-
-        def work(worker):
-            args = {"candidate_id": candidate["candidate_id"]}
-            if expected:
-                args["expected_mpn"] = expected
-            return worker.browser("inspect_component", **args)
-
-        def done(result):
-            self.research = result
-            self.show_details(result)
-            part = result.get("component", {})
-            if result.get("status") != "identity_mismatch":
-                for key in ["mpn", "manufacturer"]:
-                    if isinstance(part.get(key), str):
-                        self.fields[key].SetValue(part[key])
-                match = re.search(
-                    r"(?<![A-Za-z0-9])C[0-9]{2,}(?![A-Za-z0-9])", result.get("source", ""), re.I
-                )
-                if match:
-                    self.fields["lcsc"].SetValue(match.group().upper())
-
-        self.submit(work, done)
-
-    def on_show_browser(self, event=None):
-        if self.research and self.research.get("product_url"):
-            url = self.research["product_url"]
-            mpn = self.fields["mpn"].GetValue().strip()
-
-            def work(worker):
-                worker.browser("select_supplier", site="lcsc")
-                worker.browser("inspect_component", url=url, expected_mpn=mpn)
-                return worker.browser("show_browser")
-
-            self.submit(work, self.show_details)
-            return
-        self.submit(lambda worker: worker.browser("show_browser"), self.show_details)
+        self.message(result.get("reason") or "Component operation complete.")
 
     def on_datasheet(self, event=None):
         if self.research and self.research.get("datasheet"):
@@ -567,7 +662,7 @@ class ComponentsPanel(wx.Panel):
 
     def on_stage(self, event=None):
         if not self.project:
-            self.message("Open a saved project first.")
+            self.message("Choose a saved schematic or PCB project first.")
             return
         self.invalidate()
         self.stage = None
@@ -576,7 +671,7 @@ class ComponentsPanel(wx.Panel):
         code, mpn = (self.fields[k].GetValue().strip() for k in ["lcsc", "mpn"])
         mode = ["both", "footprint", "symbol", "none"][self.asset_mode.GetSelection()]
         if 1 <= self.category.GetSelection() <= 5:
-            mode = "none"
+            mode = "none" if self.reuse_footprint.GetValue().strip() else "footprint"
         root, step = self.project["root"], self.want_step.GetValue()
 
         def done(result):
@@ -691,6 +786,7 @@ class ComponentsPanel(wx.Panel):
                 reuse_footprint=self.reuse_footprint.GetValue(),
                 category=category,
                 model=model,
+                placement_symbol=True,
             )
             self.plan_text.SetValue(
                 "\n".join(self.plan["summary"])
@@ -705,6 +801,14 @@ class ComponentsPanel(wx.Panel):
             self.invalidate()
             self.message(str(exc))
 
+    def on_copy_symbol(self, event=None):
+        if self.last_symbol_id and wx.TheClipboard.Open():
+            try:
+                wx.TheClipboard.SetData(wx.TextDataObject(self.last_symbol_id))
+            finally:
+                wx.TheClipboard.Close()
+            self.message("In Schematic Editor press A, then paste " + self.last_symbol_id)
+
     def on_install(self, event=None):
         if not self.plan or self.working:
             return
@@ -717,11 +821,15 @@ class ComponentsPanel(wx.Panel):
                 info = self.host.api.call(lambda: self.native("info"))
                 if Path(info["board"]).resolve() != Path(self.board_file).resolve():
                     raise ValueError("Active project changed; import was not applied")
-            if worker.cancel.is_set():
-                raise runtime.Cancelled("Cancelled before library transaction")
+            with self.commit_lock:
+                if worker.cancel.is_set():
+                    raise runtime.Cancelled("Cancelled before library transaction")
+                self.committing = True
             return library.install(plan)
 
         def done(result):
+            self.last_symbol_id = plan["part"].get("symbol", "")
+            self.copy_symbol.Enable(bool(self.last_symbol_id))
             self.plan_text.SetValue(
                 json.dumps(result, indent=2)
                 + "\n\nUse these qualified IDs in KiCad. Refresh the library browser as needed. "
@@ -742,6 +850,9 @@ class ComponentsPanel(wx.Panel):
 
     def shutdown(self):
         self.closed = True
+        if self.assignment:
+            self.assignment.closed = True
+        self.catalog_panel.shutdown()
         if self.worker:
             self.worker.cancel.set()
         self.executor.shutdown(wait=False, cancel_futures=True)

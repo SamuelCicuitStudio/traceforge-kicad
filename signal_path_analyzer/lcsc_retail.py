@@ -6,11 +6,47 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import unescape as html_unescape
 from typing import Any, Callable
+
+from .cancellation import OperationCancelled
+
+_network_state = threading.local()
+
+
+@contextmanager
+def cancel_requests(event):
+    previous = getattr(_network_state, "cancel", None)
+    _network_state.cancel = event
+    try:
+        yield
+    finally:
+        _network_state.cancel = previous
+
+
+def check_cancelled():
+    event = getattr(_network_state, "cancel", None)
+    if event is not None and event.is_set():
+        raise OperationCancelled("BOM pricing cancelled")
+
+
+def read_response(response, maximum):
+    if getattr(_network_state, "cancel", None) is None:
+        return response.read(maximum + 1)
+    data = bytearray()
+    while len(data) <= maximum:
+        check_cancelled()
+        chunk = response.read(min(65536, maximum + 1 - len(data)))
+        if not chunk:
+            break
+        data += chunk
+    check_cancelled()
+    return bytes(data)
 
 
 class LookupError(Exception):
@@ -29,10 +65,15 @@ NEXT_DATA_PATTERN = re.compile(
 
 def network_open(url: str, *, timeout: int = 25, method: str = "GET", payload: Any = None):
     """Fixed provider endpoints only. Never call this on arbitrary file URLs."""
+    check_cancelled()
+    if getattr(_network_state, "cancel", None) is not None:
+        timeout = min(timeout, 8)
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     headers = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 Chrome/128.0 Safari/537.36"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 Chrome/128.0 Safari/537.36"
+        ),
         "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
         "Accept-Encoding": "identity",
         "Referer": "https://www.lcsc.com/"
@@ -59,7 +100,7 @@ def fetch_json(
     url: str, *, max_bytes: int = MAX_JSON, method: str = "GET", payload: Any = None
 ) -> dict:
     with network_open(url, method=method, payload=payload) as response:
-        raw = response.read(max_bytes + 1)
+        raw = read_response(response, max_bytes)
     if len(raw) > max_bytes:
         raise LookupError("Server response exceeds the safety limit")
     try:
@@ -103,7 +144,7 @@ def _lcsc_direct(lcsc: str, product_id: Any = None) -> dict:
 def _lcsc_html(lcsc: str) -> dict:
     url = LCSC_PRODUCT.format(lcsc=lcsc)
     with network_open(url, timeout=30) as response:
-        html_data = response.read(MAX_HTML + 1)
+        html_data = read_response(response, MAX_HTML)
     if len(html_data) > MAX_HTML:
         raise LookupError("LCSC HTML page exceeds safety limit")
     html_text = html_data.decode("utf-8", errors="replace")
@@ -204,8 +245,8 @@ def normalize_pricing(item: dict, lcsc: str, source: str) -> dict:
         "package": str(item.get("encapStandard") or ""),
         "description": str(item.get("productIntroEn") or ""),
         "stock": _as_nonneg_int(item.get("stockNumber")),
-        "minimum_order": _as_nonneg_int(item.get("minBuyNumber"))
-        or _as_nonneg_int(item.get("minPacketNumber")),
+        "minimum_order": _as_nonneg_int(item.get("minBuyNumber")),
+        "quantity_schema": 2,
         "order_multiple": _as_nonneg_int(item.get("split")),
         "datasheet": str(item.get("pdfUrl") or ""),
         "price_tiers_usd": prices,

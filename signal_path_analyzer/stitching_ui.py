@@ -315,6 +315,8 @@ class StitchingPanel(wx.ScrolledWindow):
         if not trace_mode:
             form.Add(self.avoid_pad, 0, wx.EXPAND)
             form.AddSpacer(1)
+        else:
+            self.avoid_pad.Hide()
         self.respect_courtyards.SetToolTip('Protect both board sides. Missing courtyards use '
                                          'the physical footprint bounds; fiducials and critical '
                                          'refs remain protected when this is disabled.')

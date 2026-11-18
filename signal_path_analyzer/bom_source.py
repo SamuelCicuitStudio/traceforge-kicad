@@ -15,11 +15,14 @@ def parse_netlist(path):
         flags = {p.get("name", ""): p.get("value", "") for p in comp.findall("property")}
         for key, value in flags.items():
             if value:
-                properties.setdefault(key, value)
+                if not properties.get(key):
+                    properties[key] = value
 
         def marked(name, flags=flags):
             return name in flags and str(flags[name]).lower() not in ("false", "no", "0")
 
+        properties.setdefault("Datasheet", comp.findtext("datasheet", ""))
+        properties.setdefault("Description", comp.findtext("description", ""))
         parts.append(
             dict(
                 reference=comp.get("ref", ""),

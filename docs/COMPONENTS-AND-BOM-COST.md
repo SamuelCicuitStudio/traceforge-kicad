@@ -1,4 +1,11 @@
-# Components and BOM Cost
+# Components and BOM workflow
+
+TraceForge 0.18.1 provides native combined LCSC/JLCPCB research under **Components ? Search / details**. It does not require a browser or PySide6. Each matching component can show independent retail and assembly observations, with Basic/Extended filters and category-specific facets.
+
+Under **Manufacturing ? BOM Cost**, calculate the saved schematic or live PCB, then use **JLCPCB assembly check**, **Optimize BOM**, or **Assign in-stock passives**. The latter preselects verified in-stock resistor/capacitor equivalents for batch assignment. Configure compatibility criteria, review proposals and apply selected information changes. Position, routing and generic passive libraries remain unchanged.
+
+See the [0.18.1 release notes](releases/0.18.1.md) for quantities, stock semantics, progress/cancellation, replacement constraints and current scope. The sections below describe staged asset import and optional external CAD conversion; Node/Electron research is a legacy optional launcher, not a dependency of the native catalogue.
+
 
 ## Navigation
 

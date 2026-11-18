@@ -2,19 +2,47 @@
 
 <img src="icons/traceforge-light-48.png" alt="TraceForge icon" width="72" height="72">
 
-**PCB analysis and editing tools for KiCad 10. Version 0.16.5 is released for Windows; the older macOS 0.13.1 build remains a testing preview.**
+**PCB analysis, layout reuse, component research and manufacturing tools for KiCad 10. TraceForge 0.18.1 is available for Windows.**
 
-The local **0.17.0 testing build** groups tools into six workspaces: Signals, Layout, Vias, Routing, Components and Manufacturing. View and About are shared utility windows. Components adds project-aware research/CAD/library imports; Manufacturing adds LCSC retail BOM Cost. See the [workflow and runtime setup](docs/COMPONENTS-AND-BOM-COST.md). It reads the open board through
-KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
-tools need no IPC API setup or token. Manufacturing exports read saved files and
-need a separate Python with `openpyxl`.
+[Download the Windows PCM ZIP](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/download/v0.18.1/TraceForge-0.18.1-KiCad10-PCM.zip) ? [0.18.1 release notes](docs/releases/0.18.1.md) ? [Installation](#install)
 
-![TraceForge Signals tab over the management switch PCB in KiCad](docs/screenshots/signals-xsignals.png)
+Six workspaces keep the panel compact: **Signals, Layout, Vias, Routing, Components and Manufacturing**. Read live PCB geometry through KiCad's native `pcbnew` bindings, including unsaved routing changes, without IPC configuration. Component research runs in the native panel; CAD conversion and manufacturing spreadsheet export use separately configured helpers.
 
-*Current TraceForge in PCB Editor on the 03-MANAGEMENT-SWITCH-BOARD project. The
-selected signal path is highlighted on the board.*
+![TraceForge 0.18.1 Signals with the front-board stackup and differential pairs](docs/screenshots/0181-signals.png)
 
-See [what changed in 0.16.5](docs/releases/0.16.5.md) for Layout Clone modes and interactive preview, Auto Text, saved routing geometry and the Unrouted navigator.
+*Front I/O project: saved PCBWay stackup/profile geometry and measured signal-path timing, including differential-pair skew.*
+
+## New in 0.18.1
+
+### Component research: LCSC and JLCPCB together
+
+Search by keyword, MPN or C-number, browse categories and apply horizontal parametric filters. A verified component appears once with independent **LCSC retail** and **JLCPCB assembly** stock/prices. Filter for **Basic, Extended or Preferred Extended** parts; inspect specifications and CAD availability, then use the part in your project.
+
+![Combined LCSC and JLCPCB component research on the front I/O project](docs/screenshots/0181-components.png)
+
+*Front I/O demonstration: live 100 nF capacitor research, Basic classification, independent supplier stock and quantity prices. Prices and availability are dated observations.*
+
+### BOM costing and compatible passive assignment
+
+Read the full saved schematic or live PCB, calculate order quantities with MOQ/multiples and spares, and distinguish missing identities, stock shortages and missing prices. **Optimize BOM** finds compatible Basic alternatives; **Assign in-stock passives** searches available resistor/capacitor equivalents across assembly classes and preselects verified matches for batch assignment. Review the configured ratings and apply selected changes without changing footprints, placement or routing.
+
+![Front I/O BOM costing, supplier states and passive assignment tools](docs/screenshots/0181-bom-cost.png)
+
+*The front-board estimate shows an explicitly incomplete subtotal when parts remain unpriced. Retail parts cost excludes PCB fabrication, assembly, shipping and taxes.*
+
+### Layout Clone: repeated circuits without hierarchy
+
+Record a selected group, select its counterpart and preview automatic matching. Copy placement, routing or both, with optional selected graphics/keepouts, rotated targets and net remapping. The interactive preview supports layer selection, before/after, zoom and pan. Apply performs safety checks and uses KiCad Undo.
+
+![Layout Clone preview using repeated front-board filter components](docs/screenshots/0181-layout-clone.png)
+
+*Read-only placement preview using the front-board filter groups. The target was unrouted in a temporary in-memory demonstration copy; the original project was not modified.*
+
+### Visible work and cancellation
+
+Components and BOM Cost show scanning/loading activity while catalogues, supplier identities and prices are being checked. Batch assignment shows the active references, update stage, completed groups and final incremental BOM refresh. Typing in Find category preserves focus and only filters suggestions; selecting a category starts research.
+
+[Component and BOM workflow](docs/COMPONENTS-AND-BOM-COST.md) ? [Layout Clone guide](docs/layout-clone.md) ? [Earlier 0.16.5 changes](docs/releases/0.16.5.md)
 
 ## Features
 
@@ -37,6 +65,8 @@ Open TraceForge from KiCad PCB Editor. Tools are grouped under the six workspace
 | Auto Text | Previews and arranges references on selected silkscreen, fabrication or user layers; aligned reference banks, uniform height/stroke, grid snapping and optional visible values or hidden-reference visibility. | [Auto Text](docs/auto-text.md) |
 | Unrouted | Lists live remaining connections; click to highlight endpoints and zoom to the missing section, with search and Next/Previous navigation. | [Unrouted navigator](docs/unrouted.md) |
 | Visualization | Applies live net and net-group colors and controls component-focused ratsnest visibility. | [Visualization](#visualization) |
+| Components | Combined LCSC/JLCPCB research, Basic/Extended filters, separate stock/prices, CAD staging and project library management. | [Component workflow](docs/COMPONENTS-AND-BOM-COST.md) |
+| BOM Cost | Full schematic/live PCB costing, supplier MOQ/multiples, stock states, in-stock passive assignment and compatible Basic optimization. | [BOM workflow](docs/COMPONENTS-AND-BOM-COST.md) |
 | Manufacturing | Sets manufacturer choices, runs saved-project checks, creates PCBWay or PCBPower packages, reviews/rebuilds output, and cleans unused local library entries. | [Manufacturing](#manufacturing) |
 
 Read [installation](#install) before first use and [troubleshooting](#if-a-result-looks-wrong)
@@ -45,18 +75,18 @@ save the board after reviewing changes and run KiCad DRC before manufacture.
 
 ## Install
 
-**Requirements for 0.16.5:** KiCad 10 with Python scripting support on Windows.
+**Requirements for 0.18.1:** KiCad 10 with Python scripting support on Windows.
 This release has one Windows PCM asset. The older macOS 0.13.1 preview is a
-separate release and is not updated by 0.16.5.
+separate release and is not updated by 0.18.1.
 
 ### Install the Windows PCM package
 
-Download `TraceForge-0.16.5-KiCad10-PCM.zip` from the
-[0.16.5 GitHub release](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/tag/v0.16.5).
+Download `TraceForge-0.18.1-KiCad10-PCM.zip` from the
+[0.18.1 GitHub release](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/tag/v0.18.1).
 In KiCad Manager, open **Plugin and Content Manager > Install from file** and
 select the ZIP. Close all KiCad windows and reopen PCB Editor. If an older
 TraceForge remains installed, remove it in PCM first. The **About** tab and
-window title must show **0.16.5**; if not, KiCad is still loading old files.
+window title must show **0.18.1**; if not, KiCad is still loading old files.
 The GitHub ZIP is available independently of KiCad's official PCM catalog.
 
 The first launch may assign KiCad's unused **Ctrl+Alt+Shift+F12** shortcut for
@@ -69,7 +99,7 @@ does not require PowerShell or a manually created plugin junction.
 
 The separate Windows and macOS standalone installers belong to the archived
 [0.13.1 releases](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases).
-They are not 0.16.5 assets. For this release, install the Windows PCM ZIP above.
+They are not 0.18.1 assets. For this release, install the Windows PCM ZIP above.
 
 ## How to use the panel
 
@@ -125,6 +155,8 @@ managed stitching set, **Edit / regenerate**, preview and replace it to apply
 these protections to the old placement.
 
 ### Via Size Manager
+
+![Via Size Manager with actual front-board vias](docs/screenshots/0181-via-sizes.png)
 
 Via filter selection now **replaces KiCad's actual selection** and verifies exact
 via UUIDs after synchronization. It does not select other vias, pads or tracks
@@ -219,8 +251,7 @@ teardrops as an undoable editor operation.
 
 ### Signals and path detection
 
-The screenshot above shows the current Signals / xSignals tab on the management
-switch board, including chain timing, pair status, and the PCB highlight.
+The Signals screenshot above uses the current front I/O project, including saved routing geometry, chain timing and differential-pair status.
 
 Select two pads, vias, tracks or components, then use **Detect path between 2 selected
 PCB items**. Alternatively choose **Pick first, then second** and click each endpoint
@@ -266,10 +297,10 @@ mean the source-net limit was exceeded.
 
 ### Via stitching
 
-![Via Stitching tab in the published 0.11.0 build on the management switch PCB](docs/screenshots/via-stitching.png)
 
-*This capture precedes Preview; no stitching vias were added to the project.
-The 0.11.5 release has a condensed basic form.*
+![Via Stitching preview on the front I/O board](docs/screenshots/0181-via-stitching.png)
+
+*Completed preview on the front I/O board, with accepted and skipped grid locations. No stitching was applied.*
 
 Choose the net, via preset/netclass/custom size, and center-to-center X/Y spacing.
 Choose the whole board, a PCB zone/drawing, or draw a rectangle/polygon in the
@@ -298,10 +329,10 @@ refill zones. After deleting in KiCad, press **B** when ready to refill.
 
 ### Via fencing
 
-![Current Via Fencing tab on the management switch PCB](docs/screenshots/via-fencing.png)
 
-*Current fencing controls over the management board before a signal trace is chosen.
-No fence was applied to the project.*
+![Trace-following via-fence preview on the front I/O board](docs/screenshots/0181-via-fencing.png)
+
+*Trace-following preview on an existing front-board signal path, using a separate ground fence net. No fence was applied.*
 
 Type the **Signal net to fence** or use **Pick signal net in PCB**. For a specific
 section, select connected track segments/arcs and click **Use selected trace**.
@@ -315,6 +346,10 @@ See [RF fencing](docs/VIA-FENCING.md).
 
 ### Via-in-Pad Inspector
 
+![Via-in-Pad Inspector results from the front I/O board](docs/screenshots/0181-via-inspector.png)
+
+*Completed scan: no via/pad overlaps were found on this front-board snapshot.*
+
 In **Via Tools > Via-in-Pad Inspector**, click **Scan live PCB**. Each component
 appears once, with its vias grouped by contact type: **green** means the via
 annulus fits inside the pad, **red** means the via hole partly overlaps the pad,
@@ -327,16 +362,10 @@ refill zones. Review intentional filled or capped vias separately.
 
 ### BGA fanout
 
-![Current BGA Fanout Auto escape preview and per-pad results in PCB Editor](docs/screenshots/bga-fanout.png)
 
-*Live PCB Editor preview on a disposable 4 by 4 BGA test board: 16 pads escaped
-to the field edge. The management board has no BGA footprint.*
+![Current BGA Fanout configuration](docs/screenshots/0181-bga-fanout.png)
 
-![The same BGA test board after applying 16 escaped routes](docs/screenshots/bga-fanout-applied.png)
-
-*Apply added 16 vias and 32 track segments. KiCad Undo removed them, Redo restored
-them, and Remove generated fanout returned the test board to zero tracks and vias.
-The removal itself also passed Undo and Redo.*
+*Current BGA Fanout configuration. The front I/O board has no BGA footprint, so this view shows the selection requirement, not an applied fanout result.*
 
 Select a BGA footprint and open **BGA Fanout**. Review the detected local pitch,
 fabrication limits, offsets and filters. Rectangular arrays may have different
@@ -356,10 +385,10 @@ See [BGA fanout](docs/BGA-FANOUT.md).
 
 ### Trace Cleanup
 
-![Trace Cleanup workflow showing all six copper layers on the management switch PCB](docs/screenshots/trace-cleanup.png)
 
-*The real management board reports all six enabled copper layers and track counts
-before Scan / Preview. Opening Cleanup does not start the full scan or change copper.*
+![Completed Trace Cleanup scan of the front I/O board](docs/screenshots/0181-trace-cleanup.png)
+
+*Completed read-only scan of the front-board copper. Redundant and dangling candidates are listed for review; no cleanup was applied.*
 
 Scan the whole board or an exact net to find duplicate tracks, overlapping
 collinear tracks and native dangling endpoints. Filter findings by copper layer;
@@ -500,6 +529,10 @@ See [PCM publishing steps](docs/PCM-PUBLISHING.md),
 
 
 ### Unrouted connections
+
+![Unrouted connection navigator on the front I/O board](docs/screenshots/0181-unrouted.png)
+
+*Completed native connectivity scan: zero remaining gaps on this front-board snapshot.*
 
 The **Unrouted** tab lists remaining copper gaps. Click to highlight and zoom to
 the endpoints, or use Next/Previous to walk through the list. Search by net,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -23,6 +24,9 @@ class ManufacturingPanel(wx.ScrolledWindow):
         self.preview = None
         self.inventory = None
         self.candidates = []
+        self.cancel_lock = threading.Lock()
+        self.cancel_event = threading.Event()
+        self.atomic = self.started = False
         self.working = False
         if host.dark:
             self.SetBackgroundColour("#222C3A")
@@ -134,6 +138,9 @@ class ManufacturingPanel(wx.ScrolledWindow):
 
     def on_destroy(self, event):
         if event.GetEventObject() is self:
+            with self.cancel_lock:
+                if not (self.atomic and self.started):
+                    self.cancel_event.set()
             self.executor.shutdown(wait=False, cancel_futures=True)
         event.Skip()
 
@@ -241,14 +248,41 @@ class ManufacturingPanel(wx.ScrolledWindow):
             )
             self.on_inspect()
 
-        self._submit(task, done)
+        self._submit(task, done, atomic=True)
 
-    def _submit(self, task, done):
+    def on_cancel(self, event=None):
+        if not self.working:
+            return False
+        with self.cancel_lock:
+            if self.atomic and self.started:
+                self.status.SetLabel(
+                    "Finishing the current file transaction; it cannot be interrupted halfway."
+                )
+                return False
+            self.cancel_event.set()
+        self.status.SetLabel("Cancellation requested; stopping manufacturing checks...")
+        return True
+
+    def _submit(self, task, done, atomic=False):
         if self.working:
             return
+        self.cancel_event = threading.Event()
+        self.atomic, self.started = atomic, False
         self.working = True
         self.status.SetLabel("Working from saved project files…")
-        future = self.executor.submit(task)
+        cancel = self.cancel_event
+
+        def run():
+            with self.cancel_lock:
+                if cancel.is_set():
+                    from .cancellation import OperationCancelled
+
+                    raise OperationCancelled("Manufacturing task cancelled before starting")
+                self.started = True
+            with core.cancel_scope(cancel, atomic):
+                return task()
+
+        future = self.executor.submit(run)
 
         def ready(completed):
             try:
@@ -263,6 +297,10 @@ class ManufacturingPanel(wx.ScrolledWindow):
         if not self:
             return
         self.working = False
+        self.started = False
+        if self.cancel_event.is_set():
+            self.status.SetLabel("Manufacturing task cancelled.")
+            return
         if error:
             self.status.SetLabel(error[:300])
             self.report.SetValue(error)
@@ -560,10 +598,8 @@ class ManufacturingPanel(wx.ScrolledWindow):
                 lines.append("  - " + reason)
             for board in result.get("board_release_states", []):
                 lines.append(
-                    
-                        f"{Path(board['board']).stem}: "
-                        f"{'HOLD' if board['hold'] else 'export checks passed'}"
-                    
+                    f"{Path(board['board']).stem}: "
+                    f"{'HOLD' if board['hold'] else 'export checks passed'}"
                 )
                 lines.extend("  - " + reason for reason in board["reasons"])
             self.display(
@@ -571,7 +607,7 @@ class ManufacturingPanel(wx.ScrolledWindow):
                 "Export finished. Manufacturer CAM and assembly approval remain separate.",
             )
 
-        self._submit(task, done)
+        self._submit(task, done, atomic=True)
 
     def on_export(self, _event=None):
         self._export(False)
@@ -644,5 +680,7 @@ class ManufacturingPanel(wx.ScrolledWindow):
             )
 
         self._submit(
-            lambda: core.apply_library_cleanup(self.board_file, table, names, expected), done
+            lambda: core.apply_library_cleanup(self.board_file, table, names, expected),
+            done,
+            atomic=True,
         )

@@ -11,7 +11,7 @@ import socket
 import threading
 from typing import Callable, Optional
 
-from . import __version__
+from . import NATIVE_BUILD_ID, __version__
 from .workspaces import tool_id
 
 PORT = 47231  # localhost only
@@ -33,7 +33,7 @@ def try_activate_existing(port: int = PORT, tab: Optional[int] = None) -> bool:
             reply = s.recv(128)
     except OSError:
         return False
-    expected = f'version:{__version__}\n'.encode()
+    expected = f'version:{__version__};build:{NATIVE_BUILD_ID}\n'.encode()
     if reply != expected:
         running = reply.decode(errors='replace').strip() if reply else 'an older build'
         raise ExistingPanelVersionError(
@@ -74,7 +74,7 @@ class Listener:
                     conn.settimeout(1.0)
                     command = conn.recv(64)
                     if command == _VERSION_MAGIC:
-                        conn.sendall(f'version:{__version__}\n'.encode())
+                        conn.sendall(f'version:{__version__};build:{NATIVE_BUILD_ID}\n'.encode())
                     elif command == _MAGIC:
                         conn.sendall(b"ok\n")
                         self.on_activate(None)

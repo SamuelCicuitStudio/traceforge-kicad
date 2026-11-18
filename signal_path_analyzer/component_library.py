@@ -7,10 +7,13 @@ import hashlib
 import json
 import os
 import re
+import sys
 import uuid
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import component_schema as schema
 
 
 @dataclass
@@ -111,12 +114,18 @@ def table_libraries(root, filename):
 
 
 def discover(board_file):
-    if not board_file or Path(board_file).suffix.lower() != ".kicad_pcb":
-        raise ValueError("Open a saved KiCad PCB before choosing project libraries")
+    if not board_file or Path(board_file).suffix.lower() not in (
+        ".kicad_pcb",
+        ".kicad_sch",
+        ".kicad_pro",
+    ):
+        raise ValueError(
+            "Choose a saved KiCad schematic, PCB or project before choosing project libraries"
+        )
     board = Path(board_file).resolve()
     root = board.parent
     if not root.is_dir():
-        raise ValueError("Open a saved board in an existing project")
+        raise ValueError("Choose a saved design in an existing project")
     symbols = table_libraries(root, "sym-lib-table")
     footprints = table_libraries(root, "fp-lib-table")
     settings = root / "libraries/traceforge-library.json"
@@ -127,7 +136,9 @@ def discover(board_file):
         # Prefer the registered library actually used by most placed instances.
         # Auxiliary capture libraries must not force a question on every import.
         used = Counter(
-            re.findall(r'\(footprint\s+"([^:"]+):', board.read_text(encoding="utf-8-sig"))
+            re.findall(
+                r'\((?:footprint|lib_id)\s+"([^:"]+):', board.read_text(encoding="utf-8-sig")
+            )
         )
         ranked = sorted(((used[n], n) for n in common if used[n]), reverse=True)
         if ranked and (len(ranked) == 1 or ranked[0][0] > ranked[1][0]):
@@ -280,37 +291,81 @@ def footprint_display(text):
     return text
 
 
-def _part_symbol(text, part):
-    """Attach instance defaults only to a new exact-part symbol, never a generic passive."""
-    props = {
-        "MPN": part["mpn"],
-        "Manufacturer": part["manufacturer"],
-        "LCSC Part #": part.get("lcsc", ""),
-    }
-    for key in ("Tolerance", "Voltage", "Power", "Current", "Dielectric", "Package"):
-        if part.get(key):
-            props[key] = part[key]
-    if part.get("value"):
-        props["Value"] = part["value"]
+def _part_symbol(text, part, category="custom"):
+    """Apply the shared field contract to a NEW exact-part symbol only."""
+    props = schema.properties(part)
+    visible = schema.visible_fields(category)
     for key, value in props.items():
+        if key == "Reference":
+            continue
         symbol = parse(text).children("symbol")[0]
-        aliases = {
-            "LCSC Part #": {"lcsc part #", "lcsc", "lcsc part number", "lcsc code"},
-            "MPN": {"mpn", "manufacturer part number", "manufacturer_part_number"},
-            "Manufacturer": {"manufacturer", "mfr"},
-        }.get(key, {key.casefold()})
-        existing = next(
-            (p for p in symbol.children("property") if p.arg().casefold() in aliases), None
+        aliases = {schema.fold(x) for x in [key] + schema.SCHEMA["fields"][key]["aliases"]}
+        matches = [p for p in symbol.children("property") if schema.fold(p.arg()) in aliases]
+        if key == "Value" and matches:
+            text = _replace_string(text, matches[0].value[2], value)
+            continue
+        show = key in visible
+        y = 2.54 - visible.index(key) * 1.778 if show else 0
+        hide = "" if show else " (hide yes)"
+        justify = " (justify left)" if show else ""
+        prop = (
+            f"\n(property {json.dumps(key)} {json.dumps(value)} "
+            f"(at {2.54 if show else 0} {y:g} 0) "
+            f"(effects (font (size 1.27 1.27)){justify}{hide}))\n"
         )
-        if existing:
-            text = _replace_string(text, existing.value[2], str(value))
+        if matches:
+            for old in reversed(matches):
+                text = text[: old.start] + (prop if old is matches[0] else "") + text[old.end :]
         else:
-            prop = (
-                f"\n(property {json.dumps(key)} {json.dumps(str(value))} (at 0 0 0) "
-                "(effects (font (size 1.27 1.27)) (hide yes)))\n"
-            )
             text = text[: symbol.end - 1] + prop + text[symbol.end - 1 :]
     return text
+
+
+def passive_template(root, symbol_id, symbol_library):
+    nickname, name = symbol_id.split(":", 1)
+    registered = table_libraries(root, "sym-lib-table")
+    row = next((r for r in registered if r["nickname"] == nickname), None)
+    if row:
+        path = Path(row["path"])
+    elif nickname == "Device":
+        folders = [
+            Path(os.environ.get("KICAD10_SYMBOL_DIR", "")),
+            Path(sys.executable).parent.parent / "share/kicad/symbols",
+            Path(os.environ.get("ProgramFiles", "C:/Program Files"))
+            / "KiCad/10.0/share/kicad/symbols",
+        ]
+        path = next(
+            (p / "Device.kicad_sym" for p in folders if (p / "Device.kicad_sym").is_file()), None
+        )
+        if path is None:
+            raise ValueError("KiCad Device library not found; choose a project small symbol")
+    elif nickname == symbol_library["nickname"]:
+        path = Path(symbol_library["path"])
+    else:
+        raise ValueError("Small passive template library is not registered")
+    raw = path.read_text(encoding="utf-8-sig")
+    symbol = next((n for n in parse(raw).children("symbol") if n.arg() == name), None)
+    if symbol is None or symbol.children("extends"):
+        raise ValueError("Choose a self-contained small passive symbol")
+    return raw[symbol.start : symbol.end]
+
+
+def exact_passive(root, template_id, symbol_library, part):
+    definition = passive_template(root, template_id, symbol_library)
+    old = parse(definition).arg()
+    name = re.sub(r"[^A-Za-z0-9_.+#-]", "_", part["mpn"])[:40]
+    if not name:
+        raise ValueError("Part needs a short symbol name")
+    nodes = parse(definition)
+    replacements = [(nodes.value[1], name)]
+    replacements += [
+        (n.value[1], name + n.arg()[len(old) :])
+        for n in nodes.children("symbol")
+        if n.arg().startswith(old + "_")
+    ]
+    for node, value in sorted(replacements, key=lambda pair: pair[0].start, reverse=True):
+        definition = _replace_string(definition, node, value)
+    return '(kicad_symbol_lib (version 20250114) (generator "TraceForge")\n' + definition + ")"
 
 
 def pin_numbers(node):
@@ -337,6 +392,7 @@ def plan_import(
     reuse_footprint="",
     category="custom",
     model=None,
+    placement_symbol=False,
 ):
     """Build a concrete write set. Never change active libraries in this function."""
     root = Path(project).resolve()
@@ -364,11 +420,19 @@ def plan_import(
             "encoding": encoding,
         }
 
-    if category != "custom" and (not reuse_symbol or not reuse_footprint):
+    if (
+        category != "custom"
+        and not (
+            placement_symbol
+            and schema.passive_symbol(category)
+            and (reuse_footprint or candidate_footprint)
+        )
+        and (not reuse_symbol or not reuse_footprint)
+    ):
         raise ValueError("Passives require explicit compatible generic symbol and footprint")
     symbol_id = reuse_symbol
     footprint_id = reuse_footprint
-    if reuse_symbol:
+    if reuse_symbol and not (placement_symbol and schema.passive_symbol(category)):
         nick, name = reuse_symbol.split(":", 1)
         if nick != sym["nickname"] or name not in symbol_names(sym_path):
             raise ValueError("Selected generic symbol does not exist in destination library")
@@ -400,8 +464,14 @@ def plan_import(
             add(target, text.encode())
         footprint_id = fp["nickname"] + ":" + name
         summary.append(f"Footprint {footprint_id}: {len(pads)} pads")
-    if candidate_symbol and not reuse_symbol:
-        text = Path(candidate_symbol).read_text(encoding="utf-8-sig")
+    passive_text = None
+    if placement_symbol and schema.passive_symbol(category):
+        template = reuse_symbol or schema.passive_symbol(category)
+        passive_text = exact_passive(root, template, sym, part)
+        part = dict(part, generic_template=template)
+        reuse_symbol = symbol_id = ""
+    if (candidate_symbol or passive_text) and not reuse_symbol:
+        text = passive_text or Path(candidate_symbol).read_text(encoding="utf-8-sig")
         parsed = parse(text)
         candidates = parsed.children("symbol")
         if parsed.head != "kicad_symbol_lib" or len(candidates) != 1:
@@ -419,7 +489,7 @@ def plan_import(
         else:
             if footprint_id:
                 raise ValueError("Candidate symbol has no footprint property to retarget")
-        text = _part_symbol(text, part)
+        text = _part_symbol(text, dict(part, Footprint=footprint_id), category)
         source = parse(text).children("symbol")[0]
         definition = text[source.start : source.end]
         old = read_bytes(sym_path)
@@ -447,7 +517,7 @@ def plan_import(
         summary.append("Symbol " + symbol_id)
     if not symbol_id and not footprint_id and not model:
         raise ValueError("Select at least one asset or compatible existing mapping")
-    if symbol_id and footprint_id and (candidate_symbol or candidate_footprint):
+    if symbol_id and footprint_id and (candidate_symbol or candidate_footprint or passive_text):
         sym_key = str(sym_path.relative_to(root))
         sym_text = writes[sym_key]["data"] if sym_key in writes else sym_path.read_text()
         definition = next(

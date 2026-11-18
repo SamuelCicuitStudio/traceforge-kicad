@@ -1,3 +1,13 @@
+## 0.18.1 (Windows PCM release)
+
+- Combined native LCSC/JLCPCB research, horizontal facets, independent stock/prices, Basic/Extended filters and CAD handoff.
+- Full-schematic/live-PCB BOM purchase costing with supplier MOQ/multiples, leftover quantities, clear availability states and export evidence.
+- Compatible Basic optimization and batch assignment of verified in-stock resistor/capacitor equivalents, preserving project geometry.
+- Visible catalogue/BOM scanning and per-component assignment progress, cancellation and incremental report updates.
+- Category typing preserves focus; explicit category confirmation starts research. Filter alternatives remain selectable.
+- PCB reference highlight/zoom and Layout Clone preview fixes; updated six-workspace navigation and current front-board screenshots.
+- [Release notes](docs/releases/0.18.1.md).
+
 ## 0.17.0 (local testing build)
 
 - Six workspaces with stable tool IDs, retained selectors and shared View/About windows.

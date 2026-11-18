@@ -11,7 +11,7 @@ def snapshot(board):
             dict(
                 reference=footprint.GetReference(),
                 value=footprint.GetValue(),
-                footprint=str(footprint.GetFPID().GetLibItemName()),
+                footprint=str(footprint.GetFPID().GetUniStringLibId()),
                 properties=props,
                 dnp=bool(footprint.IsDNP()),
                 exclude_bom=bool(footprint.IsExcludedFromBOM()),

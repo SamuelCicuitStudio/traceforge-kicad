@@ -425,6 +425,23 @@ def dispatch(board, operation, payload):
             _highlights.clear(board, board_items(board))
         return stitch_dispatch(board, operation, payload)
 
+    if operation == 'component_info_focus':
+        from signal_path_analyzer.component_info_native import footprints
+
+        selected = footprints(board, payload.get('refs', []))
+        refs = {fp.GetReference() for fp in selected}
+        chosen = _highlights.apply(board, board_items(board), set(), refs)
+        pcbnew.Refresh()
+        zoomed = zoom_to_items(board, chosen, force=True)
+        return dict(selected=sorted(refs), highlighted=len(chosen), zoomed=bool(zoomed))
+
+    if operation.startswith('component_info_'):
+        from signal_path_analyzer.component_info_native import dispatch as info_dispatch
+
+        from .revision import signature
+
+        return info_dispatch(board, operation, payload, lambda: signature(board))
+
     if operation == 'bom_snapshot':
         from signal_path_analyzer.bom_cost_native import snapshot
 

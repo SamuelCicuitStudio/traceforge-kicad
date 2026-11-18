@@ -40,15 +40,20 @@ def files():
     }
     for name in (
         "traceforge_action.py",
+        "traceforge_components.py",
         "highlight_net_chain_action.py",
         "signal_path_analyzer_action.py",
     ):
         paths[f"plugins/{name}"] = ROOT / name
+    paths["plugins/register_schematic_components.py"] = ROOT / "tools/install_schematic_launcher.py"
     for source in (ROOT / "native_bridge").glob("*.py"):
         if source.name != "__init__.py":
             paths[f"plugins/{source.name}"] = source
     for source in (ROOT / "signal_path_analyzer").glob("*.py"):
         paths[f"plugins/signal_path_analyzer/{source.name}"] = source
+    paths["plugins/signal_path_analyzer/component_schema.json"] = (
+        ROOT / "signal_path_analyzer/component_schema.json"
+    )
     for source in (ROOT / "signal_path_analyzer" / "manufacturing_resources").rglob("*"):
         if source.is_file() and "__pycache__" not in source.parts:
             relative = source.relative_to(ROOT / "signal_path_analyzer").as_posix()

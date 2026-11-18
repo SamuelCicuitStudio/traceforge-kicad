@@ -1,0 +1,164 @@
+{
+  "schema": "traceforge.component/1",
+  "version": 1,
+  "fields": {
+    "Reference": {
+      "aliases": []
+    },
+    "Value": {
+      "aliases": [
+        "value"
+      ]
+    },
+    "Manufacturer": {
+      "aliases": [
+        "manufacturer",
+        "MFR"
+      ]
+    },
+    "MPN": {
+      "aliases": [
+        "mpn",
+        "Manufacturer Part Number",
+        "Manufacturer_Part_Number"
+      ]
+    },
+    "LCSC Part #": {
+      "aliases": [
+        "lcsc",
+        "LCSC Part",
+        "LCSC Code",
+        "LCSC Part Number",
+        "JLCPCB Part #"
+      ]
+    },
+    "Footprint": {
+      "aliases": [
+        "footprint"
+      ]
+    },
+    "Datasheet": {
+      "aliases": [
+        "datasheet",
+        "datasheet_url"
+      ]
+    },
+    "Description": {
+      "aliases": [
+        "description"
+      ]
+    },
+    "Package": {
+      "aliases": [
+        "package",
+        "Package / Case"
+      ]
+    },
+    "Tolerance": {
+      "aliases": [
+        "tolerance"
+      ]
+    },
+    "Voltage": {
+      "aliases": [
+        "voltage",
+        "Voltage Rating",
+        "Voltage - Rated",
+        "Voltage Rating (DC)"
+      ]
+    },
+    "Power": {
+      "aliases": [
+        "power",
+        "Power(Watts)",
+        "Power Rating"
+      ]
+    },
+    "Current": {
+      "aliases": [
+        "current",
+        "Current Rating",
+        "Current Rating (Amps)",
+        "Rated Current"
+      ]
+    },
+    "Saturation Current": {
+      "aliases": [
+        "Current - Saturation (Isat)",
+        "Saturation Current"
+      ]
+    },
+    "DCR": {
+      "aliases": [
+        "DC Resistance (DCR)",
+        "DC Resistance"
+      ]
+    },
+    "Impedance Frequency": {
+      "aliases": [
+        "Test Frequency",
+        "Impedance Frequency",
+        "Frequency"
+      ]
+    },
+    "Dielectric": {
+      "aliases": [
+        "dielectric",
+        "Temperature Coefficient"
+      ]
+    }
+  },
+  "categories": {
+    "resistor": {
+      "symbol": "Device:R_Small",
+      "visible": [
+        "Tolerance",
+        "Power"
+      ]
+    },
+    "capacitor": {
+      "symbol": "Device:C_Small",
+      "visible": [
+        "Voltage",
+        "Tolerance",
+        "Dielectric"
+      ]
+    },
+    "inductor": {
+      "symbol": "Device:L_Small",
+      "visible": [
+        "Current",
+        "Saturation Current",
+        "DCR"
+      ]
+    },
+    "bead": {
+      "symbol": "Device:FerriteBead_Small",
+      "visible": [
+        "Impedance Frequency",
+        "Current",
+        "DCR"
+      ]
+    },
+    "led": {
+      "symbol": "Device:LED_Small",
+      "visible": []
+    },
+    "custom": {
+      "visible": []
+    }
+  },
+  "paths": {
+    "symbols": "libraries/<project>_Symbols.kicad_sym",
+    "footprints": "libraries/<project>.pretty",
+    "models": "3dmodels/<short-MPN>.step"
+  },
+  "pcb": {
+    "visible": [
+      "Reference"
+    ],
+    "reference_layer": "F.SilkS",
+    "other_fields": "hidden"
+  },
+  "identity": "Never infer a rating. Exact manufacturer/MPN/LCSC; one part record references symbol, footprint, model and provenance."
+}
