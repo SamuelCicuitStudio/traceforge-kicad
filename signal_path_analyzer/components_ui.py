@@ -133,7 +133,12 @@ class ComponentsPanel(wx.Panel):
             self.use_research_part(part)
 
     def begin_bom_assignment(self, report, row, replacement=False):
+        from . import component_operations
         from .bom_part_research_ui import BomAssignmentSession
+
+        if report.working or component_operations.gate(self).owner is not None:
+            self.message("Finish or cancel the active component operation first.")
+            return
 
         if self.assignment and not self.assignment.detach():
             return
@@ -556,10 +561,20 @@ class ComponentsPanel(wx.Panel):
         )
 
     def submit(self, function, done):
+        from . import component_operations
+
+        gate = component_operations.gate(self)
+        if not gate.acquire(self, "Component library operation"):
+            self.message("Finish or cancel the active component operation first.")
+            return
         if self.working:
             self.message("A component operation is already running.")
             return
-        self.worker = runtime.Worker(self.config)
+        try:
+            self.worker = runtime.Worker(self.config)
+        except Exception:
+            gate.release(self)
+            raise
         self.working = True
         self.message("Working...")
         worker = self.worker
@@ -576,6 +591,7 @@ class ComponentsPanel(wx.Panel):
             if self.closed:
                 return
             self.working = False
+            gate.release(self)
             self.installing = False
             self.committing = False
             if error:
@@ -589,7 +605,7 @@ class ComponentsPanel(wx.Panel):
 
     def on_cancel(self, event=None):
         self.catalog_panel.cancel_pending()
-        if self.assignment and self.assignment.applying:
+        if self.assignment:
             self.assignment.request_cancel()
             return
         with self.commit_lock:

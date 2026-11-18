@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
-from . import component_schema, lcsc_retail
+from . import component_occurrences, component_schema, lcsc_retail
 from .cancellation import wait_future
 
 CACHE = Path(os.environ.get("APPDATA", Path.home())) / "TraceForge/lcsc-retail"
@@ -35,13 +35,20 @@ def group_parts(parts):
             excluded.append(part["reference"])
             continue
         props = part.get("properties", {})
-        code = property_value(props, LCSC_KEYS)
+        normalized = component_schema.properties(props)
+        code = normalized.get("LCSC Part #", "")
         match = re.search(r"(?<![A-Za-z0-9])C[0-9]{2,}(?![A-Za-z0-9])", code, re.I)
         code = match.group().upper() if match else ""
-        mpn = property_value(props, ("MPN", "Manufacturer Part Number", "Manufacturer_Part_Number"))
-        manufacturer = property_value(props, ("Manufacturer", "MFR"))
+        mpn = normalized.get("MPN", "")
+        manufacturer = normalized.get("Manufacturer", "")
         # Missing identity stays an individual visible line instead of merging unrelated parts.
-        key = code if code else ("missing", part["reference"])
+        key = (
+            code
+            if code
+            else ("exact", component_occurrences.identity(part))
+            if component_occurrences.identity(part)
+            else ("missing", part["reference"])
+        )
         grouped[key].append(dict(part, lcsc=code, mpn=mpn, manufacturer=manufacturer))
     result = []
     code_mpns = defaultdict(set)
@@ -58,6 +65,8 @@ def group_parts(parts):
                 lcsc=first["lcsc"],
                 mpn=known["mpn"],
                 manufacturer=first["manufacturer"],
+                supplier=component_schema.supplier_identity(first.get("properties", {}))[0],
+                supplier_code=component_schema.supplier_identity(first.get("properties", {}))[1],
                 references=sorted(p["reference"] for p in group),
                 per_board=len(group),
                 identity_source="; ".join(
@@ -97,7 +106,11 @@ def price_line(line, quote, boards=1, spares_percent=0):
         out["status"] = "identity conflict: same LCSC code assigned to different MPNs"
         return out
     if not line["lcsc"]:
-        out["status"] = "missing LCSC code"
+        out["status"] = (
+            f"{line['supplier']} {line.get('supplier_code', '')}; outside LCSC retail pricing"
+            if line.get("supplier") and line.get("supplier_code")
+            else "missing LCSC code"
+        )
         return out
     if quote.get("lcsc_code") != line["lcsc"]:
         out["status"] = "supplier identity unavailable"
@@ -234,6 +247,8 @@ def estimate(
 
 
 def availability_state(row):
+    if not row.get("lcsc") and row.get("supplier") and row.get("supplier_code"):
+        return "Other supplier"
     if not row.get("lcsc"):
         return "Unassigned"
     if row.get("conflict") or "mismatch" in row.get("status", ""):
@@ -250,7 +265,17 @@ def availability_state(row):
 
 def update_assignment(report, references, properties, cancel=None, lookup=cached_quote):
     """Reprice changed SKU groups without re-exporting or resolving the whole BOM."""
-    refs = set(references)
+    return update_assignments(report, [(references, properties)], cancel=cancel, lookup=lookup)
+
+
+def update_assignments(report, changes, cancel=None, lookup=cached_quote):
+    """Apply a complete batch to snapshots, then group/price once."""
+    updates = {}
+    for references, properties in changes:
+        for ref in references:
+            if ref in updates and updates[ref] != properties:
+                raise ValueError("Conflicting assignments in the same batch: " + ref)
+            updates[ref] = properties
     source = copy.deepcopy(report["source_parts"])
     parts = copy.deepcopy(report.get("resolved_parts", source))
     if "resolved_parts" not in report:
@@ -263,9 +288,13 @@ def update_assignment(report, references, properties, cancel=None, lookup=cached
                 )
     for collection in (source, parts):
         for part in collection:
-            if part["reference"] in refs:
-                part.setdefault("properties", {}).update(properties)
-                part["identity_source"] = "explicit LCSC assignment"
+            if cancel is not None and cancel.is_set():
+                from .cancellation import OperationCancelled
+
+                raise OperationCancelled("BOM refresh cancelled; saved component fields retained")
+            if part["reference"] in updates:
+                part.setdefault("properties", {}).update(updates[part["reference"]])
+                part["identity_source"] = "explicit supplier assignment"
     quotes = dict(report.get("quotes", {}))
 
     def reuse(code, refresh=False):

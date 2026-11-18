@@ -12,7 +12,16 @@ from pathlib import Path
 import pcbnew
 
 from .cancellation import checker
-from .fanout import candidates, fit_guidance, grid_info, matches, validate, world
+from .fanout import (
+    candidates,
+    escape_widths,
+    fit_guidance,
+    grid_info,
+    matches,
+    pad_order,
+    validate,
+    world,
+)
 from .fanout_escape import edge_paths, paired_net
 from .stitching_native import fits, outline, point_mm, refill, transaction, uid
 
@@ -268,9 +277,7 @@ def plan(board, request):
     breakout_only, already_routed, reserved_routes = [], [], []
     grid = data['grid']
     # Inner balls first, with deterministic ordering and outward-preferred sites.
-    ordered = sorted(data['pads'], key=lambda p: (
-        abs(p['local'][0] - grid['center'][0]) + abs(p['local'][1] - grid['center'][1]),
-        p['number']))
+    ordered = sorted(data['pads'], key=lambda p: pad_order(p, grid, values))
     for pad in ordered:
         cancel()
         if time.monotonic() - started > 15:
@@ -314,7 +321,9 @@ def plan(board, request):
                      candidates(pad, grid, values['offset_x'], values['offset_y']))
         failures = []
         fallback = None
-        for location in locations:
+        preferred_width = width
+        widths = escape_widths(width, values, ds.m_TrackMinWidth / 1e6)
+        for width, location in ((w, site) for w in widths for site in locations):
             end = mmvec(world(location, data['position'], data['angle']))
             radius = round(diameter * 5e5)
             circle = pcbnew.SHAPE_CIRCLE(end, radius)
@@ -391,7 +400,9 @@ def plan(board, request):
                 continue
             row = dict(pad=pad['number'], id=pad['id'], net=net,
                                  start=pad['position'], end=point_mm(end),
-                                 diameter=diameter, drill=drill, width=width)
+                                 diameter=diameter, drill=drill, width=width,
+                                 preferred_width=preferred_width,
+                                 neck_down=width < preferred_width - 1e-9)
             route_shapes = []
             if escape_layer is not None:
                 fallback = row

@@ -149,6 +149,11 @@ def net_mapping(template, target, plan):
 def plan_options(template, target, plan, mode, graphics):
     """Augment the ordinary correspondence preview without editing anything."""
     issues = list(plan['issues'])
+    warnings = []
+    if mode == 'placement' and not plan.get('topology_matches', True):
+        issues = [s for s in issues if not s.startswith('Internal pin connections differ.')]
+        warnings.append('Pin connections differ: placement only retains every target net. '
+                        'Routing reuse remains blocked for this mapping.')
     if mode == 'routing':
         issues = [s for s in issues if not s.startswith('Target footprints locked:')]
         dst = {x['id']: x for x in target['items']}
@@ -170,7 +175,7 @@ def plan_options(template, target, plan, mode, graphics):
         except ValueError as exc:
             issues.append(str(exc))
     plan = dict(plan, issues=issues, can_apply=bool(plan['pairs']) and not issues,
-                mode=mode, include_graphics=graphics)
+                mode=mode, include_graphics=graphics, warnings=warnings)
     return plan
 
 

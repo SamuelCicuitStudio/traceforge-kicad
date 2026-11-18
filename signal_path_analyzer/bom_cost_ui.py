@@ -76,7 +76,10 @@ class BomCostPanel(wx.Panel):
         action_row.Add(assembly, 0, wx.RIGHT, 6)
         assign = style(wx.Button(self, label="Assign in-stock passives"), True)
         assign.Bind(wx.EVT_BUTTON, lambda event: self.on_optimize(event, assign_mode=True))
-        action_row.Add(assign, 0)
+        exact = style(wx.Button(self, label="Assign exact MPN matches"), True)
+        exact.Bind(wx.EVT_BUTTON, lambda event: self.on_optimize(event, mpn_mode=True))
+        action_row.Add(assign, 0, wx.RIGHT, 6)
+        action_row.Add(exact, 0)
         controls.AddStretchSpacer(1)
         total_box = wx.BoxSizer(wx.VERTICAL)
         self.total_amount = wx.StaticText(self, label="USD --")
@@ -186,6 +189,12 @@ class BomCostPanel(wx.Panel):
         return True
 
     def on_calculate(self, event=None):
+        from . import component_operations
+
+        components = getattr(self.host, "components", None)
+        if components and component_operations.gate(components).owner is not None:
+            self.message("Finish or cancel the component update before recalculating.", "warning")
+            return
         if self.working:
             return
         if not self.native and self.source.GetSelection() == 1:
@@ -271,17 +280,35 @@ class BomCostPanel(wx.Panel):
             stock = observation.get("stock")
             self.table.SetItem(index, 15, "Unknown" if stock is None else f"{stock:,}")
 
-    def on_optimize(self, event=None, check_only=False, assign_mode=False):
+    def on_optimize(self, event=None, check_only=False, assign_mode=False, mpn_mode=False):
         if self.working or not self.result:
             self.message(
                 "Calculate the BOM first, then optimize or check assembly stock.", "warning"
             )
             return
+        from . import component_operations
         from .bom_optimizer_ui import OptimizerDialog
 
-        dialog = OptimizerDialog(self, check_only, assign_mode=assign_mode)
-        dialog.ShowModal()
-        dialog.Destroy()
+        gate = component_operations.gate(self.host.components)
+        if gate.owner is not None:
+            self.message("Finish or cancel the active component operation first.", "warning")
+            return
+        dialog = OptimizerDialog(self, check_only, assign_mode=assign_mode, mpn_mode=mpn_mode)
+        if not gate.acquire(dialog, "BOM assignment / optimization"):
+            dialog.pool.shutdown(wait=False, cancel_futures=True)
+            dialog.Destroy()
+            self.message("Finish or cancel the active component operation first.", "warning")
+            return
+        try:
+            dialog.ShowModal()
+        finally:
+            # A dismissed window can still own an atomic commit/refresh. Keep
+            # its hidden controller alive until that callback releases the gate.
+            if not dialog.applying:
+                gate.release(dialog)
+                if not getattr(dialog, "_disposed", False):
+                    dialog._disposed = True
+                    dialog.Destroy()
 
     def refresh_assignment(self, references, properties):
         self.refresh_assignments([(references, properties)])
@@ -318,9 +345,7 @@ class BomCostPanel(wx.Panel):
 
         def work():
             try:
-                result = previous
-                for references, properties in changes:
-                    result = bom_cost.update_assignment(result, references, properties, cancel)
+                result = bom_cost.update_assignments(previous, changes, cancel)
                 error = None
             except Exception as exc:
                 result, error = None, exc
@@ -392,6 +417,7 @@ class BomCostPanel(wx.Panel):
             state = bom_cost.availability_state(row)
             colours = {
                 "Ready": (FG, "#1c3529"),
+                "Other supplier": ("#9acbff", "#233145"),
                 "Unassigned": ("#ff8585", "#3b2831"),
                 "Identity conflict": ("#ff8585", "#3b2831"),
                 "Stock short": ("#ffd166", "#3b3020"),

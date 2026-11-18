@@ -174,3 +174,26 @@ site reservation, and distinguishing fanout methods. TraceForge's planner and na
 integration are original code; this feature does not import or bundle that project.
 The upstream project's [routing guidance](https://github.com/drandyhaas/KiCadRoutingTools/blob/main/.claude/skills/plan-pcb-routing/SKILL.md)
 also documents how projected axis pitch can misclassify staggered perimeter packages.
+
+## Local neck-down and routing order
+
+**Allow local neck-down below preferred width** is an explicit escape-only option.
+With **Respect netclass track widths** enabled, each pad first tries the larger of
+the requested width and its netclass preferred width. If every candidate site or
+edge path fails, it retries narrower widths down to the larger of **Local neck-down
+minimum** (default 0.127 mm) and the board minimum. The chosen width applies to the
+pad-to-via stub and, in Auto escape mode, the edge escape. It does not change the
+project's netclass width or narrow the remaining power distribution. Preview lists
+**Track / preferred mm**, marking every neck-down. Clearance, holes, via dimensions
+and edge limits remain enforced. This option is off until selected.
+
+**Signals first**, **Inner balls first**, and **Power first** control pad ordering.
+The UI starts with Signals first; power membership comes from the editable comma-separated
+**Power nets** wildcard patterns. Inner balls are processed first within each group.
+Check those patterns against actual rail names, including hierarchical names.
+
+Local power neck-downs still need current/temperature review. Native preview does not
+evaluate all custom KiCad rules; run DRC before accepting the design. A preferred
+netclass width is a routing preset, not proof of a minimum current-carrying width.
+No routing order can guarantee complete fanout when pitch, via clearance, layers or
+existing copper leave no legal path. Blocked pads remain reported rather than forced.

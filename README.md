@@ -538,3 +538,7 @@ The **Unrouted** tab lists remaining copper gaps. Click to highlight and zoom to
 the endpoints, or use Next/Previous to walk through the list. Search by net,
 reference or netclass. It reads live connectivity without running DRC. See
 [the Unrouted guide](docs/unrouted.md) for zone-fill and endpoint-tree details.
+
+Included in the refreshed 0.18.1 package: [shared supplier fields and exact-MPN assignment](docs/COMPONENT-SCHEMA.md), and [BGA local neck-down/routing order](docs/BGA-FANOUT.md#local-neck-down-and-routing-order).
+
+Component workflow: [exclusive operations, progress and incremental refresh](docs/COMPONENT-OPERATIONS.md).

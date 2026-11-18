@@ -9,17 +9,20 @@ from concurrent.futures import ThreadPoolExecutor
 
 import wx
 
+from . import bom_mpn_assignment, component_operations, supplier_records
 from . import bom_optimizer as optimizer
 from .bom_part_research_ui import BomAssignmentSession
 from .lcsc_research_ui import FG, GOLD, GREEN, INPUT, button, style
 
 
 class OptimizerDialog(wx.Dialog):
-    def __init__(self, report, check_only=False, assign_mode=False):
+    def __init__(self, report, check_only=False, assign_mode=False, mpn_mode=False):
         super().__init__(
             report,
             title=(
-                "Assign in-stock passives"
+                "Assign exact MPN matches"
+                if mpn_mode
+                else "Assign in-stock passives"
                 if assign_mode
                 else "JLCPCB assembly check"
                 if check_only
@@ -32,6 +35,7 @@ class OptimizerDialog(wx.Dialog):
         self.report = report
         self.check_only = check_only
         self.assign_mode = assign_mode
+        self.mpn_mode = mpn_mode
         self.apply_total = 0
         self.snapshot = copy.deepcopy(report.result)
         self.parameters = optimizer.Parameters()
@@ -46,7 +50,9 @@ class OptimizerDialog(wx.Dialog):
         title = wx.StaticText(
             self,
             label=(
-                "Assign in-stock R/C equivalents; prefer Basic | "
+                "Exact MPN identity / all component types | "
+                if mpn_mode
+                else "Assign in-stock R/C equivalents; prefer Basic | "
                 if assign_mode
                 else "Assembly inventory and Basic alternatives | "
             )
@@ -80,6 +86,12 @@ class OptimizerDialog(wx.Dialog):
         self.dielectric.SetValue(True)
         controls.Add(self.dielectric, 0, wx.ALIGN_CENTER_VERTICAL)
         outer.Add(controls, 0, wx.EXPAND | wx.ALL, 10)
+        controls.ShowItems(not mpn_mode)
+        self.source = wx.Choice(self, choices=supplier_records.SOURCES)
+        self.source.SetSelection(0)
+        style(self.source)
+        self.source.Show(mpn_mode)
+        outer.Add(self.source, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
         note = wx.StaticText(
             self,
             label="Resistor power and capacitor voltage: same or higher. "
@@ -87,6 +99,12 @@ class OptimizerDialog(wx.Dialog):
             "Costs below are JLCPCB component estimates; "
             "assembly setup, handling and other fees are excluded.",
         )
+        if mpn_mode:
+            note.SetLabel(
+                "Uses saved supplier fields, or live LCSC exact-MPN lookup. "
+                "Saved DigiKey, Mouser and element14 information is not live stock or pricing. "
+                "No equivalent substitutions; value, footprint and routing stay fixed."
+            )
         note.Wrap(1100)
         note.SetForegroundColour(GOLD)
         outer.Add(note, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
@@ -109,6 +127,23 @@ class OptimizerDialog(wx.Dialog):
             ]
         ):
             self.table.InsertColumn(index, label, width=width)
+        if mpn_mode:
+            for index, label in enumerate(
+                [
+                    "References",
+                    "Current LCSC code",
+                    "Supplier",
+                    "Stock",
+                    "Exact SKU / MPN",
+                    "Manufacturer",
+                    "Package",
+                    "Verification",
+                    "Checks / reason",
+                ]
+            ):
+                item = self.table.GetColumn(index)
+                item.SetText(label)
+                self.table.SetColumn(index, item)
         outer.Add(self.table, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
         self.progress_area = wx.Panel(self)
         progress_box = wx.BoxSizer(wx.VERTICAL)
@@ -136,7 +171,9 @@ class OptimizerDialog(wx.Dialog):
         actions = wx.BoxSizer(wx.HORIZONTAL)
         self.scan_button = button(
             self,
-            "Find in-stock equivalents"
+            "Find exact MPN matches"
+            if mpn_mode
+            else "Find in-stock equivalents"
             if assign_mode
             else "Check assembly"
             if check_only
@@ -147,7 +184,11 @@ class OptimizerDialog(wx.Dialog):
         actions.Add(self.scan_button, 0, wx.RIGHT, 6)
         self.apply_button = button(
             self,
-            "Assign checked equivalents" if assign_mode else "Apply checked replacements",
+            "Assign checked identities"
+            if mpn_mode
+            else "Assign checked equivalents"
+            if assign_mode
+            else "Apply checked replacements",
             self.apply,
             True,
         )
@@ -167,7 +208,7 @@ class OptimizerDialog(wx.Dialog):
         for control in (self.scope, self.tolerance, self.stock, self.dielectric):
             style(control)
             control.Enable(not check_only)
-        if assign_mode:
+        if assign_mode or mpn_mode:
             self.stock.Disable()
             wx.CallAfter(self.scan)
 
@@ -201,7 +242,7 @@ class OptimizerDialog(wx.Dialog):
             event.Skip()
 
     def scan(self, event=None):
-        if self.busy or self.applying:
+        if self.closed or self.busy or self.applying:
             return
         self.cancel = threading.Event()
         cancel = self.cancel
@@ -230,15 +271,21 @@ class OptimizerDialog(wx.Dialog):
 
             wx.CallAfter(show)
 
+        source = self.source.GetStringSelection()
+
         def work():
             try:
-                result = optimizer.scan(
-                    self.snapshot,
-                    self.backend,
-                    params,
-                    cancel,
-                    progress,
-                    optimize=not self.check_only,
+                result = (
+                    bom_mpn_assignment.scan(self.snapshot, self.backend, cancel, progress, source)
+                    if self.mpn_mode
+                    else optimizer.scan(
+                        self.snapshot,
+                        self.backend,
+                        params,
+                        cancel,
+                        progress,
+                        optimize=not self.check_only,
+                    )
                 )
                 error = None
             except Exception as exc:
@@ -264,7 +311,8 @@ class OptimizerDialog(wx.Dialog):
         observations.update(
             {p["candidate"].code: p["candidate"] for p in self.proposals if p.get("candidate")}
         )
-        self.report.update_assembly_observations(observations)
+        if not self.mpn_mode:
+            self.report.update_assembly_observations(observations)
         self.snapshot = copy.deepcopy(self.report.result)
         if self.check_only:
             self.proposals = [
@@ -303,12 +351,27 @@ class OptimizerDialog(wx.Dialog):
                 usd(after - before) if before is not None and after is not None else "Unknown",
                 proposal["reason"],
             ]
+            if self.mpn_mode:
+                values = [
+                    row["lcsc"] or "Unassigned",
+                    candidate.supplier if candidate else "",
+                    "Unknown",
+                    f"{candidate.code} / {candidate.mpn}" if candidate else "",
+                    candidate.manufacturer if candidate else row.get("manufacturer", ""),
+                    candidate.package if candidate else "",
+                    "Saved"
+                    if candidate and candidate.verification_source
+                    else "Live LCSC"
+                    if candidate
+                    else "",
+                    proposal["reason"],
+                ]
             for col, value in enumerate(values, 1):
                 self.table.SetItem(index, col, value)
             self.table.SetItemTextColour(index, GREEN if candidate else GOLD)
             if candidate:
                 available += 1
-                if self.assign_mode:
+                if self.assign_mode or self.mpn_mode:
                     self.table.CheckItem(index, True)
         self.apply_button.Enable(available > 0)
         if self.assign_mode:
@@ -321,6 +384,12 @@ class OptimizerDialog(wx.Dialog):
             if not self.check_only
             else "Assembly stock and classification checked; component information unchanged."
         )
+
+        if self.mpn_mode:
+            self.status.SetLabel(
+                f"{available} exact identity assignments selected; "
+                f"{len(result.get('missing_mpn', []))} references have no MPN and remain unchanged."
+            )
 
     def apply(self, event=None):
         if self.busy or self.applying:
@@ -339,7 +408,7 @@ class OptimizerDialog(wx.Dialog):
             )
             return
         removed = {ref for proposal in chosen for ref in proposal["row"]["references"]}
-        for proposal in chosen:
+        for proposal in [] if self.mpn_mode else chosen:
             candidate = proposal["candidate"]
             per_board = sum(
                 len(p["row"]["references"]) for p in chosen if p["candidate"].code == candidate.code
@@ -379,6 +448,8 @@ class OptimizerDialog(wx.Dialog):
         self.next_assignment()
 
     def next_assignment(self):
+        updated = {ref for refs, _ in self.changes for ref in refs}
+        self.queue = [p for p in self.queue if not set(p["row"]["references"]) <= updated]
         if not self.queue or self.cancel.is_set():
             self.finish_application()
             return
@@ -386,6 +457,9 @@ class OptimizerDialog(wx.Dialog):
         components = self.report.host.components
 
         def validate(checked):
+            if self.mpn_mode:
+                bom_mpn_assignment.validate(proposal["parts"], checked)
+                return
             assembly = self.backend.assembly.exact(checked.code, self.session.cancel)
             if self.parameters.library_tier == "basic" and assembly.assembly_tier != "Basic":
                 raise ValueError("Replacement is no longer classified Basic")
@@ -406,6 +480,7 @@ class OptimizerDialog(wx.Dialog):
             validator=validate,
             progress=self.assignment_progress,
         )
+        self.session.operation_owner = self
         components.assignment = self.session
         self.current = proposal
         refs = ", ".join(proposal["row"]["references"])
@@ -425,7 +500,7 @@ class OptimizerDialog(wx.Dialog):
 
     def assigned(self, properties, error):
         if properties:
-            self.changes.append((self.current["row"]["references"], properties))
+            self.changes.append((self.session.references, properties))
         if error:
             self.queue = []
             self.finish_application(error)
@@ -450,6 +525,11 @@ class OptimizerDialog(wx.Dialog):
 
     def application_finished(self, error=None):
         if self.closed:
+            self.applying = False
+            component_operations.gate(self.report.host.components).release(self)
+            if not getattr(self, "_disposed", False):
+                self._disposed = True
+                self.Destroy()
             return
         self.applying = False
         self.activity.Stop()
@@ -464,31 +544,43 @@ class OptimizerDialog(wx.Dialog):
             (str(error) + " | " if error else "")
             + f"{len(self.changes)} groups updated. Close to view the refreshed BOM."
         )
-        self.scan_button.Disable()
-        self.apply_button.Disable()
+        self.scan_button.Enable(bool(error))
+        self.apply_button.Enable(
+            bool(error)
+            and not self.changes
+            and any(
+                self.table.IsItemChecked(i) and p.get("candidate")
+                for i, p in enumerate(self.proposals)
+            )
+        )
         self.table.Enable()
+        if error:
+            self.phase.SetLabel(str(error) + " | Fix the cause, then retry or scan again.")
         self.Layout()
 
     def on_cancel(self, event=None):
+        if self.closed:
+            return
         self.cancel.set()
+        self.queue = []
         if self.session:
             self.session.request_cancel()
-        elif self.applying and self.report.working:
-            self.report.on_cancel()
-        if self.busy and not self.applying:
-            self.busy = False
-            self.activity.Stop()
-            self.progress_title.SetLabel("Cancelled")
-            self.scan_button.Enable()
-            self.status.SetLabel("Cancelled; no replacements applied.")
-            return
-        self.status.SetLabel("Cancellation requested; an active atomic assignment finishes safely.")
+        self.closed = True
+        self.activity.Stop()
+        self.pool.shutdown(wait=False, cancel_futures=True)
+        if self.applying:
+            self.report.message(
+                "Assignment window closed. Stopping pending work; completing any active "
+                "transaction and refreshing saved changes.",
+                "warning",
+            )
+        self.Hide()
+        if self.IsModal():
+            self.EndModal(wx.ID_CANCEL)
+        elif not self.applying:
+            component_operations.gate(self.report.host.components).release(self)
+            self._disposed = True
+            self.Destroy()
 
     def on_close(self, event=None):
-        if self.applying:
-            self.on_cancel()
-            return
-        self.cancel.set()
-        self.closed = True
-        self.pool.shutdown(wait=False, cancel_futures=True)
-        self.EndModal(wx.ID_CLOSE)
+        self.on_cancel(event)

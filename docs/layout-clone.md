@@ -1,6 +1,6 @@
 # Layout Clone
 
-Reuse repeated circuit layout without hierarchical sheets. Open **Layout Clone** in TraceForge.
+Reuse repeated circuit layout from selected parts or repeated hierarchical sheet instances. Open **Layout Clone** in TraceForge.
 
 1. Choose the clone mode and graphics option, then select source footprints in PCB Editor. Include the tracks, arcs, vias, zones and
    board graphics you want to reuse, then click **Record selected layout**.
@@ -111,3 +111,39 @@ or adds anything on the live board, never changes selection, never refills zones
 and never saves the PCB. Old templates with native assets can regenerate their
 preview without recapturing the source. A blocked mapping is visibly marked;
 previewing it does not bypass routing-only alignment or electrical checks.
+
+## Repeated hierarchical sheet instances
+
+Choose **Scope: Repeated sheet instance** before recording. Select one footprint
+in the source instance and click Record; TraceForge expands it to every footprint
+in that sheet and its subsheets. Select one footprint in the destination instance,
+then Preview or Apply. **Parent sheet levels** (0 = containing sheet, 1 = its parent)
+lets you select a footprint inside a nested sheet and clone the larger repeated block.
+Use the same nesting level for source and target; the recorded scope is used for both.
+Root-project expansion is refused. Expansion is limited to 500 footprints.
+
+Matching uses symbol UUID paths relative to each instance root, including nested
+sheet UUIDs. Table matches show **Hierarchy**. This disambiguates identical passives
+without guessing from reference numbers or position. Different symbol sets, pad
+geometry, internal connectivity, stale sheet membership and conflicting manual
+assignments are blocked. Selected-items mode remains available for circuits without
+hierarchy and also uses matching UUID paths when available.
+
+All existing clone modes work: placement, routing, or both, with anchor rotation,
+preview, net remapping and native undo. For repeated-sheet recording, routing modes
+automatically capture tracks/arcs/vias on nets whose footprint pads all belong to
+that instance. **Shared power and interface nets require explicit routing selection**;
+TraceForge does not capture routing from other circuits sharing those nets. Graphics
+and keepouts still require explicit selection and the graphics checkbox. Select them
+alongside the source footprint before Record. A hierarchy change never bypasses the
+existing target-copper, clearance, locked-component or routing-alignment checks.
+
+## FPGA and connectors across different sheets
+
+Use **Selected items** for an FPGA and its connected headers when they span
+separate schematic branches. Select the same component roles in the target group.
+Functional connector labels such as SIM05 / IDC1 and SIM01 / IDC1 match as the same
+role; IDC1 and IDC2 remain distinct. Component values and labels are never rewritten.
+Placement-only cloning can retain differing target pin connectivity and shows a
+warning. Routing cloning still requires matching connectivity and safe net remapping.
+Matching caches physical geometry while evaluating network roles for large BGAs.

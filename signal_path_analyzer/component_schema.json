@@ -1,6 +1,6 @@
 {
   "schema": "traceforge.component/1",
-  "version": 1,
+  "version": 2,
   "fields": {
     "Reference": {
       "aliases": []
@@ -13,14 +13,19 @@
     "Manufacturer": {
       "aliases": [
         "manufacturer",
-        "MFR"
+        "MFR",
+        "MF"
       ]
     },
     "MPN": {
       "aliases": [
         "mpn",
         "Manufacturer Part Number",
-        "Manufacturer_Part_Number"
+        "Manufacturer_Part_Number",
+        "Manufacturer Part",
+        "MANUFACTURERPART",
+        "Part Number",
+        "MP"
       ]
     },
     "LCSC Part #": {
@@ -40,7 +45,8 @@
     "Datasheet": {
       "aliases": [
         "datasheet",
-        "datasheet_url"
+        "datasheet_url",
+        "DATASHEETS"
       ]
     },
     "Description": {
@@ -64,7 +70,8 @@
         "voltage",
         "Voltage Rating",
         "Voltage - Rated",
-        "Voltage Rating (DC)"
+        "Voltage Rating (DC)",
+        "Voltage Rating - DC"
       ]
     },
     "Power": {
@@ -91,7 +98,8 @@
     "DCR": {
       "aliases": [
         "DC Resistance (DCR)",
-        "DC Resistance"
+        "DC Resistance",
+        "DC Resistance(DCR)"
       ]
     },
     "Impedance Frequency": {
@@ -105,6 +113,65 @@
       "aliases": [
         "dielectric",
         "Temperature Coefficient"
+      ]
+    },
+    "Supplier": {
+      "aliases": [
+        "Supplier 1"
+      ]
+    },
+    "Supplier Part #": {
+      "aliases": [
+        "SupplierPart",
+        "Supplier Part",
+        "Supplier Part Number",
+        "Supplier Part Number 1"
+      ]
+    },
+    "Supplier URL": {
+      "aliases": [
+        "Purchase-URL",
+        "Purchase URL",
+        "SupplierURL"
+      ]
+    },
+    "DigiKey Part #": {
+      "aliases": [
+        "Digi-Key Part Number",
+        "DigiKey Part Number",
+        "Digi-Key_Part_Number"
+      ]
+    },
+    "DigiKey URL": {
+      "aliases": [
+        "Digi-Key Purchase URL",
+        "Digi-Key_PURCHASE_URL"
+      ]
+    },
+    "Mouser Part #": {
+      "aliases": [
+        "Mouser Part Number",
+        "MouserPartNumber"
+      ]
+    },
+    "Mouser URL": {
+      "aliases": [
+        "Mouser Purchase URL",
+        "Mouser Product URL"
+      ]
+    },
+    "element14 Part #": {
+      "aliases": [
+        "element14 Part Number",
+        "Farnell Part Number",
+        "Newark Part Number"
+      ]
+    },
+    "element14 URL": {
+      "aliases": [
+        "Farnell Purchase URL",
+        "element14 Purchase URL",
+        "Newark Purchase URL"
       ]
     }
   },
@@ -160,5 +227,23 @@
     "reference_layer": "F.SilkS",
     "other_fields": "hidden"
   },
-  "identity": "Never infer a rating. Exact manufacturer/MPN/LCSC; one part record references symbol, footprint, model and provenance."
+  "identity": "Manufacturer and MPN identify the component. Supplier and supplier order codes are separate. LCSC is optional; preserve independent LCSC, DigiKey, Mouser and element14 identifiers and provenance. Never infer ratings or treat an MPN as a distributor SKU.",
+  "suppliers": {
+    "LCSC": {
+      "part_field": "LCSC Part #",
+      "url_field": "Supplier URL"
+    },
+    "DigiKey": {
+      "part_field": "DigiKey Part #",
+      "url_field": "DigiKey URL"
+    },
+    "Mouser": {
+      "part_field": "Mouser Part #",
+      "url_field": "Mouser URL"
+    },
+    "element14": {
+      "part_field": "element14 Part #",
+      "url_field": "element14 URL"
+    }
+  }
 }

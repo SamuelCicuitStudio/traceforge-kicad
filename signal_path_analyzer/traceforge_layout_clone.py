@@ -15,6 +15,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from . import layout_clone_assets as assets
+from . import layout_clone_hierarchy as hierarchy
 
 FORMAT_VERSION = 1
 INVALID = -1_000_000
@@ -58,7 +59,13 @@ def geometry_key(item: dict) -> tuple:
 
 
 def value_key(item: dict) -> str:
-    return re.sub(r'\s+', '', str(item.get('value', '')).upper())
+    value = str(item.get('value', '')).upper()
+    # Functional connector labels identify channel instances, not different parts.
+    # Keep the IDC/role suffix; do not normalize arbitrary connector MPNs.
+    if str(item.get('ref', '')).startswith('J') and re.match(
+            r'^(?:SIM|READER|UART|CHANNEL|CH|PORT|LANE)[ _-]?\d+\s*/\s*.+', value):
+        value = normalize_net(value)
+    return re.sub(r'\s+', '', value)
 
 
 def pad_key(pad: dict) -> tuple:
@@ -77,7 +84,9 @@ def index_nets(items: list[dict]):
     def digest(value):
         return hashlib.sha256(repr(value).encode('utf-8')).hexdigest()
 
-    colors = {it['id']: digest((geometry_key(it), value_key(it))) for it in items}
+    geometry = {it['id']: geometry_key(it) for it in items}
+    values = {it['id']: value_key(it) for it in items}
+    colors = {it['id']: digest((geometry[it['id']], values[it['id']])) for it in items}
     role_colors = {}
     for _ in range(3):
         role_colors = {}
@@ -100,7 +109,7 @@ def index_nets(items: list[dict]):
             neighbors = []
             for other, other_pad in by_net.get(net, []):
                 if other['id'] != it['id']:
-                    neighbors.append((geometry_key(other)[0], value_key(other),
+                    neighbors.append((geometry[other['id']][0], values[other['id']],
                                       str(other_pad['number'])))
             pdata[pad_key(pad)] = (
                 len(by_net.get(net, ())) if net else 0,
@@ -246,7 +255,13 @@ def make_plan(template: dict, target: dict, overrides: dict | None = None,
     src, dst = _validate_snapshot(template), _validate_snapshot(target)
     if {x['id'] for x in src} & {x['id'] for x in dst}:
         raise ValueError('Source and target selections overlap. Select a DIFFERENT group.')
-    overrides = overrides or {}
+    explicit_overrides = dict(overrides or {})
+    sheet_matches = hierarchy.correspondences(template, target)
+    if template.get('scope') == 'hierarchy' and any(
+            ref in sheet_matches and sheet_matches[ref] != dstref
+            for ref, dstref in explicit_overrides.items()):
+        raise ValueError('Manual assignment conflicts with repeated-sheet symbol identity.')
+    overrides = {**sheet_matches, **explicit_overrides}
     src_by_ref = {it['ref']: it for it in src}
     dst_by_ref = {it['ref']: it for it in dst}
     if not set(overrides) <= set(src_by_ref):
@@ -305,7 +320,9 @@ def make_plan(template: dict, target: dict, overrides: dict | None = None,
             ambiguous.append(dict(source=s['ref'], target=d['ref'], alternatives=alternatives))
         pairs.append(dict(source=s['ref'], target=d['ref'], source_id=s['id'],
                           target_id=d['id'], score=score,
-                          status=('Manual' if s['ref'] in overrides else
+                          status=('Hierarchy' if s['ref'] in sheet_matches and
+                                  s['ref'] not in explicit_overrides else
+                                  'Manual' if s['ref'] in overrides else
                                   'Ambiguous' if alternatives else
                                   'Value differs' if value_key(s) != value_key(d) else 'Matched')))
     used = {p['target'] for p in pairs}
@@ -441,6 +458,8 @@ def _snapshot_fp(board, fp):
                 layer=str(board.GetLayerName(fp.GetLayer())),
                 x=x, y=y, angle=norm_angle(fp.GetOrientationDegrees()),
                 locked=bool(fp.IsLocked()), pads=pads,
+                schematic_path=hierarchy.path_parts(fp.GetPath().AsString()),
+                sheet_file=str(fp.GetSheetfile()),
                 text_layout=[dict(kind=kind, position=list(_pmm(field.GetPosition())),
                                   angle=field.GetTextAngleDegrees(), layer=field.GetLayer(),
                                   size=list(_pmm(field.GetTextSize())),
@@ -455,6 +474,47 @@ def _snapshot_fp(board, fp):
 def _snapshot(board, fps):
     return dict(format=FORMAT_VERSION, board=str(board.GetFileName()),
                 items=[_snapshot_fp(board, fp) for fp in fps])
+
+
+def _scope_snapshot(board, payload):
+    fps = _selected_footprints(board)
+    scope = payload.get('scope', 'selection')
+    if scope not in ('selection', 'hierarchy'):
+        raise ValueError('Choose selected items or a repeated sheet instance.')
+    root = ()
+    levels = int(payload.get('parent_levels', 0))
+    if not 0 <= levels <= 8:
+        raise ValueError('Parent sheet levels must be between 0 and 8.')
+    if scope == 'hierarchy':
+        root = hierarchy.common_sheet(fp.GetPath().AsString() for fp in fps)
+        if levels:
+            root = root[:-levels]
+        if not root:
+            raise ValueError('Select footprints in one child sheet instance. '
+                             'Expansion to the project root is not allowed.')
+        fps = sorted((fp for fp in board.GetFootprints()
+                      if hierarchy.path_parts(fp.GetPath().AsString())[:len(root)] == root),
+                     key=lambda fp: fp.GetReference())
+        if len(fps) > MAX_SELECTION:
+            raise ValueError('Sheet instance exceeds the 500-footprint clone limit.')
+    snap = _snapshot(board, fps)
+    snap.update(scope=scope, parent_levels=levels, hierarchy_root=root)
+    return snap, fps
+
+
+def _internal_sheet_assets(board, fps):
+    """Auto-capture routes only on nets whose every footprint pad is in the sheet.
+
+    Shared power and boundary nets need explicit selection; never pull in another
+    circuit's routing merely because it has the same net name.
+    """
+    selected = {_uuid(fp) for fp in fps}
+    inside, outside = set(), set()
+    for fp in board.GetFootprints():
+        nets = {pad.GetNetCode() for pad in fp.Pads() if pad.GetNetCode()}
+        (inside if _uuid(fp) in selected else outside).update(nets)
+    local_nets = inside - outside
+    return [item for item in board.GetTracks() if item.GetNetCode() in local_nets]
 
 
 def _connected_target_copper(board, selected):
@@ -502,7 +562,9 @@ def _is_same_live_record(old, new) -> bool:
             geometry_key(old) == geometry_key(new) and
             value_key(old) == value_key(new) and
             bool(old.get('locked')) == bool(new.get('locked')) and
-            _pad_identity(old) == _pad_identity(new))
+            _pad_identity(old) == _pad_identity(new) and
+            hierarchy.path_parts(old.get('schematic_path')) ==
+            hierarchy.path_parts(new.get('schematic_path')))
 
 
 def _apply_to_board(board, payload):
@@ -523,7 +585,15 @@ def _apply_to_board(board, payload):
     if not all(pid in by_id for pid in ids):
         raise ValueError('Selected target components changed. Analyze selection again.')
     fps = [by_id[pid] for pid in ids]
+    if expected.get('scope') == 'hierarchy':
+        root = hierarchy.path_parts(expected.get('hierarchy_root'))
+        live_ids = {_uuid(fp) for fp in board.GetFootprints()
+                    if hierarchy.path_parts(fp.GetPath().AsString())[:len(root)] == root}
+        if not root or live_ids != set(ids):
+            raise ValueError('Target sheet membership changed. Preview again.')
     current = _snapshot(board, fps)
+    current.update(scope=expected.get('scope', 'selection'),
+                   hierarchy_root=expected.get('hierarchy_root', ()))
     mode, graphics = assets.options(payload)
     if any(not _is_same_live_record(a, b) or
            graphics and a.get('text_layout') != b.get('text_layout')
@@ -606,18 +676,21 @@ def _apply_to_board(board, payload):
 def dispatch(board, operation: str, payload: dict):
     """TraceForge native_bridge/server.py dispatcher hook; editor wx main thread."""
     if operation == 'layout_clone_capture':
-        snap = _snapshot(board, _selected_footprints(board))
+        snap, fps = _scope_snapshot(board, payload)
         import pcbnew
         mode, graphics = assets.options(payload)
         chosen = assets.selected_items(pcbnew.GetCurrentSelection())
         chosen = [i for i in chosen if
                   assets.category(i) in ('tracks', 'arcs', 'vias', 'zones') and
                   mode != 'placement' or graphics and assets.category(i) in ('graphics', 'zones')]
+        if snap['scope'] == 'hierarchy' and mode != 'placement':
+            chosen = list({_uuid(item): item for item in
+                           chosen + _internal_sheet_assets(board, fps)}.values())
         snap['assets'] = assets.capture(board, chosen)
         return snap
     if operation == 'layout_clone_target':
-        fps = _selected_footprints(board)
-        return dict(snapshot=_snapshot(board, fps),
+        snap, fps = _scope_snapshot(board, payload)
+        return dict(snapshot=snap,
                     copper_by_ref=_connected_target_copper(board, fps))
     if operation == 'layout_clone_apply':
         return _apply_to_board(board, payload)
@@ -643,7 +716,8 @@ def create_tab(parent, native_call):
             help_text = wx.StaticText(self, label=(
                 'Select source footprints in KiCad -> Record. Select another group -> '
                 'Apply. Matching is automatic; Preview is optional. '
-                'Select routing/graphics with the source components to record them.'))
+                'Select routing/graphics with the source components to record them. '
+                'Repeated sheet scope expands one selected footprint to its sheet and subsheets.'))
             help_text.Wrap(850)
             root.Add(help_text, 0, wx.ALL | wx.EXPAND, 10)
             row = wx.BoxSizer(wx.HORIZONTAL)
@@ -683,6 +757,17 @@ def create_tab(parent, native_call):
             self.include_graphics.Bind(wx.EVT_CHECKBOX, self.on_option)
             mode_row.Add(self.include_graphics, 0, wx.ALIGN_CENTER_VERTICAL)
             root.Add(mode_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+            scope_row = wx.BoxSizer(wx.HORIZONTAL)
+            scope_row.Add(wx.StaticText(self, label='Scope:'), 0,
+                          wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+            self.scope = wx.Choice(self, choices=['Selected items', 'Repeated sheet instance'])
+            self.scope.SetSelection(0)
+            scope_row.Add(self.scope, 0, wx.RIGHT, 14)
+            scope_row.Add(wx.StaticText(self, label='Parent sheet levels:'), 0,
+                          wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+            self.parent_levels = wx.SpinCtrl(self, min=0, max=8, initial=0, size=(70, -1))
+            scope_row.Add(self.parent_levels)
+            root.Add(scope_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
             flags = wx.BoxSizer(wx.HORIZONTAL)
             self.allow_partial = wx.CheckBox(
                 self, label='Allow partial matches (unmatched parts untouched)')
@@ -750,7 +835,9 @@ def create_tab(parent, native_call):
             try:
                 snap = self.call('layout_clone_capture',
                                  mode=assets.MODES[self.clone_mode.GetSelection()],
-                                 include_graphics=self.include_graphics.GetValue())
+                                 include_graphics=self.include_graphics.GetValue(),
+                                 scope=('selection', 'hierarchy')[self.scope.GetSelection()],
+                                 parent_levels=self.parent_levels.GetValue())
                 _validate_snapshot(snap)
                 self.template = snap
                 self.target = None
@@ -763,7 +850,11 @@ def create_tab(parent, native_call):
                 self._update_preview()
                 self.message(f'Recorded {len(snap["items"])} selected footprints; '
                              f'assets: {snap.get("assets", {}).get("counts", {})}. '
-                             'Now select a DIFFERENT group in KiCad and click Apply. '
+                             f"Scope: {snap.get('scope', 'selection')}. "
+                             'Now select a DIFFERENT group or sheet instance in KiCad '
+                             'and click Apply. '
+                             'Sheet scope captures internal-net routing automatically; '
+                             'select shared-net routes and graphics explicitly. '
                              'No table-row selection is required.')
             except Exception as exc:
                 self.error(exc)
@@ -773,7 +864,9 @@ def create_tab(parent, native_call):
                 self.error('Record or load a source placement first.')
                 return
             try:
-                result = self.call('layout_clone_target')
+                result = self.call('layout_clone_target',
+                                  scope=self.template.get('scope', 'selection'),
+                                  parent_levels=self.template.get('parent_levels', 0))
                 self.target = result['snapshot']
                 self.copper_by_ref = result['copper_by_ref']
                 self.overrides.clear()
@@ -820,7 +913,7 @@ def create_tab(parent, native_call):
                        f'offset: {self.plan["delta"]}\n')
             details += (f'Clone mode: {self.clone_mode.GetStringSelection()}; '
                         f'recorded assets: {self.template.get("assets", {}).get("counts", {})}\n')
-            notices = []
+            notices = list(self.plan.get('warnings', []))
             if self.plan['missing'] and self.allow_partial.GetValue():
                 notices.append('Partial: missing ' + ', '.join(self.plan['missing']))
             if self.plan['extra'] and self.allow_partial.GetValue():
@@ -920,7 +1013,9 @@ def create_tab(parent, native_call):
                 return
             try:
                 # Apply uses the current KiCad selection, never a selected table row.
-                fresh = self.call('layout_clone_target')
+                fresh = self.call('layout_clone_target',
+                                  scope=self.template.get('scope', 'selection'),
+                                  parent_levels=self.template.get('parent_levels', 0))
                 old_ids = {p['id'] for p in self.target['items']} if self.target else set()
                 new_ids = {p['id'] for p in fresh['snapshot']['items']}
                 if old_ids != new_ids:

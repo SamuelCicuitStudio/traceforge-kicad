@@ -96,6 +96,9 @@ class FanoutPanel(wx.Panel):
         for key, label, value in (('diameter', 'Via diameter (mm)', '.6'),
                                   ('drill', 'Drill diameter (mm)', '.25'),
                                   ('width', 'Track width (mm)', '.15'),
+                                  ('escape_min_width', 'Local neck-down minimum (mm)', '.127'),
+                                  ('power_nets', 'Power nets; comma-separated globs',
+                                   '*GND*,*VDD*,*VCC*,*PWR*,+*'),
                                   ('clearance', 'Minimum clearance (mm)', '.15'),
                                   ('offset_x', 'Dogbone X offset; 0 = local auto', '0'),
                                   ('offset_y', 'Dogbone Y offset; 0 = local auto', '0'),
@@ -113,6 +116,19 @@ class FanoutPanel(wx.Panel):
         left.Add(form, 0, wx.EXPAND)
         self.netclass_width = wx.CheckBox(self, label='Respect netclass track widths')
         self.netclass_width.SetValue(True)
+        self.adaptive_width = wx.CheckBox(self, label='Allow local neck-down below preferred width')
+        self.adaptive_width.SetToolTip(
+            'Try netclass width first, then narrower local escapes down to the larger of '
+            'this minimum and the board minimum. Clearance and vias stay fixed. '
+            'Review power-current capacity and custom rules with DRC.')
+        self.route_order = wx.Choice(
+            self, choices=['Signals first', 'Inner balls first', 'Power first'])
+        self.route_order.SetSelection(0)
+        self.route_order.Bind(wx.EVT_CHOICE, self.settings_changed)
+        left.Add(wx.StaticText(self, label='Routing order (power net patterns above)'),
+                 0, wx.TOP, 8)
+        left.Add(self.route_order, 0, wx.EXPAND)
+        left.Add(self.adaptive_width, 0, wx.TOP, 8)
         self.allow_via_in_pad = wx.CheckBox(self, label='Fabrication supports via-in-pad')
         left.Add(self.netclass_width, 0, wx.TOP, 8)
         left.Add(self.allow_via_in_pad, 0, wx.TOP, 8)
@@ -138,7 +154,8 @@ class FanoutPanel(wx.Panel):
         outer.Add(bar, 0, wx.ALL, 8)
         self.rows = wx.ListCtrl(self, style=wx.LC_REPORT, size=(-1, 140))
         for i, (label, width) in enumerate((('Pad', 70), ('Net', 220),
-                                           ('Status / reason', 340), ('Via / drill mm', 140))):
+                                           ('Status / reason', 340), ('Via / drill mm', 140),
+                                           ('Track / preferred mm', 170))):
             self.rows.InsertColumn(i, label, width=width)
         outer.Add(self.rows, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
         self.status = wx.StaticText(self, label='Dogbone/via-in-pad breakouts or bounded '
@@ -148,7 +165,7 @@ class FanoutPanel(wx.Panel):
         for control in (self.mode, self.source):
             control.Bind(wx.EVT_CHOICE, self.changed)
         self.escape_layer.Bind(wx.EVT_CHOICE, self.settings_changed)
-        for control in (self.netclass_width, self.allow_via_in_pad):
+        for control in (self.netclass_width, self.allow_via_in_pad, self.adaptive_width):
             control.Bind(wx.EVT_CHECKBOX, self.settings_changed)
         if host.dark:
             self.rows.SetBackgroundColour('#19212D')
@@ -276,7 +293,10 @@ class FanoutPanel(wx.Panel):
                              mode=mode,
                              escape_layer=self.escape_layer.GetStringSelection(),
                              allow_via_in_pad=self.allow_via_in_pad.GetValue(),
-                             netclass_width=self.netclass_width.GetValue()))
+                             netclass_width=self.netclass_width.GetValue(),
+                             adaptive_width=self.adaptive_width.GetValue(),
+                             route_order=('signals-first', 'inner-first', 'power-first')[
+                                 self.route_order.GetSelection()]))
 
     def on_preview(self, event=None):
         if not self.data:
@@ -307,6 +327,8 @@ class FanoutPanel(wx.Panel):
                                                                'Accepted pad-to-via breakout')))
                 if key in ('accepted', 'breakout_only'):
                     self.rows.SetItem(i, 3, f"{row['diameter']:.3f} / {row['drill']:.3f}")
+                    widths = f"{row['width']:.3f} / {row.get('preferred_width', row['width']):.3f}"
+                    self.rows.SetItem(i, 4, widths + (' neck-down' if row.get('neck_down') else ''))
                 self.rows.SetItemTextColour(i, self.host.colors[state])
         count = len(result['accepted'])
         self.apply.Enable(bool(count))

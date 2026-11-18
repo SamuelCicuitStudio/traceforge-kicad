@@ -142,6 +142,10 @@ class Part:
     assembly_min_purchase: Optional[int] = None
     assembly_min_placement: Optional[int] = None
     identity_warning: str = ""
+    supplier: str = "LCSC"
+    supplier_code: str = ""
+    supplier_url: str = ""
+    verification_source: str = ""
 
     def cad_record(self) -> dict[str, Any]:
         """Minimal, stable, read-only handoff for existing CAD downloaders."""

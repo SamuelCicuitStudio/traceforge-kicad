@@ -1,5 +1,7 @@
 ## 0.18.1 (Windows PCM release)
 
+Refreshed 0.18.1 (18 November 2026): supplier-neutral exact-MPN/all-occurrence assignment, cancellation/navigation and stale-lock fixes, exclusive responsive batch updates, hierarchical Layout Clone and adaptive BGA escape widths. See [release notes](docs/releases/0.18.1.md).
+
 - Combined native LCSC/JLCPCB research, horizontal facets, independent stock/prices, Basic/Extended filters and CAD handoff.
 - Full-schematic/live-PCB BOM purchase costing with supplier MOQ/multiples, leftover quantities, clear availability states and export evidence.
 - Compatible Basic optimization and batch assignment of verified in-stock resistor/capacitor equivalents, preserving project geometry.

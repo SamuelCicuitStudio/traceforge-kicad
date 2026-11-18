@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import uuid
+from collections import OrderedDict
 from decimal import Decimal
 from pathlib import Path
 
 from . import component_library as library
 from . import component_schema as schema
+from . import schematic_lock
 
 INFO_FIELDS = tuple(
     k for k in schema.SCHEMA["fields"] if k not in {"Reference", "Value", "Footprint"}
@@ -23,12 +26,26 @@ def selected_properties(part, project=None):
         MPN=part.mpn,
         Manufacturer=part.manufacturer,
         **{
-            "LCSC Part #": part.code,
+            "LCSC Part #": part.code
+            if getattr(part, "supplier", "LCSC") == "LCSC"
+            else part.specs.get("LCSC Part #", ""),
             "Package": part.package,
             "Datasheet": part.datasheet_url,
             "Description": part.description,
         },
     )
+    supplier = getattr(part, "supplier", "LCSC")
+    code = getattr(part, "supplier_code", "") or part.code
+    supplied.update(
+        Supplier=supplier,
+        **{
+            "Supplier Part #": code,
+            "Supplier URL": getattr(part, "supplier_url", "") or part.product_url,
+        },
+    )
+    field = schema.SCHEMA.get("suppliers", {}).get(supplier, {}).get("part_field")
+    if field:
+        supplied[field] = code
     previous = {}
     if project:
         record = library.existing_part(project, part.manufacturer, part.mpn)
@@ -36,8 +53,8 @@ def selected_properties(part, project=None):
             previous = schema.properties(record)
     known = {**previous, **schema.properties(supplied)}
     props = {k: known.get(k, "") for k in INFO_FIELDS}
-    if not all(props.get(k) for k in ("MPN", "Manufacturer", "LCSC Part #")):
-        raise ValueError("Selected part needs a confirmed manufacturer, MPN and LCSC code")
+    if not schema.complete_identity(props):
+        raise ValueError("Selected part needs a manufacturer, MPN and supplier order code")
     return props
 
 
@@ -96,7 +113,39 @@ def references(symbol, project_name):
     return found
 
 
-def hierarchy(schematic):
+_PARSE_CACHE = OrderedDict()
+_CACHE_LOCK = threading.Lock()
+_CACHE_BYTES = 32 * 1024 * 1024
+
+
+def parsed_sheet(path, cancel):
+    raw = path.read_bytes()
+    key = (str(path), library.digest(raw))
+    with _CACHE_LOCK:
+        entry = _PARSE_CACHE.get(key)
+        if entry:
+            _PARSE_CACHE.move_to_end(key)
+            return entry[1], entry[2], True
+    text = raw.decode("utf-8-sig")
+    parsed = library.parse(text, cancel=cancel)
+    # Metadata preparation only needs placed symbols and child-sheet links.
+    # Retain original text/spans, but do not retain huge embedded library/graphics trees.
+    node = library.Node(
+        [parsed.value[0]] + [n for n in parsed.value[1:] if n.head in ("symbol", "sheet")],
+        parsed.start,
+        parsed.end,
+    )
+    if len(raw) <= _CACHE_BYTES:
+        with _CACHE_LOCK:
+            for old in [k for k in _PARSE_CACHE if k[0] == str(path)]:
+                del _PARSE_CACHE[old]
+            _PARSE_CACHE[key] = (len(raw), text, node)
+            while sum(v[0] for v in _PARSE_CACHE.values()) > _CACHE_BYTES:
+                _PARSE_CACHE.popitem(last=False)
+    return text, node, False
+
+
+def hierarchy(schematic, cancel=None, progress=None):
     schematic = Path(schematic).resolve()
     root = schematic.parent
     queue = [schematic]
@@ -107,8 +156,17 @@ def hierarchy(schematic):
         if path in seen:
             continue
         seen.add(path)
-        text = path.read_text(encoding="utf-8-sig")
-        node = library.parse(text)
+        if cancel is not None and cancel.is_set():
+            from .cancellation import OperationCancelled
+
+            raise OperationCancelled("Assignment cancelled before writing component information")
+        if progress:
+            progress(f"Reading sheet {len(files) + 1}: {path.name}")
+        text, node, reused = parsed_sheet(path, cancel)
+        if progress:
+            progress(
+                f"{'Reused unchanged' if reused else 'Parsed'} sheet {len(files) + 1}: {path.name}"
+            )
         if node.head != "kicad_sch":
             raise ValueError("Not a KiCad schematic: " + str(path))
         files.append((path, text, node))
@@ -119,13 +177,24 @@ def hierarchy(schematic):
     return files
 
 
-def check_closed(schematic):
-    root = Path(schematic).resolve().parent
-    if list(root.rglob("~*.kicad_sch.lck")):
-        raise ValueError(
-            "Save and close this project's Schematic Editor before Set. "
-            "KiCad 10 cannot update live schematic fields safely; PCB Editor can stay open."
-        )
+def check_closed(schematic, cancel=None, files=None):
+    # Only locks belonging to this root's actual hierarchy can block it.
+    # Delivery archives/staging projects may contain unrelated copied lock files.
+    running = None
+    checked_processes = False
+    for path, _, _ in files if files is not None else hierarchy(schematic, cancel=cancel):
+        lock = path.with_name("~" + path.name + ".lck")
+        if not lock.is_file():
+            continue
+        if not checked_processes:
+            running = schematic_lock.schematic_editor_running()
+            checked_processes = True
+        if schematic_lock.blocks(lock, running):
+            raise ValueError(
+                "Save and close this project's Schematic Editor before Set. "
+                "KiCad 10 cannot update live schematic fields safely; PCB Editor can stay open. "
+                "Locked sheet: " + path.name
+            )
 
 
 def edit_properties(text, symbol, props):
@@ -143,11 +212,11 @@ def edit_properties(text, symbol, props):
                 reverse=True,
             ):
                 a, b = n.start - first.start, n.end - first.start
-                raw = raw[:a] + json.dumps(v) + raw[b:]
+                raw = raw[:a] + json.dumps(v, ensure_ascii=False) + raw[b:]
             replacements += [(p.start, p.end, raw if p is first else "") for p in old]
         else:
             new.append(
-                f"\n(property {json.dumps(key)} {json.dumps(value)} (at 0 0 0) "
+                f"\n(property {json.dumps(key)} {json.dumps(value, ensure_ascii=False)} (at 0 0 0) "
                 "(effects (font (size 1.27 1.27)) (hide yes)))"
             )
     if new:
@@ -155,9 +224,10 @@ def edit_properties(text, symbol, props):
     return replacements
 
 
-def plan(schematic, expected, props):
+def plan(schematic, expected, props, cancel=None, progress=None):
     schematic = Path(schematic).resolve()
-    check_closed(schematic)
+    files = hierarchy(schematic, cancel=cancel, progress=progress)
+    check_closed(schematic, cancel=cancel, files=files)
     root = schematic.parent
     wanted = {p["reference"]: p for p in expected}
     if not wanted:
@@ -166,14 +236,23 @@ def plan(schematic, expected, props):
     writes = {}
     found = set()
     changes = []
+    source_texts = {path: text for path, text, _ in files}
 
     def add(path, data):
         old = library.read_bytes(path)
+        if path in source_texts and (old is None or old.decode("utf-8-sig") != source_texts[path]):
+            raise ValueError("Schematic changed during preparation; retry: " + path.name)
         writes[str(path.relative_to(root))] = dict(
             before=library.digest(old), data=data, encoding="utf-8"
         )
 
-    for path, text, node in hierarchy(schematic):
+    for index, (path, text, node) in enumerate(files, 1):
+        if progress:
+            progress(f"Checking references in sheet {index}/{len(files)}: {path.name}")
+        if cancel is not None and cancel.is_set():
+            from .cancellation import OperationCancelled
+
+            raise OperationCancelled("Assignment cancelled before writing component information")
         replacements = []
         for symbol in node.children("symbol"):
             refs = references(symbol, schematic.stem)
@@ -192,7 +271,16 @@ def plan(schematic, expected, props):
             for ref in targets:
                 exp = wanted[ref]
                 prior = schema.properties(exp.get("properties", {}))
-                for key in ("MPN", "Manufacturer", "LCSC Part #"):
+                for key in (
+                    "MPN",
+                    "Manufacturer",
+                    "Supplier",
+                    "Supplier Part #",
+                    "LCSC Part #",
+                    "DigiKey Part #",
+                    "Mouser Part #",
+                    "element14 Part #",
+                ):
                     if old_props.get(key, "") != prior.get(key, ""):
                         raise ValueError(
                             ref + " information changed since BOM calculation; calculate again"
@@ -217,7 +305,7 @@ def plan(schematic, expected, props):
         for a, b, value in sorted(replacements, key=lambda x: x[0], reverse=True):
             text = text[:a] + value + text[b:]
         if replacements:
-            library.parse(text)
+            library.parse(text, cancel=cancel)
             add(path, text)
     if found != set(wanted):
         raise ValueError("References not located: " + ", ".join(sorted(set(wanted) - found)))
@@ -238,7 +326,7 @@ def plan(schematic, expected, props):
         part=dict(
             symbol="",
             footprint="",
-            provenance={"source": "explicit LCSC assignment", "properties": props},
+            provenance={"source": "explicit supplier assignment", "properties": props},
         ),
     )
 

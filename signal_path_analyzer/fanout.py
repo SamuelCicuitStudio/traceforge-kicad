@@ -122,7 +122,39 @@ def validate(values):
         raise ValueError('Choose Dogbone, Auto escape, or explicit Via-in-pad mode.')
     if result.get('mode') == 'via-in-pad' and not result.get('allow_via_in_pad'):
         raise ValueError('Confirm that your fabrication process supports via-in-pad.')
+    if result.get('adaptive_width'):
+        try:
+            floor = float(result.get('escape_min_width', .127))
+        except (ValueError, TypeError) as exc:
+            raise ValueError('Enter a valid local escape minimum width in mm.') from exc
+        if not math.isfinite(floor) or floor <= 0:
+            raise ValueError('Local escape minimum width must be positive and finite.')
+        result['escape_min_width'] = floor
+    if result.get('route_order', 'inner-first') not in (
+            'inner-first', 'signals-first', 'power-first'):
+        raise ValueError('Choose a supported fanout routing order.')
     return result
+
+
+def escape_widths(preferred, values, board_minimum):
+    """Retry only local fanout copper, never change project width/clearance rules."""
+    if not values.get('adaptive_width', False):
+        return [preferred]
+    floor = max(board_minimum, float(values.get('escape_min_width', .127)))
+    floor = min(preferred, floor)
+    return sorted({round(max(floor, preferred * ratio), 6)
+                   for ratio in (1, .75, .5, .375, .25, 0)}, reverse=True)
+
+
+def pad_order(pad, grid, values):
+    """Keep inner-first within each explicit signal/power group."""
+    patterns = values.get('power_nets', '*GND*,*VDD*,*VCC*,*PWR*,+*')
+    power = bool(patterns.strip()) and matches(pad.get('net', ''), patterns)
+    mode = values.get('route_order', 'inner-first')
+    group = (int(power) if mode == 'signals-first' else
+             int(not power) if mode == 'power-first' else 0)
+    return (group, abs(pad['local'][0] - grid['center'][0]) +
+            abs(pad['local'][1] - grid['center'][1]), pad['number'])
 
 
 def fit_guidance(data, values):

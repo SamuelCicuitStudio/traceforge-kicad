@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
-from . import bom_cost
+from . import component_schema as schema
 from . import lcsc_research_backend as api
 from .cancellation import OperationCancelled
 
@@ -18,8 +18,12 @@ def resolve(parts, cancel=None, progress=None, backend=None):
         if part.get("dnp") or part.get("exclude_bom"):
             continue
         props = part["properties"]
-        code = bom_cost.property_value(props, bom_cost.LCSC_KEYS)
+        code = schema.properties(props).get("LCSC Part #", "")
         if re.fullmatch(r"C\d{2,}", code, re.I):
+            continue
+        provider, sku = schema.supplier_identity(props)
+        if provider and provider != "LCSC" and sku:
+            part["identity_source"] = f"saved {provider} order code; outside LCSC retail pricing"
             continue
         links = [
             str(v)
@@ -39,10 +43,9 @@ def resolve(parts, cancel=None, progress=None, backend=None):
             props["LCSC Part #"] = codes.pop().upper()
             part["identity_source"] = "saved LCSC product link; MPN checked at pricing"
             continue
-        mpn = bom_cost.property_value(
-            props, ("MPN", "Manufacturer Part Number", "Manufacturer_Part_Number")
-        )
-        maker = bom_cost.property_value(props, ("Manufacturer", "MFR"))
+        normalized = schema.properties(props)
+        mpn = normalized.get("MPN", "")
+        maker = normalized.get("Manufacturer", "")
         if mpn:
             pending.setdefault((mpn, maker), []).append(part)
 

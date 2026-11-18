@@ -33,12 +33,25 @@ class Node:
         return self.value[index].value
 
 
-def parse(text):
-    tokens = list(re.finditer(r'"(?:\\.|[^"\\])*"|[()]|[^\s()]+', text))
+def parse(text, cancel=None):
+    def check():
+        if cancel is not None and cancel.is_set():
+            from .cancellation import OperationCancelled
+
+            raise OperationCancelled("Assignment cancelled before writing component information")
+
+    check()
+    tokens = []
+    for token in re.finditer(r'"(?:\\.|[^"\\])*"|[()]|[^\s()]+', text):
+        if len(tokens) % 2048 == 0:
+            check()
+        tokens.append(token)
     index = 0
 
     def node(depth=0):
         nonlocal index
+        if index % 2048 == 0:
+            check()
         if depth > 120 or index >= len(tokens):
             raise ValueError("Invalid or excessively nested KiCad document")
         token = tokens[index]
@@ -55,7 +68,11 @@ def parse(text):
             return Node(values, token.start(), end)
         if word == ")":
             raise ValueError("Unexpected closing parenthesis")
-        return Node(json.loads(word) if word.startswith('"') else word, token.start(), token.end())
+        return Node(
+            json.loads(word, strict=False) if word.startswith('"') else word,
+            token.start(),
+            token.end(),
+        )
 
     result = node()
     if index != len(tokens):

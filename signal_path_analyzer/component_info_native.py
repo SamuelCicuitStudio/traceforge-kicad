@@ -57,7 +57,7 @@ def dispatch(board, operation, payload, revision):
         refs = payload.get("refs", [])
         selected = footprints(board, refs)
         props = {k: str(v) for k, v in payload.get("properties", {}).items() if k in INFO_FIELDS}
-        if not all(props.get(k) for k in ("MPN", "Manufacturer", "LCSC Part #")):
+        if not schema.complete_identity(props):
             raise ValueError("Complete exact supplier identity is required")
         expected = {p["reference"]: p for p in payload.get("expected", [])}
         for fp in selected:
@@ -68,7 +68,11 @@ def dispatch(board, operation, payload, revision):
                 )
             old = schema.properties({f.GetName(): f.GetText() for f in fp.GetFields()})
             prior = schema.properties(previous.get("properties", {}))
-            if old.get("MPN") and prior.get("MPN") and old["MPN"] != prior["MPN"]:
+            if (
+                old.get("MPN")
+                and prior.get("MPN")
+                and old["MPN"].casefold() != prior["MPN"].casefold()
+            ):
                 raise ValueError(
                     fp.GetReference() + " PCB identity differs from BOM; synchronize first"
                 )
