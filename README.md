@@ -4,8 +4,7 @@
 
 **PCB analysis and editing tools for KiCad 10. Version 0.16.5 is released for Windows; the older macOS 0.13.1 build remains a testing preview.**
 
-TraceForge 0.16.5 groups signal analysis, five Via Tools, BGA fanout, three Trace Tools,
-PCB Rotation, Visualization, Manufacturing, Layout Clone, Auto Text, and Unrouted in one panel. It reads the open board through
+The local **0.17.0 testing build** groups tools into six workspaces: Signals, Layout, Vias, Routing, Components and Manufacturing. View and About are shared utility windows. Components adds project-aware research/CAD/library imports; Manufacturing adds LCSC retail BOM Cost. See the [workflow and runtime setup](docs/COMPONENTS-AND-BOM-COST.md). It reads the open board through
 KiCad's native `pcbnew` bindings, including unsaved routing changes. The PCB
 tools need no IPC API setup or token. Manufacturing exports read saved files and
 need a separate Python with `openpyxl`.
@@ -19,8 +18,7 @@ See [what changed in 0.16.5](docs/releases/0.16.5.md) for Layout Clone modes and
 
 ## Features
 
-Open TraceForge from KiCad PCB Editor. Each main tab is listed below; **Via Tools**
-and **Trace Tools** have a selector at the top right for their individual tools.
+Open TraceForge from KiCad PCB Editor. Tools are grouped under the six workspace selectors; the table below describes the individual tools.
 
 | Tool | What it does | Detailed use |
 | --- | --- | --- |

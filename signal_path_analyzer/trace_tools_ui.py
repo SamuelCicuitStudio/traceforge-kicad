@@ -424,7 +424,7 @@ class FilletPanel(wx.Panel):
 
 
 class TraceToolsPanel(wx.Panel):
-    names = ('Trace Cleanup', 'Teardrops', 'Round Corners')
+    names = ('Trace Cleanup', 'Teardrops', 'Round Corners', 'BGA Fanout')
 
     def __init__(self, parent, host, native):
         super().__init__(parent)
@@ -450,6 +450,10 @@ class TraceToolsPanel(wx.Panel):
         self.book.AddPage(self.cleanup, self.names[0])
         self.book.AddPage(self.teardrops, self.names[1])
         self.book.AddPage(self.fillets, self.names[2])
+        from .fanout_ui import FanoutPanel
+
+        self.fanout = FanoutPanel(self.book, host, native)
+        self.book.AddPage(self.fanout, self.names[3])
         outer.Add(self.book, 1, wx.EXPAND)
         self.SetSizer(outer)
 
@@ -459,8 +463,8 @@ class TraceToolsPanel(wx.Panel):
 
     @property
     def active_page(self):
-        return (self.cleanup, self.teardrops, self.fillets)[self.active_index]
+        return (self.cleanup, self.teardrops, self.fillets, self.fanout)[self.active_index]
 
     def on_choice(self, event):
         self.book.SetSelection(self.active_index)
-        self.host.schedule_auto_refresh()
+        self.host.workspace_changed()

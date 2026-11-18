@@ -55,4 +55,4 @@ class ViaToolsPanel(wx.Panel):
 
     def on_choice(self, event):
         self.book.SetSelection(self.active_index)
-        self.host.schedule_auto_refresh()
+        self.host.workspace_changed()

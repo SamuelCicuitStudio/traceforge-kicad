@@ -98,34 +98,37 @@ class ExportLauncher(NativeLauncher):
 class RotationLauncher(NativeLauncher):
     def __init__(self):
         super().__init__('TraceForge: PCB Rotation', 'traceforge_action.py',
-                         'pcb-rotation', True, 4)
+                         'pcb-rotation', True, 'layout.rotate')
 
 
 class ViaToolsLauncher(NativeLauncher):
     def __init__(self):
-        super().__init__('TraceForge: Via Tools', 'traceforge_action.py', 'traceforge', tab=1)
+        super().__init__('TraceForge: Via Tools', 'traceforge_action.py',
+                         'traceforge', tab='vias.stitching')
 
 
 class FanoutLauncher(NativeLauncher):
     def __init__(self):
-        super().__init__('TraceForge: BGA Fanout', 'traceforge_action.py', 'traceforge', tab=2)
+        super().__init__('TraceForge: BGA Fanout', 'traceforge_action.py',
+                         'traceforge', tab='routing.fanout')
 
 
 class TraceToolsLauncher(NativeLauncher):
     def __init__(self):
-        super().__init__('TraceForge: Trace Tools', 'traceforge_action.py', 'traceforge', tab=3)
+        super().__init__('TraceForge: Trace Tools', 'traceforge_action.py',
+                         'traceforge', tab='routing.cleanup')
 
 
 class VisualizationLauncher(NativeLauncher):
     def __init__(self):
         super().__init__('TraceForge: Visualization', 'traceforge_action.py',
-                         'traceforge', tab=5)
+                         'traceforge', tab='view')
 
 
 class ManufacturingLauncher(NativeLauncher):
     def __init__(self):
         super().__init__('TraceForge: Manufacturing', 'traceforge_action.py',
-                         'traceforge', tab=6)
+                         'traceforge', tab='manufacturing')
 
 
 class StitchingCommit(pcbnew.ActionPlugin):

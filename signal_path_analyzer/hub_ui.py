@@ -425,56 +425,79 @@ class TraceForgePanel(wx.Frame):
         root.SetSizer(box)
 
         from .via_tools_ui import ViaToolsPanel
+        from .workspace_ui import ToolWorkspace, utility_window
+        from .workspaces import tool_id
 
-        self.notebook.AddPage(root, "Signals / xSignals")
+        self.signals_workspace = ToolWorkspace(self.notebook, self, ['Paths / timing', 'Unrouted'])
+        self.signals_workspace.add(root, 'Paths / timing')
+        from .unrouted_ui import UnroutedPanel
+
+        self.unrouted = UnroutedPanel(self.signals_workspace.book, self, stitching)
+        self.signals_workspace.add(self.unrouted, 'Unrouted')
+        self.notebook.AddPage(self.signals_workspace, 'Signals')
+        self.layout_workspace = ToolWorkspace(self.notebook, self,
+                                              ['Layout Clone', 'Rotation', 'References'])
+        from .board_rotate_ui import BoardRotatePanel
+        from .traceforge_auto_text import create_tab as create_auto_text_tab
+        from .traceforge_layout_clone import create_tab
+
+        self.layout_clone = create_tab(self.layout_workspace.book, stitching)
+        self.rotation = BoardRotatePanel(self.layout_workspace.book, self, stitching)
+        self.auto_text = create_auto_text_tab(self.layout_workspace.book, self, stitching)
+        for page, label in [(self.layout_clone, 'Layout Clone'), (self.rotation, 'Rotation'),
+                            (self.auto_text, 'References')]:
+            self.layout_workspace.add(page, label)
+        self.notebook.AddPage(self.layout_workspace, 'Layout')
         self.via_tools = ViaToolsPanel(self.notebook, self, stitching)
         self.stitching = self.via_tools.stitching
         self.trace_fence = self.via_tools.fencing
         self.via_array = self.via_tools.array
-        self.notebook.AddPage(self.via_tools, "Via Tools")
-        from .fanout_ui import FanoutPanel
-
-        self.fanout = FanoutPanel(self.notebook, self, stitching)
-        self.notebook.AddPage(self.fanout, "BGA Fanout")
+        self.notebook.AddPage(self.via_tools, 'Vias')
         from .trace_tools_ui import TraceToolsPanel
 
         self.trace_tools = TraceToolsPanel(self.notebook, self, stitching)
         self.trace_cleanup = self.trace_tools.cleanup
-        self.notebook.AddPage(self.trace_tools, "Trace Tools")
-        from .board_rotate_ui import BoardRotatePanel
+        self.fanout = self.trace_tools.fanout
+        self.notebook.AddPage(self.trace_tools, 'Routing')
+        from .components_ui import ComponentsPanel
 
-        self.rotation = BoardRotatePanel(self.notebook, self, stitching)
-        self.notebook.AddPage(self.rotation, "PCB Rotation")
-        from .visualization_ui import VisualizationPanel
-
-        board_file = (native_info or {}).get("board")
-        self.visualization = VisualizationPanel(self.notebook, self, stitching, board_file)
-        self.notebook.AddPage(self.visualization, "Visualization")
+        board_file = (native_info or {}).get('board')
+        self.components = ComponentsPanel(self.notebook, self, stitching, board_file)
+        self.notebook.AddPage(self.components, 'Components')
+        from .bom_cost_ui import BomCostPanel
         from .manufacturing_ui import ManufacturingPanel
 
-        self.manufacturing = ManufacturingPanel(self.notebook, self, board_file)
-        self.notebook.AddPage(self.manufacturing, "Manufacturing")
+        self.manufacturing_workspace = ToolWorkspace(self.notebook, self,
+                                                     ['Manufacturing', 'BOM Cost'])
+        self.manufacturing = ManufacturingPanel(self.manufacturing_workspace.book, self, board_file)
+        self.bom_cost = BomCostPanel(self.manufacturing_workspace.book, self, stitching, board_file)
+        self.manufacturing_workspace.add(self.manufacturing, 'Manufacturing')
+        self.manufacturing_workspace.add(self.bom_cost, 'BOM Cost')
+        self.notebook.AddPage(self.manufacturing_workspace, 'Manufacturing')
         from .about_ui import AboutPanel
+        from .visualization_ui import VisualizationPanel
 
-        self.about = AboutPanel(self.notebook, self.dark, native_info)
-        self.notebook.AddPage(self.about, "About")
-        from .traceforge_layout_clone import create_tab
-
-        self.layout_clone = create_tab(self.notebook, stitching)
-        self.notebook.AddPage(self.layout_clone, "Layout Clone")
-        from .traceforge_auto_text import create_tab as create_auto_text_tab
-
-        self.auto_text = create_auto_text_tab(self.notebook, self, stitching)
-        self.notebook.AddPage(self.auto_text, "Auto Text")
-        from .unrouted_ui import UnroutedPanel
-
-        self.unrouted = UnroutedPanel(self.notebook, self, stitching)
-        self.notebook.AddPage(self.unrouted, "Unrouted")
+        self.view_window = utility_window(self, 'TraceForge - View')
+        self.visualization = VisualizationPanel(self.view_window, self, stitching, board_file)
+        view_box = wx.BoxSizer(wx.VERTICAL)
+        view_box.Add(self.visualization, 1, wx.EXPAND)
+        self.view_window.SetSizer(view_box)
+        self.about_window = utility_window(self, 'About TraceForge')
+        self.about = AboutPanel(self.about_window, self.dark, native_info)
+        about_box = wx.BoxSizer(wx.VERTICAL)
+        about_box.Add(self.about, 1, wx.EXPAND)
+        self.about_window.SetSizer(about_box)
+        self._utility = None
+        self._normalizing_tool = tool_id
         if self.dark:
             self.stitching.SetBackgroundColour("#222C3A")
             self.stitching.SetForegroundColour("#E5EDF8")
         frame_box = wx.BoxSizer(wx.VERTICAL)
         cancel_bar = wx.BoxSizer(wx.HORIZONTAL)
+        for title, target in [('View', 'view'), ('About / Settings', 'about')]:
+            utility = wx.Button(self, label=title)
+            utility.Bind(wx.EVT_BUTTON, lambda event, target=target: self.activate_tool(target))
+            cancel_bar.Add(utility, 0, wx.ALL, 4)
         cancel_bar.AddStretchSpacer()
         cancel_bar.Add(self.cancel_operation, 0, wx.ALL, 4)
         frame_box.Add(cancel_bar, 0, wx.EXPAND)
@@ -494,14 +517,113 @@ class TraceForgePanel(wx.Frame):
         self.register_shortcuts(load_shortcuts())
         self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_tab_open)
         self.Bind(wx.EVT_ACTIVATE, self.on_activate)
+        try:
+            preferences = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
+            for name, workspace in [('signals', self.signals_workspace),
+                                    ('layout', self.layout_workspace), ('vias', self.via_tools),
+                                    ('routing', self.trace_tools),
+                                    ('components', self.components),
+                                    ('manufacturing', self.manufacturing_workspace)]:
+                index = preferences.get('workspace_tools', {}).get(name, 0)
+                if isinstance(index, int) and 0 <= index < workspace.selector.GetCount():
+                    workspace.selector.SetSelection(index)
+                    workspace.book.SetSelection(index)
+            self.activate_tool(preferences.get('workspace', 'signals.paths'))
+        except (OSError, ValueError):
+            logging.exception('Cannot restore workspace preferences')
         wx.CallAfter(self.schedule_auto_refresh)
+
+    def current_tool(self):
+        index = self.notebook.GetSelection()
+        if index == 0:
+            return ('signals.paths', 'signals.unrouted')[self.signals_workspace.active_index]
+        if index == 1:
+            return ('layout.clone', 'layout.rotate', 'layout.references')[
+                self.layout_workspace.active_index]
+        if index == 2:
+            return ('vias.stitching', 'vias.fencing', 'vias.array', 'vias.sizes',
+                    'vias.inspector')[self.via_tools.active_index]
+        if index == 3:
+            return ('routing.cleanup', 'routing.teardrops', 'routing.corners',
+                    'routing.fanout')[self.trace_tools.active_index]
+        if index == 4:
+            return ('components.search', 'components.assets', 'components.library')[
+                self.components.selector.GetSelection()]
+        return ('manufacturing', 'manufacturing.cost')[self.manufacturing_workspace.active_index]
+
+    def legacy_tab(self):
+        from .workspaces import legacy_index
+
+        return legacy_index(self.current_tool())
+
+    def workspace_changed(self):
+        if not hasattr(self, 'activity'):
+            return
+        self.remember_workspace()
+        self.position_activity()
+        if self.current_tool() == 'signals.unrouted':
+            wx.CallAfter(self.unrouted.on_refresh)
+        self.schedule_auto_refresh()
+
+    def remember_workspace(self):
+        try:
+            data = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
+            data['workspace'] = self.current_tool()
+            data['workspace_tools'] = {
+                'signals': self.signals_workspace.active_index,
+                'layout': self.layout_workspace.active_index,
+                'vias': self.via_tools.active_index,
+                'routing': self.trace_tools.active_index,
+                'components': self.components.selector.GetSelection(),
+                'manufacturing': self.manufacturing_workspace.active_index}
+            SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+            SETTINGS.write_text(json.dumps(data, indent=2) + '\n')
+        except (OSError, ValueError):
+            logging.exception('Cannot save workspace preferences')
+
+    def activate_tool(self, target):
+        from .workspaces import tool_id
+
+        target = tool_id(target)
+        if target in ('view', 'about'):
+            window = self.view_window if target == 'view' else self.about_window
+            window.Show()
+            window.Raise()
+            if target == 'view' and not self.visualization.nets:
+                self.visualization.on_refresh()
+            return
+        group, index = ({
+            'signals.paths': (0, 0), 'signals.unrouted': (0, 1),
+            'layout.clone': (1, 0), 'layout.rotate': (1, 1), 'layout.references': (1, 2),
+            'vias.stitching': (2, 0), 'vias.fencing': (2, 1), 'vias.array': (2, 2),
+            'vias.sizes': (2, 3), 'vias.inspector': (2, 4),
+            'routing.cleanup': (3, 0), 'routing.teardrops': (3, 1),
+            'routing.corners': (3, 2), 'routing.fanout': (3, 3),
+            'components.search': (4, 0), 'components.assets': (4, 1),
+            'components.library': (4, 2), 'manufacturing': (5, 0),
+            'manufacturing.cost': (5, 1)})[target]
+        if group in (0, 1):
+            (self.signals_workspace if group == 0 else self.layout_workspace).select(index)
+        elif group in (2, 3):
+            page = self.via_tools if group == 2 else self.trace_tools
+            page.selector.SetSelection(index)
+            page.book.SetSelection(index)
+        elif group == 4:
+            self.components.selector.SetSelection(index)
+            self.components.book.SetSelection(index)
+        elif group == 5:
+            self.manufacturing_workspace.select(index)
+        self.notebook.SetSelection(group)
+        self.workspace_changed()
 
     def on_tab_open(self, event):
         event.Skip()
         self.position_activity()
-        if self.notebook.GetSelection() == 10:
+        self._utility = None
+        self.remember_workspace()
+        if self.legacy_tab() == 10:
             wx.CallAfter(self.unrouted.on_refresh)
-        if self.notebook.GetSelection() == 5 and not self.visualization.nets:
+        if self.legacy_tab() == 5 and not self.visualization.nets:
             wx.CallAfter(self.visualization.on_refresh)
         self.schedule_auto_refresh()
 
@@ -512,7 +634,7 @@ class TraceForgePanel(wx.Frame):
     def on_activate(self, event):
         event.Skip()
         if event.GetActive():
-            if self.notebook.GetSelection() == 10 and not self.actions_pending and not self.busy:
+            if self.legacy_tab() == 10 and not self.actions_pending and not self.busy:
                 wx.CallAfter(self.unrouted.on_refresh)
             self.schedule_auto_refresh()
 
@@ -522,9 +644,9 @@ class TraceForgePanel(wx.Frame):
         if (
             not self.native_call
             or self.closing
-            or self.notebook.GetSelection() in (4, 5, 6, 7, 8, 9, 10)
-            or (self.notebook.GetSelection() == 1 and self.via_tools.active_index >= 2)
-            or (self.notebook.GetSelection() == 3 and self.trace_tools.active_index != 0)
+            or self.legacy_tab() in (4, 5, 6, 7, 8, 9, 10, 11)
+            or (self.legacy_tab() == 1 and self.via_tools.active_index >= 2)
+            or (self.legacy_tab() == 3 and self.trace_tools.active_index != 0)
         ):
             return
         self.auto_refresh_later = wx.CallLater(350, self.check_board_revision)
@@ -537,9 +659,9 @@ class TraceForgePanel(wx.Frame):
             self.auto_check_deferred = True
             return
         self.auto_check_deferred = False
-        tab = self.notebook.GetSelection()
+        tab = self.legacy_tab()
         if (
-            tab in (4, 5, 6, 7, 8, 9, 10)
+            tab in (4, 5, 6, 7, 8, 9, 10, 11)
             or (tab == 1 and self.via_tools.active_index >= 2)
             or (tab == 3 and self.trace_tools.active_index != 0)
         ):
@@ -567,7 +689,7 @@ class TraceForgePanel(wx.Frame):
                 return  # No automatic retry after a busy/closed/old helper.
             self.resume_auto_check()
             if (
-                self.notebook.GetSelection() != tab
+                self.legacy_tab() != tab
                 or self.busy
                 or self.actions_pending
                 or (tab == 1 and self.via_tools.active_index != via_mode)
@@ -608,7 +730,7 @@ class TraceForgePanel(wx.Frame):
     def position_activity(self):
         if not self.activity_count or self.closing:
             return
-        tab = self.notebook.GetSelection()
+        tab = self.legacy_tab()
         target = (
             self.tree.GetMainWindow()
             if tab == 0
@@ -632,6 +754,8 @@ class TraceForgePanel(wx.Frame):
             if tab == 5
             else self.unrouted.table
             if tab == 10
+            else self.notebook.GetCurrentPage()
+            if tab in (6, 8, 9, 11)
             else self.about
         )
         bounds = target.GetScreenRect()
@@ -664,10 +788,13 @@ class TraceForgePanel(wx.Frame):
 
     # ----------------------------------------------------------- manual refresh (worker thread)
     def on_refresh(self, _event=None) -> None:
-        if self.notebook.GetSelection() == 10:
+        if self.legacy_tab() == 11:
+            self.components.on_refresh()
+            return
+        if self.legacy_tab() == 10:
             self.unrouted.on_refresh()
             return
-        if self.notebook.GetSelection() == 0:
+        if self.legacy_tab() == 0:
             try:
                 geometry = self.tools.routing_configuration()
                 self.stackup_display.SetLabel(geometry.get('stackup', 'Stackup unavailable'))
@@ -684,26 +811,26 @@ class TraceForgePanel(wx.Frame):
             except (OSError, ValueError, KeyError) as exc:
                 self.stackup_display.SetLabel('Cannot read saved stackup: ' + str(exc))
                 self.routing_geometry.DeleteAllItems()
-        if self.notebook.GetSelection() == 9:
+        if self.legacy_tab() == 9:
             self.auto_text.on_refresh()
             return
-        if self.notebook.GetSelection() == 8:
+        if self.legacy_tab() == 8:
             return
-        if self.notebook.GetSelection() == 6:
+        if self.legacy_tab() == 6:
             return
-        if self.notebook.GetSelection() == 5:
+        if self.legacy_tab() == 5:
             self.visualization.on_refresh()
             return
-        if self.notebook.GetSelection() == 4:
+        if self.legacy_tab() == 4:
             self.rotation.on_refresh()
             return
-        if self.notebook.GetSelection() == 3:
+        if self.legacy_tab() == 3:
             self.trace_tools.active_page.on_refresh()
             return
-        if self.notebook.GetSelection() == 2:
+        if self.legacy_tab() == 2:
             self.fanout.on_refresh()
             return
-        if self.notebook.GetSelection() == 1:
+        if self.legacy_tab() == 1:
             self.via_tools.active_page.on_refresh()
             return
         if self.busy or self.actions_pending or self.closing:
@@ -1182,7 +1309,7 @@ class TraceForgePanel(wx.Frame):
             "export_paths": self.on_export,
         }.get(action)
         if handler:
-            self.notebook.ChangeSelection(0)
+            self.activate_tool('signals.paths')
             handler()
 
     def on_close(self, event) -> None:
@@ -1193,6 +1320,8 @@ class TraceForgePanel(wx.Frame):
             self.auto_refresh_later.Stop()
         self.overlay.Stop()
         self.activity_timer.Stop()
+        self.components.shutdown()
+        self.bom_cost.shutdown()
         self.worker.shutdown(wait=False, cancel_futures=True)
         for hid in list(self.hotkey_ids):
             self.UnregisterHotKey(hid)
@@ -1214,7 +1343,7 @@ def run(
         tools, stitching=stitching, endpoints=endpoints, native_info=native_info
     )
     if start_tab is not None:
-        panel.notebook.SetSelection(start_tab)
+        panel.activate_tool(start_tab)
     panel.Show()
     listener = None
     if single_instance_port is not None:
@@ -1229,8 +1358,8 @@ def run(
 
 
 def _bring_front(panel: wx.Frame, tab=None) -> None:
-    if tab is not None and 0 <= tab < panel.notebook.GetPageCount():
-        panel.notebook.SetSelection(tab)
+    if tab is not None:
+        panel.activate_tool(tab)
     panel.Show()
     panel.Iconize(False)
     panel.Raise()

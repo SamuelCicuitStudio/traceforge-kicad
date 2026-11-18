@@ -1,3 +1,13 @@
+## 0.17.0 (local testing build)
+
+- Six workspaces with stable tool IDs, retained selectors and shared View/About windows.
+- Components research, exact C-number details, independent CAD/STEP staging, native previews and project-local library transactions.
+- Generic passive reuse, exact-part catalog, preserved customized assets and recovery journals.
+- Separate selected-footprint library-update preview and undoable apply, with pad/net/contact and stale checks; placed metadata, grouping, model policy and routing preserved.
+- Manufacturing BOM Cost with full saved schematic scope, LCSC quantity tiers, MOQ/spares, timestamped cache and explicit incomplete totals.
+- External research/converter helpers remain separate from the PCM package.
+- [Usage and setup](docs/COMPONENTS-AND-BOM-COST.md).
+
 ## 0.16.5 (Windows PCM release)
 
 First public release after 0.13.3; includes the local 0.14-0.16.4 additions below.

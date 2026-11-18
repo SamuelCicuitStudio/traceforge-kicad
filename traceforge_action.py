@@ -138,9 +138,9 @@ def main() -> int:
     _log_to_file()
     try:
         tab_text = os.environ.get('TRACEFORGE_START_TAB', '')
-        start_tab = int(tab_text) if tab_text else None
-        if start_tab is not None and not 0 <= start_tab < 11:
-            raise ValueError('Invalid TraceForge tab requested by the PCB Editor.')
+        from signal_path_analyzer.workspaces import tool_id
+
+        start_tab = tool_id(tab_text) if tab_text else None
         if try_activate_existing(PORT, tab=start_tab):
             return 0
         from signal_path_analyzer import hub_ui

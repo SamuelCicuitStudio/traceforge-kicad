@@ -12,6 +12,7 @@ import threading
 from typing import Callable, Optional
 
 from . import __version__
+from .workspaces import tool_id
 
 PORT = 47231  # localhost only
 _MAGIC = b"traceforge:front\n"
@@ -40,7 +41,9 @@ def try_activate_existing(port: int = PORT, tab: Optional[int] = None) -> bool:
             'Close the old TraceForge window and every KiCad window, then reopen the board.')
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.5) as s:
-            s.sendall(_MAGIC if tab is None else _TAB_MAGIC + f'{tab}\n'.encode())
+            target = tab if isinstance(tab, int) else tool_id(tab) if tab is not None else None
+            command = _MAGIC if target is None else _TAB_MAGIC + f'{target}\n'.encode()
+            s.sendall(command)
             return s.recv(3) == b"ok\n"
     except OSError:
         return False
@@ -77,9 +80,12 @@ class Listener:
                         self.on_activate(None)
                     elif command.startswith(_TAB_MAGIC):
                         value = command[len(_TAB_MAGIC):].strip()
-                        if value in tuple(str(i).encode() for i in range(11)):
-                            conn.sendall(b"ok\n")
-                            self.on_activate(int(value))
+                        try:
+                            target = tool_id(value.decode('ascii'))
+                        except (ValueError, UnicodeError):
+                            continue
+                        conn.sendall(b"ok\n")
+                        self.on_activate(int(value) if value.isdigit() else target)
             except OSError:
                 continue
 

@@ -425,6 +425,18 @@ def dispatch(board, operation, payload):
             _highlights.clear(board, board_items(board))
         return stitch_dispatch(board, operation, payload)
 
+    if operation == 'bom_snapshot':
+        from signal_path_analyzer.bom_cost_native import snapshot
+
+        return snapshot(board)
+
+    if operation.startswith('component_update_'):
+        from signal_path_analyzer.component_update_native import dispatch as update_dispatch
+
+        from .revision import signature
+
+        return update_dispatch(board, operation, payload, lambda: signature(board))
+
     if operation == 'info':
         from signal_path_analyzer import NATIVE_BUILD_ID, __version__
 
