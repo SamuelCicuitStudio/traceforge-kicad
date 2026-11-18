@@ -4,7 +4,7 @@
 
 **PCB analysis, layout reuse, component research and manufacturing tools for KiCad 10. TraceForge 0.18.1 is available for Windows.**
 
-[Download the Windows PCM ZIP](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/download/v0.18.1/TraceForge-0.18.1-KiCad10-PCM.zip) ? [0.18.1 release notes](docs/releases/0.18.1.md) ? [Installation](#install)
+[Get TraceForge 0.18.1 on GitHub Releases](https://github.com/SamuelCicuitStudio/traceforge-kicad/releases/tag/v0.18.1) ? [0.18.1 release notes](docs/releases/0.18.1.md) ? [Installation](#install)
 
 Six workspaces keep the panel compact: **Signals, Layout, Vias, Routing, Components and Manufacturing**. Read live PCB geometry through KiCad's native `pcbnew` bindings, including unsaved routing changes, without IPC configuration. Component research runs in the native panel; CAD conversion and manufacturing spreadsheet export use separately configured helpers.
 
