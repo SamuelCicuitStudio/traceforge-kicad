@@ -23,7 +23,7 @@ from .fanout import (
     world,
 )
 from .fanout_escape import edge_paths, paired_net
-from .stitching_native import fits, outline, point_mm, refill, transaction, uid
+from .stitching_native import fits, outline, point_mm, transaction, uid
 
 _preview = None
 
@@ -579,7 +579,11 @@ def dispatch(board, operation, payload):
     def apply(live):
         for item in created:
             live.Add(item)
-        refill(live)
+        # A full copper-zone refill can take minutes on a large board and is not
+        # necessary to place or connect the new track/via items.  Preserve the
+        # existing fills; KiCad can refill explicitly with B when the user is
+        # ready to run DRC/export.
+        live.BuildConnectivity()
         conn = live.GetConnectivity()
         if any(not any(uid(item) == uid(via) for item in conn.GetConnectedItems(pad))
                for pad, via in source_pairs):
@@ -595,6 +599,7 @@ def dispatch(board, operation, payload):
                 raise RuntimeError('BGA edge route is not connected to its via.')
         journal(live, current['footprint'], created, current['settings'])
         return dict(pads=len(current['accepted']), items=len(created),
-                    escaped=len(escape_pairs), rejected=len(current['rejected']))
+                    escaped=len(escape_pairs), rejected=len(current['rejected']),
+                    zones_refilled=False)
 
     return transaction(board, apply)

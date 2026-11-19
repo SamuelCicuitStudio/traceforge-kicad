@@ -76,7 +76,11 @@ class FanoutPanel(wx.Panel):
                                      'or its pads in PCB Editor.')
         top.Add(self.summary, 1, wx.ALIGN_CENTER_VERTICAL)
         outer.Add(top, 0, wx.EXPAND | wx.ALL, 8)
-        self.fit = wx.StaticText(self, label='Fit guidance appears after Analyze selection.')
+        self.fit = wx.StaticText(
+            self,
+            label=('Scope: fanout ends at the selected BGA pad-field edge only. '
+                   'It does not route outside the BGA, to connectors, or across the board.'),
+        )
         outer.Add(self.fit, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         body = wx.BoxSizer(wx.HORIZONTAL)
         form = wx.FlexGridSizer(cols=2, vgap=6, hgap=8)
@@ -158,8 +162,11 @@ class FanoutPanel(wx.Panel):
                                            ('Track / preferred mm', 170))):
             self.rows.InsertColumn(i, label, width=width)
         outer.Add(self.rows, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
-        self.status = wx.StaticText(self, label='Dogbone/via-in-pad breakouts or bounded '
-                                    'single-ended escape to the BGA edge. No pair matching.')
+        self.status = wx.StaticText(
+            self,
+            label=('Dogbone/via-in-pad breakouts or bounded single-ended escape to the '
+                   'BGA pad-field edge only. Outside-BGA routing is manual. No pair matching.'),
+        )
         outer.Add(self.status, 0, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(outer)
         for control in (self.mode, self.source):
@@ -366,7 +373,8 @@ class FanoutPanel(wx.Panel):
             unit = 'escaped routes' if placed['escaped'] else 'pad-to-via breakouts'
             self.message(f"Placed {placed['pads']} {unit}. "
                          'Undo is available in KiCad. '
-                         'Run KiCad DRC and save normally.', 'ok')
+                         'Zones were not refilled; press B when ready, then run KiCad DRC and save.',
+                         'ok')
 
         self.task(work, done)
 

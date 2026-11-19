@@ -173,11 +173,23 @@ def dispatch(board, operation, payload):
     if operation == 'via_array_preview':
         chosen = _selected(board)
         layout = arrange(_snapshot(chosen), payload['fixed_axis'], payload['fixed_count'])
-        issues, old_layers = _check(board, chosen, layout)
+        ignore_drc = payload.get('ignore_drc', False) is True
+        # Preserve the geometry preview, but do not make TraceForge's own
+        # clearance/contact guard a blocker when the operator deliberately asks
+        # to resolve it later with KiCad DRC.
+        try:
+            issues, old_layers = _check(board, chosen, layout)
+        except ValueError as exc:
+            if not ignore_drc:
+                raise
+            # Keep the proposed grid visible; applying in override mode leaves
+            # the complete rule decision to KiCad's later DRC run.
+            issues, old_layers = ([(row['uuid'], str(exc)) for row in layout['moves']], {})
         token = secrets.token_hex(12)
         _preview = dict(board=board.GetFileName(), selected=_snapshot(chosen),
                         fixed_axis=payload['fixed_axis'], fixed_count=payload['fixed_count'],
-                        layout=layout, issues=issues, old_layers=old_layers, token=token)
+                        layout=layout, issues=issues, old_layers=old_layers, token=token,
+                        ignore_drc=ignore_drc)
         return dict(token=token, count=len(chosen), net=next(iter(chosen.values())).GetNetname(),
                     rows=layout['rows'], columns=layout['columns'],
                     inferred=layout.get('inferred', False),
@@ -187,7 +199,8 @@ def dispatch(board, operation, payload):
                     bounds_mm=[v / 1e6 for v in layout['bounds']],
                     moves=[dict(uuid=row['uuid'], old=[v / 1e6 for v in row['old']],
                                 new=[v / 1e6 for v in row['new']]) for row in layout['moves']],
-                    issues=issues, accepted=not issues)
+                    issues=issues, accepted=ignore_drc or not issues,
+                    ignore_drc=ignore_drc)
     if operation != 'via_array_apply':
         raise ValueError('Unsupported via array operation.')
     saved = _preview
@@ -198,8 +211,12 @@ def dispatch(board, operation, payload):
     if _snapshot(chosen) != saved['selected']:
         raise ValueError('The selected vias moved or changed. Preview again.')
     layout = arrange(_snapshot(chosen), saved['fixed_axis'], saved['fixed_count'])
-    issues, old_layers = _check(board, chosen, layout)
-    if layout != saved['layout'] or issues or issues != saved['issues']:
+    if saved.get('ignore_drc'):
+        issues, old_layers = saved['issues'], saved['old_layers']
+    else:
+        issues, old_layers = _check(board, chosen, layout)
+    if (layout != saved['layout'] or
+            (not saved.get('ignore_drc') and (issues or issues != saved['issues']))):
         raise ValueError('The board or clearance result changed. Preview again.')
     moves = [row for row in layout['moves'] if row['old'] != row['new']]
     if not moves:
@@ -212,11 +229,14 @@ def dispatch(board, operation, payload):
         # Leave zone refill to the user, as with an ordinary interactive move.
         live.BuildConnectivity()
         conn = live.GetConnectivity()
-        if any(not all(conn.IsConnectedOnLayer(current[row['uuid']], layer)
-                       for layer in old_layers[row['uuid']]) for row in moves):
+        if (not saved.get('ignore_drc') and
+                any(not all(conn.IsConnectedOnLayer(current[row['uuid']], layer)
+                            for layer in old_layers[row['uuid']]) for row in moves)):
             raise RuntimeError('Copper contact changed after moving vias.')
         pcbnew.Refresh()
         return dict(moved=len(moves),
-                    message=f'Arranged {len(moves)} vias; Undo restores them.')
+                    message=(f'Arranged {len(moves)} vias; Undo restores them. '
+                             + ('TraceForge clearance guard was ignored; run KiCad DRC.'
+                                if saved.get('ignore_drc') else '')))
 
     return transaction(board, apply)
