@@ -23,9 +23,10 @@ from .fanout import (
     world,
 )
 from .fanout_escape import edge_paths, paired_net
-from .stitching_native import fits, outline, point_mm, transaction, uid
+from .stitching_native import outline, point_mm, transaction, uid
 
 _preview = None
+_OBSTACLE_CELL = 2_000_000  # 2 mm; broad-phase only, exact native tests remain below.
 
 
 def store_path(board):
@@ -147,8 +148,83 @@ def mmvec(point):
     return pcbnew.VECTOR2I(round(point[0] * 1e6), round(point[1] * 1e6))
 
 
-def clear_escape_route(route, layer, width, gap, edge, board_poly, zones,
-                       obstacles, reserved, reserved_routes, ds, net):
+def _obstacle_cells(box, margin):
+    """Yield stable 2 mm broad-phase bins for an inflated KiCad BOX2I."""
+    margin = int(round(margin))
+    left = (box.GetX() - margin) // _OBSTACLE_CELL
+    right = (box.GetRight() + margin) // _OBSTACLE_CELL
+    top = (box.GetY() - margin) // _OBSTACLE_CELL
+    bottom = (box.GetBottom() + margin) // _OBSTACLE_CELL
+    for x in range(left, right + 1):
+        for y in range(top, bottom + 1):
+            yield x, y
+
+
+def _shape_box(shape):
+    if hasattr(shape, 'BBox'):
+        return shape.BBox()
+    # pcbnew.SEG is a lightweight geometry object and does not expose BBox().
+    if hasattr(shape, 'A') and hasattr(shape, 'B'):
+        a, b = shape.A, shape.B
+        return pcbnew.BOX2I(
+            pcbnew.VECTOR2I(min(a.x, b.x), min(a.y, b.y)),
+            pcbnew.VECTOR2I(abs(a.x - b.x), abs(a.y - b.y)),
+        )
+    raise TypeError('Unsupported fanout boundary shape')
+
+
+def _nearby_obstacles(index, box):
+    """Return each indexed obstacle once; the caller still makes exact checks."""
+    found, seen = [], set()
+    for key in _obstacle_cells(box, 0):
+        for entry in index.get(key, ()):
+            identity = entry[0]
+            if identity not in seen:
+                seen.add(identity)
+                found.append(entry)
+    return found
+
+
+def _boundary_index(poly, margin):
+    """Index outline/cutout segments; fanout paths only need nearby boundaries."""
+    index = {}
+    for outline_index in range(poly.OutlineCount()):
+        rings = [poly.Outline(outline_index)] + [
+            poly.Hole(outline_index, hole_index)
+            for hole_index in range(poly.HoleCount(outline_index))
+        ]
+        for ring in rings:
+            for segment_index in range(ring.SegmentCount()):
+                segment = ring.CSegment(segment_index)
+                a, b = segment.A, segment.B
+                box = pcbnew.BOX2I(
+                    pcbnew.VECTOR2I(min(a.x, b.x), min(a.y, b.y)),
+                    pcbnew.VECTOR2I(abs(a.x - b.x), abs(a.y - b.y)),
+                )
+                for cell in _obstacle_cells(box, margin):
+                    index.setdefault(cell, []).append(segment)
+    return index
+
+
+def _clear_of_boundary(index, shape, setback):
+    """Exact distance test against only outline/cutout segments near *shape*."""
+    seen = set()
+    point = isinstance(shape, pcbnew.VECTOR2I)
+    box = pcbnew.BOX2I(shape, pcbnew.VECTOR2I(0, 0)) if point else _shape_box(shape)
+    for cell in _obstacle_cells(box, 0):
+        for segment in index.get(cell, ()):
+            key = (segment.A.x, segment.A.y, segment.B.x, segment.B.y)
+            if key in seen:
+                continue
+            seen.add(key)
+            distance = segment.Distance(shape)
+            if distance < setback or (point and distance == setback):
+                return False
+    return True
+
+
+def clear_escape_route(route, layer, width, gap, edge, board_poly, boundary_index,
+                       zones, obstacle_index, reserved, reserved_routes, ds, net):
     """Check every proposed segment against copper, holes, zones and board edges."""
     segments = []
     for start, finish in zip(route, route[1:]):
@@ -157,13 +233,12 @@ def clear_escape_route(route, layer, width, gap, edge, board_poly, zones,
             continue
         shape = pcbnew.SHAPE_SEGMENT(a, b, round(width * 1e6))
         limit = round(width * 5e5 + edge)
-        if not fits(board_poly, a, limit) or not fits(board_poly, b, limit):
+        if (not board_poly.Contains(a, -1, 0, True) or
+                not board_poly.Contains(b, -1, 0, True) or
+                not _clear_of_boundary(boundary_index, a, limit) or
+                not _clear_of_boundary(boundary_index, b, limit)):
             return None
-        if any(ring.CSegment(k).Distance(pcbnew.SEG(a, b)) < limit
-               for i in range(board_poly.OutlineCount())
-               for ring in [board_poly.Outline(i)] +
-               [board_poly.Hole(i, j) for j in range(board_poly.HoleCount(i))]
-               for k in range(ring.SegmentCount())):
+        if not _clear_of_boundary(boundary_index, pcbnew.SEG(a, b), limit):
             return None
         bbox = shape.BBox()
         for zone in zones:
@@ -176,7 +251,7 @@ def clear_escape_route(route, layer, width, gap, edge, board_poly, zones,
                     raise ValueError('Refill copper zones before previewing BGA escape.')
                 if zone.GetFilledPolysList(layer).Collide(shape, gap):
                     return None
-        for _, box, shapes, other_gap, hole in obstacles:
+        for _, box, shapes, other_gap, hole in _nearby_obstacles(obstacle_index, bbox):
             clearance = max(gap, other_gap, ds.m_HoleClearance)
             if (box.GetRight() + clearance < bbox.GetX() or
                     box.GetX() - clearance > bbox.GetRight() or
@@ -244,7 +319,15 @@ def plan(board, request):
     pads = {uid(p): p for p in fp.Pads()}
     # Bound the initial implementation: broad-phase bounding boxes prune exact native
     # shape collision tests, including existing tracks/vias and all footprint pads.
-    items = list(board.GetTracks()) + list(board.Drawings())
+    # Snapshot native collections once.  Calling board.GetTracks() inside the
+    # pad loop materializes every track again for every ball on a large BGA.
+    # That was the dominant source of UI stalls (256 balls × whole-board tracks).
+    tracks = list(board.GetTracks())
+    via_at_pad = {
+        (track.GetNetname(), track.GetPosition().x, track.GetPosition().y)
+        for track in tracks if isinstance(track, pcbnew.PCB_VIA)
+    }
+    items = tracks + list(board.Drawings())
     for other in board.GetFootprints():
         items.extend(other.Pads())
         items.extend(other.GraphicalItems())
@@ -272,12 +355,38 @@ def plan(board, request):
                 shape.Append(x, y)
             shapes = dict.fromkeys(active, shape)
         obstacles.append((uid(item), box, shapes, clearance, hole))
+    # Index obstacles once for local BGA work.  A pad-to-via breakout can only
+    # collide with copper/hole geometry close to its short segment, yet the old
+    # code checked every pad, track and drawing on the entire board for every
+    # candidate.  Inflate each bin by the largest possible exact-test margin so
+    # this is only a broad-phase performance filter, never a clearance shortcut.
+    max_clearance = max([ds.m_MinClearance, ds.m_HoleClearance, ds.m_HoleToHoleMin,
+                         round(values['clearance'] * 1e6)] +
+                        [entry[3] for entry in obstacles])
+    max_via_radius = round(max(
+        [values['diameter'] * 5e5] +
+        [rule.get('diameter', values['diameter']) * 5e5
+         for rule in data['net_rules'].values()]
+    ))
+    obstacle_margin = max_via_radius + max_clearance + max(ds.m_HoleClearance,
+                                                             ds.m_HoleToHoleMin)
+    obstacle_index = {}
+    for entry in obstacles:
+        for cell in _obstacle_cells(entry[1], obstacle_margin):
+            obstacle_index.setdefault(cell, []).append(entry)
+    max_track_half = round(max(
+        [values['width'] * 5e5] +
+        [rule.get('width', values['width']) * 5e5
+         for rule in data['net_rules'].values()]
+    ))
+    boundary_index = _boundary_index(board_poly, edge + max(max_via_radius, max_track_half))
     zones = list(board.Zones())
     accepted, skipped, rejected, reserved = [], [], [], []
     breakout_only, already_routed, reserved_routes = [], [], []
     grid = data['grid']
     # Inner balls first, with deterministic ordering and outward-preferred sites.
     ordered = sorted(data['pads'], key=lambda p: pad_order(p, grid, values))
+    connectivity = board.GetConnectivity()
     for pad in ordered:
         cancel()
         if time.monotonic() - started > 15:
@@ -297,10 +406,8 @@ def plan(board, request):
             continue
         live_pad = pads[pad['id']]
         # Do not duplicate existing routed stubs; zone-only contact does not imply a stub.
-        connected = board.GetConnectivity()
-        if (connected.GetConnectedTracks(live_pad) or
-            any(isinstance(t, pcbnew.PCB_VIA) and t.GetNetname() == net and
-                t.GetPosition() == live_pad.GetPosition() for t in board.GetTracks())):
+        if (connectivity.GetConnectedTracks(live_pad) or
+                (net, live_pad.GetPosition().x, live_pad.GetPosition().y) in via_at_pad):
             destination = already_routed if values['mode'] == 'auto-escape' else skipped
             destination.append(dict(pad=pad['number'], position=pad['position'],
                                     reason='already routed; existing escape not verified'))
@@ -330,16 +437,16 @@ def plan(board, request):
             drill_circle = pcbnew.SHAPE_CIRCLE(end, round(drill * 5e5))
             segment = pcbnew.SHAPE_SEGMENT(pad_start, end, round(width * 1e6))
             why = None
-            if not fits(board_poly, end, radius + edge):
+            if (not board_poly.Contains(end, -1, 0, True) or
+                    not _clear_of_boundary(boundary_index, end, radius + edge)):
                 why = 'board edge / cutout'
-            elif not fits(board_poly, pad_start, round(width * 5e5 + edge)):
+            elif (not board_poly.Contains(pad_start, -1, 0, True) or
+                  not _clear_of_boundary(boundary_index, pad_start,
+                                          round(width * 5e5 + edge))):
                 why = 'track edge / cutout'
             # Test the entire thick segment against every boundary, including holes.
-            elif any(ring.CSegment(k).Distance(pcbnew.SEG(pad_start, end)) < width * 5e5 + edge
-                     for i in range(board_poly.OutlineCount())
-                     for ring in [board_poly.Outline(i)] + [board_poly.Hole(i, j)
-                                 for j in range(board_poly.HoleCount(i))]
-                     for k in range(ring.SegmentCount())):
+            elif not _clear_of_boundary(
+                    boundary_index, pcbnew.SEG(pad_start, end), width * 5e5 + edge):
                 why = 'track edge / cutout'
             for zone in zones:
                 if why:
@@ -359,7 +466,8 @@ def plan(board, request):
                             why = 'other-net zone copper'
                             break
             bbox = segment.BBox()
-            for identity, box, shapes, other_gap, hole in obstacles:
+            for identity, box, shapes, other_gap, hole in _nearby_obstacles(
+                    obstacle_index, segment.BBox()):
                 if why:
                     break
                 clearance = max(gap, other_gap)
@@ -409,8 +517,8 @@ def plan(board, request):
                 for local_path in edge_paths(location, grid):
                     route = [world(p, data['position'], data['angle']) for p in local_path]
                     route_shapes = clear_escape_route(
-                        route, escape_layer, width, gap, edge, board_poly, zones,
-                        obstacles, reserved, reserved_routes, ds, net)
+                        route, escape_layer, width, gap, edge, board_poly, boundary_index, zones,
+                        obstacle_index, reserved, reserved_routes, ds, net)
                     if route_shapes:
                         row.update(route=route, edge_endpoint=route[-1],
                                    escape_layer=values['escape_layer'], status='escaped')

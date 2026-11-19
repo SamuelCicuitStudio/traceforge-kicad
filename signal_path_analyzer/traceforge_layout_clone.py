@@ -672,6 +672,10 @@ def _is_same_live_record(old, new) -> bool:
     )
 
 
+# Session ownership only. Verify UUID and geometry before replacing a prior copy.
+_grid_assets = {}
+
+
 def _apply_to_board(board, payload, prepared_jobs=None):
     import pcbnew
 
@@ -699,7 +703,8 @@ def _apply_to_board(board, payload, prepared_jobs=None):
             for fp in board.GetFootprints()
             if hierarchy.path_parts(fp.GetPath().AsString())[: len(root)] == root
         }
-        if not root or live_ids != set(ids):
+        if not root or (not set(ids) <= live_ids if prepared_jobs is not None
+                        else live_ids != set(ids)):
             raise ValueError("Target sheet membership changed. Preview again.")
     current = _snapshot(board, fps)
     current.update(
@@ -744,22 +749,33 @@ def _apply_to_board(board, payload, prepared_jobs=None):
     # a disposable BOARD unsafe to attach to the live BOARD.  All native object
     # creation therefore happens only inside the one live undo transaction below.
     removal_ids = {_uuid(item) for item in removals}
+    ownership_key = (str(board.GetFileName()), tuple(sorted(ids)))
+    if prepared_jobs is not None:
+        recorded = _grid_assets.get(ownership_key, {})
+        for item in assets._objects(board):
+            identity = _uuid(item)
+            if identity in recorded and assets._native_key(item) == recorded[identity]:
+                if item.IsLocked():
+                    raise ValueError("A previously cloned asset is locked. Unlock it before recloning.")
+                removal_ids.add(identity)
     changes = plan["pairs"] if mode != "routing" else []
 
     # Edit only inside KiCad's native undo transaction.  This deliberately means
     # clearance is checked after local tracks/vias are removed and placements are
     # applied, so it sees exactly the geometry that will be committed.  Any error
     # is handled by transaction() as one Undo operation.
-    def job(live):
-        live_tracks = {_uuid(item): item for item in live.GetTracks()}
+    def remove_old(live):
+        live_items = {_uuid(item): item for item in assets._objects(live)}
         for item_id in removal_ids:
-            item = live_tracks.get(item_id)
+            item = live_items.get(item_id)
             if item is not None:
                 # Tracks/vias are native board-list members.  KiCad 10 can leave
                 # BOARD.GetTracks() non-iterable after generic Remove() on a
                 # large board; RemoveNative keeps the native undo/container
                 # ownership coherent for the rest of this transaction.
                 live.RemoveNative(item)
+
+    def move(live):
         refreshed = {_uuid(fp): fp for fp in live.GetFootprints()}
         for entry in changes:
             fp = refreshed[entry["target_id"]]
@@ -789,6 +805,8 @@ def _apply_to_board(board, payload, prepared_jobs=None):
                     field.SetTextSize(pcbnew.VECTOR2I(*(pcbnew.FromMM(v) for v in style["size"])))
                     field.SetAutoThickness(False)
                     field.SetTextThickness(pcbnew.FromMM(style["thickness"]))
+    def place(live):
+        refreshed = {_uuid(fp): fp for fp in live.GetFootprints()}
         # assets.prepare() duplicates into *live*; never retain native objects
         # made by a temporary BOARD beyond that board's lifetime.
         additions = assets.prepare(live, template, current, plan, mode, graphics)
@@ -809,15 +827,21 @@ def _apply_to_board(board, payload, prepared_jobs=None):
         return dict(
             moved=len(changes),
             cloned_assets=len(additions),
-            removed_routing=len(removals),
+            removed_routing=len(removal_ids),
             asset_counts=dict(Counter(assets.category(a) for a in additions)),
             anchor=plan["anchor"],
             distance=[rmm(n) for n in plan["delta"]],
+            ownership={_uuid(item): assets._native_key(item) for item in additions}
+            if prepared_jobs is not None else {},
         )
 
     if prepared_jobs is not None:
-        prepared_jobs.append(job)
+        prepared_jobs.append((remove_old, move, place, ownership_key))
         return dict(pairs=plan["pairs"])
+    def job(live):
+        remove_old(live)
+        move(live)
+        return place(live)
     return transaction(board, job)
 
 
@@ -902,16 +926,24 @@ def clone_grid(board, payload):
         )
         _apply_to_board(board, request, prepared_jobs=jobs)
     def apply(live):
-        results = [job(live) for job in jobs]
+        for remove_old, _, _, _ in jobs:
+            remove_old(live)
+        for _, move, _, _ in jobs:
+            move(live)
+        results = [place(live) for _, _, place, _ in jobs]
         refill(live)
         pcbnew.Refresh()
         return dict(
             instances=len(results),
             moved=sum(r["moved"] for r in results),
             cloned_assets=sum(r["cloned_assets"] for r in results),
+            ownership=[r["ownership"] for r in results],
         )
 
-    return transaction(board, apply)
+    result = transaction(board, apply)
+    for (_, _, _, key), ownership in zip(jobs, result.pop("ownership")):
+        _grid_assets[key] = ownership
+    return result
 
 
 def dispatch(board, operation: str, payload: dict):

@@ -11,7 +11,7 @@ class FanoutPreview(wx.Panel):
         super().__init__(parent)
         self.data, self.preview = None, None
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.SetMinSize((300, 240))
+        self.SetMinSize((180, 120))
         self.Bind(wx.EVT_PAINT, self.paint)
         self.Bind(wx.EVT_SIZE, lambda event: (self.Refresh(), event.Skip()))
 
@@ -83,18 +83,20 @@ class FanoutPanel(wx.Panel):
         )
         outer.Add(self.fit, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         body = wx.BoxSizer(wx.HORIZONTAL)
+        settings = wx.ScrolledWindow(self, style=wx.VSCROLL | wx.TAB_TRAVERSAL)
+        settings.SetScrollRate(0, self.FromDIP(16))
         form = wx.FlexGridSizer(cols=2, vgap=6, hgap=8)
-        self.mode = wx.Choice(self, choices=['Dogbone via in adjacent gap',
+        self.mode = wx.Choice(settings, choices=['Dogbone via in adjacent gap',
                                              'Via-in-pad', 'Auto escape to BGA edge'])
         self.mode.SetSelection(0)
-        self.source = wx.Choice(self, choices=['Active board preset', 'Netclass per net', 'Custom'])
+        self.source = wx.Choice(settings, choices=['Active board preset', 'Netclass per net', 'Custom'])
         self.source.SetSelection(0)
-        self.escape_layer = wx.Choice(self, choices=['B.Cu'])
+        self.escape_layer = wx.Choice(settings, choices=['B.Cu'])
         self.escape_layer.SetSelection(0)
         self.escape_layer.Disable()
         for label, control in (('Method', self.mode), ('Via size source', self.source),
                                ('Auto escape layer', self.escape_layer)):
-            form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+            form.Add(wx.StaticText(settings, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
             form.Add(control, 1, wx.EXPAND)
         self.fields = {}
         for key, label, value in (('diameter', 'Via diameter (mm)', '.6'),
@@ -110,33 +112,35 @@ class FanoutPanel(wx.Panel):
                                   ('include', 'Include nets; comma-separated globs', '*'),
                                   ('exclude', 'Exclude nets; comma-separated globs', ''),
                                   ('pads', 'Pad numbers; comma-separated globs', '*')):
-            control = wx.TextCtrl(self, value=value)
+            control = wx.TextCtrl(settings, value=value)
             self.fields[key] = control
-            form.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+            form.Add(wx.StaticText(settings, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
             form.Add(control, 1, wx.EXPAND)
             control.Bind(wx.EVT_TEXT, self.settings_changed)
         form.AddGrowableCol(1)
         left = wx.BoxSizer(wx.VERTICAL)
         left.Add(form, 0, wx.EXPAND)
-        self.netclass_width = wx.CheckBox(self, label='Respect netclass track widths')
+        self.netclass_width = wx.CheckBox(settings, label='Respect netclass track widths')
         self.netclass_width.SetValue(True)
-        self.adaptive_width = wx.CheckBox(self, label='Allow local neck-down below preferred width')
+        self.adaptive_width = wx.CheckBox(settings, label='Allow local neck-down below preferred width')
         self.adaptive_width.SetToolTip(
             'Try netclass width first, then narrower local escapes down to the larger of '
             'this minimum and the board minimum. Clearance and vias stay fixed. '
             'Review power-current capacity and custom rules with DRC.')
         self.route_order = wx.Choice(
-            self, choices=['Signals first', 'Inner balls first', 'Power first'])
+            settings, choices=['Signals first', 'Inner balls first', 'Power first'])
         self.route_order.SetSelection(0)
         self.route_order.Bind(wx.EVT_CHOICE, self.settings_changed)
-        left.Add(wx.StaticText(self, label='Routing order (power net patterns above)'),
+        left.Add(wx.StaticText(settings, label='Routing order (power net patterns above)'),
                  0, wx.TOP, 8)
         left.Add(self.route_order, 0, wx.EXPAND)
         left.Add(self.adaptive_width, 0, wx.TOP, 8)
-        self.allow_via_in_pad = wx.CheckBox(self, label='Fabrication supports via-in-pad')
+        self.allow_via_in_pad = wx.CheckBox(settings, label='Fabrication supports via-in-pad')
         left.Add(self.netclass_width, 0, wx.TOP, 8)
         left.Add(self.allow_via_in_pad, 0, wx.TOP, 8)
-        body.Add(left, 0, wx.ALL, 8)
+        settings.SetSizer(left)
+        settings.SetMinSize((left.CalcMin().width + self.FromDIP(24), self.FromDIP(120)))
+        body.Add(settings, 0, wx.EXPAND | wx.ALL, 8)
         self.canvas = FanoutPreview(self)
         body.Add(self.canvas, 1, wx.EXPAND | wx.ALL, 8)
         outer.Add(body, 1, wx.EXPAND)
@@ -156,7 +160,8 @@ class FanoutPanel(wx.Panel):
         self.remove.Bind(wx.EVT_BUTTON, self.on_remove)
         bar.Add(self.remove, 0, wx.LEFT, 5)
         outer.Add(bar, 0, wx.ALL, 8)
-        self.rows = wx.ListCtrl(self, style=wx.LC_REPORT, size=(-1, 140))
+        self.rows = wx.ListCtrl(self, style=wx.LC_REPORT)
+        self.rows.SetMinSize((-1, self.FromDIP(85)))
         for i, (label, width) in enumerate((('Pad', 70), ('Net', 220),
                                            ('Status / reason', 340), ('Via / drill mm', 140),
                                            ('Track / preferred mm', 170))):
@@ -177,7 +182,8 @@ class FanoutPanel(wx.Panel):
         if host.dark:
             self.rows.SetBackgroundColour('#19212D')
             self.rows.SetForegroundColour('#E5EDF8')
-            for child in self.GetChildren():
+            settings.SetBackgroundColour('#222C3A')
+            for child in [*self.GetChildren(), *settings.GetChildren()]:
                 if isinstance(child, (wx.StaticText, wx.CheckBox)):
                     child.SetForegroundColour('#E5EDF8')
         self.update_size()
