@@ -124,6 +124,15 @@ class ViaArrayPanel(wx.Panel):
         calculate = wx.Button(self, label='Preview array')
         calculate.Bind(wx.EVT_BUTTON, self.on_preview)
         bar.Add(calculate, 0, wx.RIGHT, 8)
+        self.ignore_drc = wx.CheckBox(self, label='Ignore DRC / clearance checks')
+        self.ignore_drc.SetValue(False)
+        self.ignore_drc.SetToolTip(
+            'Allow Apply even when TraceForge finds a clearance, edge, keepout, or copper '
+            'contact issue. This does not change KiCad design rules or disable KiCad DRC; '
+            'run KiCad DRC after applying.'
+        )
+        self.ignore_drc.Bind(wx.EVT_CHECKBOX, self.invalidate)
+        bar.Add(self.ignore_drc, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         self.apply = wx.Button(self, label='Apply to PCB')
         self.apply.Disable()
         self.apply.Bind(wx.EVT_BUTTON, self.on_apply)
@@ -220,7 +229,7 @@ class ViaArrayPanel(wx.Panel):
                 f"{detected}: {result['count']} vias | {result['rows']} rows × "
                 f"{result['columns']} columns | "
                 f"X {result['pitch_x_mm']:.3f} mm, Y {result['pitch_y_mm']:.3f} mm center spacing")
-            if result['issues']:
+            if result['issues'] and not result.get('ignore_drc', False):
                 reasons = sorted({reason for _identity, reason in result['issues']})
                 blocked = len({identity for identity, _reason in result['issues']})
                 self.message(
@@ -229,10 +238,16 @@ class ViaArrayPanel(wx.Panel):
                     '. Connected tracks or pads may need rerouting first.', 'warning')
             else:
                 self.apply.Enable()
-                self.message('Array fits the selected rectangle. Click Apply to PCB.', 'ok')
+                if result.get('ignore_drc', False):
+                    self.message(
+                        'DRC / clearance guard ignored for this apply. Review red vias and '
+                        'run KiCad DRC after applying.', 'warning'
+                    )
+                else:
+                    self.message('Array fits the selected rectangle. Click Apply to PCB.', 'ok')
 
         self._call('via_array_preview', done, fixed_axis=axis,
-                   fixed_count=self.count.GetValue())
+                   fixed_count=self.count.GetValue(), ignore_drc=self.ignore_drc.GetValue())
 
     def on_apply(self, event=None):
         if not self.preview or not self.preview['accepted']:
