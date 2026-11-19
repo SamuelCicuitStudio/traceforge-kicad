@@ -68,6 +68,17 @@ def geometry_key(item: dict) -> tuple:
     return (name, str(item["layer"]), tuple(sorted(pads)))
 
 
+def matching_geometry(source, target):
+    source_key, target_key = geometry_key(source), geometry_key(target)
+    if source["layer"] == target["layer"]:
+        return source_key == target_key
+    for item, other_key in ((source, target_key), (target, source_key)):
+        flipped = item.get("flipped_geometry")
+        if flipped and geometry_key(dict(item, **flipped)) == other_key:
+            return True
+    return False
+
+
 def value_key(item: dict) -> str:
     value = str(item.get("value", "")).upper()
     # Functional connector labels identify channel instances, not different parts.
@@ -140,7 +151,7 @@ def index_nets(items: list[dict]):
 
 def compatibility(source: dict, target: dict, src_network=None, dst_network=None) -> int:
     """Compatibility score. INVALID means the physical pad arrangement differs."""
-    if geometry_key(source) != geometry_key(target):
+    if not matching_geometry(source, target):
         return INVALID
     score = 120
     score += 28 if value_key(source) == value_key(target) else -30
@@ -557,10 +568,20 @@ def _snapshot_fp(board, fp):
 
 
 def _snapshot(board, fps):
+    import pcbnew
+
+    items = []
+    for fp in fps:
+        record = _snapshot_fp(board, fp)
+        duplicate = fp.Duplicate(False).Cast()
+        duplicate.Flip(duplicate.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
+        flipped = _snapshot_fp(board, duplicate)
+        record["flipped_geometry"] = dict(layer=flipped["layer"], pads=flipped["pads"])
+        items.append(record)
     return dict(
         format=FORMAT_VERSION,
         board=str(board.GetFileName()),
-        items=[_snapshot_fp(board, fp) for fp in fps],
+        items=items,
     )
 
 
@@ -759,6 +780,11 @@ def _apply_to_board(board, payload, prepared_jobs=None):
                     raise ValueError("A previously cloned asset is locked. Unlock it before recloning.")
                 removal_ids.add(identity)
     changes = plan["pairs"] if mode != "routing" else []
+    source_records = {r["ref"]: r for r in template["items"]}
+    expected_geometry = {
+        pair["target_id"]: geometry_key(source_records[pair["source"]])
+        for pair in changes
+    }
 
     # Edit only inside KiCad's native undo transaction.  This deliberately means
     # clearance is checked after local tracks/vias are removed and placements are
@@ -781,12 +807,14 @@ def _apply_to_board(board, payload, prepared_jobs=None):
             fp = refreshed[entry["target_id"]]
             if fp.IsLocked():
                 raise ValueError("Target footprint became locked: " + entry["target"])
+            source_layer = source_records[entry["source"]]["layer"]
+            if live.GetLayerName(fp.GetLayer()) != source_layer:
+                fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
             # Native FOOTPRINT setters transform all pads and text as a unit.
             # Never alter pad-local (at ...) fields directly.
             fp.SetOrientationDegrees(entry["angle"])
             fp.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(entry["x"]), pcbnew.FromMM(entry["y"])))
         if graphics:
-            source_records = {r["ref"]: r for r in template["items"]}
             for pair in plan["pairs"]:
                 fp = refreshed[pair["target_id"]]
                 for style in source_records[pair["source"]].get("text_layout", []):
@@ -817,7 +845,7 @@ def _apply_to_board(board, payload, prepared_jobs=None):
         for a in current["items"]:
             fp = refreshed[a["id"]]
             now = _snapshot_fp(live, fp)
-            if geometry_key(a) != geometry_key(now):
+            if expected_geometry.get(a["id"], geometry_key(a)) != geometry_key(now):
                 raise RuntimeError(f"Pad geometry/orientation changed: {a['ref']}. Undoing.")
             if _pad_identity(a) != _pad_identity(now):
                 raise RuntimeError(f"Pad identity or net changed: {a['ref']}. Undoing.")
@@ -1450,7 +1478,7 @@ def create_tab(parent, native_call):
             choices = [
                 d["ref"]
                 for d in self.target["items"]
-                if geometry_key(source) == geometry_key(d)
+                if matching_geometry(source, d)
                 and d["ref"] not in {v for k, v in self.overrides.items() if k != source_ref}
             ]
             if not choices:
@@ -1535,6 +1563,7 @@ def create_tab(parent, native_call):
                 self.copper_by_ref = fresh["copper_by_ref"]
                 self._render_plan()
                 if not self.plan["can_apply"]:
+                    self.work_label.SetLabel("Apply blocked")
                     self.message("Cannot apply this selection:\n" + self.status.GetValue())
                     return
                 payload = dict(

@@ -75,11 +75,10 @@ def capture(board, items):
     import pcbnew as k
     chosen = []
     for item in items:
-        if isinstance(item, (k.FOOTPRINT, k.PAD, k.PCB_FIELD, k.PCB_GROUP)):
+        if category(item) is None or item.GetLayer() in (k.Edge_Cuts, k.Margin):
             continue
         if item.GetParentFootprint() is not None:
             continue  # Footprint-owned artwork belongs to the matched footprint.
-        _check_asset(item)
         chosen.append(item)
     if len(chosen) > MAX_ASSETS:
         raise ValueError('Select at most 10000 non-footprint layout items.')
