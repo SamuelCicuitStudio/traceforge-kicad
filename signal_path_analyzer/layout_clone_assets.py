@@ -112,6 +112,8 @@ def capture(board, items):
     if len(text.encode('utf-8')) > MAX_ASSET_BYTES:
         raise ValueError('Selected layout assets exceed 16 MB. Narrow the selection.')
     return dict(native_board=text, counts=dict(Counter(category(i) for i in chosen)),
+                nets=sorted({i.GetNetname().replace('{slash}', '/') for i in chosen
+                             if hasattr(i, 'GetNetname') and i.GetNetname()}),
                 preview=preview_items(chosen))
 
 
@@ -143,7 +145,30 @@ def net_mapping(template, target, plan):
     return mapping
 
 
-def plan_options(template, target, plan, mode, graphics):
+def compatible_net_mapping(template, target, plan):
+    """Require identical numbered-pad membership within the matched group."""
+    source = {item['ref']: item for item in template['items']}
+    dest = {item['ref']: item for item in target['items']}
+    source_nets, target_nets = {}, {}
+    for pair in plan['pairs']:
+        for item, nets in ((source[pair['source']], source_nets),
+                           (dest[pair['target']], target_nets)):
+            for pad in item['pads']:
+                net = pad['net']
+                if net and not net.startswith('unconnected-'):
+                    nets.setdefault(net, set()).add((pair['source'], pad['number']))
+    by_pins = {}
+    for net, pins in target_nets.items():
+        by_pins.setdefault(frozenset(pins), []).append(net)
+    mapping = {}
+    for net, pins in source_nets.items():
+        candidates = by_pins.get(frozenset(pins), ())
+        if len(candidates) == 1 and sum(pins == p for p in source_nets.values()) == 1:
+            mapping[net] = candidates[0]
+    return mapping
+
+
+def plan_options(template, target, plan, mode, graphics, selective=False):
     """Augment the ordinary correspondence preview without editing anything."""
     issues = list(plan['issues'])
     warnings = []
@@ -167,12 +192,20 @@ def plan_options(template, target, plan, mode, graphics):
         if not sum(counts.get(k, 0) for k in ('tracks', 'arcs', 'vias', 'zones')):
             issues.append('No routing recorded. Select source tracks/vias/zones with components, '
                           'then Record.')
-        try:
-            net_mapping(template, target, plan)
-        except ValueError as exc:
-            issues.append(str(exc))
+        if selective:
+            issues = [s for s in issues if not s.startswith('Internal pin connections differ.')]
+            mapping = compatible_net_mapping(template, target, plan)
+            skipped = sorted(set(template.get('assets', {}).get('nets', ())) - mapping.keys())
+            warnings.append('Selective routing copies only nets with matching numbered pads.'
+                            + (' Skipped recorded nets: ' + ', '.join(skipped) if skipped else ''))
+        else:
+            try:
+                net_mapping(template, target, plan)
+            except ValueError as exc:
+                issues.append(str(exc))
     plan = dict(plan, issues=issues, can_apply=bool(plan['pairs']) and not issues,
-                mode=mode, include_graphics=graphics, warnings=warnings)
+                mode=mode, include_graphics=graphics, warnings=warnings,
+                selective=selective and mode != 'placement')
     return plan
 
 
@@ -185,7 +218,7 @@ def transform_point(point, transform):
             round(transform['target'][1] - s*x + c*y, 5)]
 
 
-def prepare(board, template, target, plan, mode, graphics):
+def prepare(board, template, target, plan, mode, graphics, skipped=None):
     """Validate and translate clones in memory before the edit transaction."""
     import pcbnew as k
     asset_data = template.get('assets', {})
@@ -203,8 +236,10 @@ def prepare(board, template, target, plan, mode, graphics):
     objects = _objects(scratch)
     if len(objects) > MAX_ASSETS:
         raise ValueError('Too many native layout assets.')
-    mapping = net_mapping(template, target, plan)
-    target_nets = {n.GetNetname(): n for n in board.GetNetsByNetcode().values()}
+    selective = plan.get('selective', False)
+    mapping = (compatible_net_mapping if selective else net_mapping)(template, target, plan)
+    target_nets = {n.GetNetname().replace('{slash}', '/'): n
+                   for n in board.GetNetsByNetcode().values()}
     transform = plan['transform']
     origin = k.VECTOR2I(*(k.FromMM(n) for n in transform['origin']))
     delta = k.VECTOR2I(*(k.FromMM(transform['target'][i] - transform['origin'][i])
@@ -221,7 +256,11 @@ def prepare(board, template, target, plan, mode, graphics):
         clone = _duplicate(item)
         clone.SetParent(board)
         if hasattr(item, 'GetNetname') and not keepout and (routing or item.GetNetname()):
-            name = str(item.GetNetname())
+            name = str(item.GetNetname()).replace('{slash}', '/')
+            if selective and name not in mapping:
+                if skipped is not None:
+                    skipped[name or '(no net)'] += 1
+                continue
             if not name or name not in mapping or mapping[name] not in target_nets:
                 raise ValueError('Cannot resolve selected copper net through matched pads: ' + name)
             clone.SetNet(target_nets[mapping[name]])

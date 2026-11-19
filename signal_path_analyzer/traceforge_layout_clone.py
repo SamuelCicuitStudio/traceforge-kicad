@@ -757,7 +757,8 @@ def _apply_to_board(board, payload, prepared_jobs=None):
     if mode == "routing":
         # Reclone routing also reapplies source placement before copying copper.
         mode = "both"
-    plan = assets.plan_options(template, current, plan, mode, graphics)
+    plan = assets.plan_options(template, current, plan, mode, graphics,
+                               selective=payload.get("selective") is True)
     if not plan["can_apply"]:
         raise ValueError("Unsafe mapping: " + "; ".join(plan["issues"]))
     changed_fps = [by_id[p["target_id"]] for p in plan["pairs"]]
@@ -837,7 +838,8 @@ def _apply_to_board(board, payload, prepared_jobs=None):
         refreshed = {_uuid(fp): fp for fp in live.GetFootprints()}
         # assets.prepare() duplicates into *live*; never retain native objects
         # made by a temporary BOARD beyond that board's lifetime.
-        additions = assets.prepare(live, template, current, plan, mode, graphics)
+        skipped = Counter()
+        additions = assets.prepare(live, template, current, plan, mode, graphics, skipped)
         if payload.get("check_clearance", True):
             assets.check_copper_clearance(live, additions)
         for item in additions:
@@ -857,6 +859,7 @@ def _apply_to_board(board, payload, prepared_jobs=None):
             cloned_assets=len(additions),
             removed_routing=len(removal_ids),
             asset_counts=dict(Counter(assets.category(a) for a in additions)),
+            skipped_nets=dict(skipped),
             anchor=plan["anchor"],
             distance=[rmm(n) for n in plan["delta"]],
             ownership={_uuid(item): assets._native_key(item) for item in additions}
@@ -959,12 +962,16 @@ def clone_grid(board, payload):
         for _, move, _, _ in jobs:
             move(live)
         results = [place(live) for _, _, place, _ in jobs]
+        skipped = Counter()
+        for result in results:
+            skipped.update(result["skipped_nets"])
         refill(live)
         pcbnew.Refresh()
         return dict(
             instances=len(results),
             moved=sum(r["moved"] for r in results),
             cloned_assets=sum(r["cloned_assets"] for r in results),
+            skipped_nets=dict(skipped),
             ownership=[r["ownership"] for r in results],
         )
 
@@ -1132,7 +1139,8 @@ def create_tab(parent, native_call):
                 self, label="Allow partial matches (unmatched parts untouched)"
             )
             self.allow_values = wx.CheckBox(self, label="Accept different component values")
-            for item in (self.allow_partial, self.allow_values):
+            self.selective = wx.CheckBox(self, label="Copy only compatible routing")
+            for item in (self.allow_partial, self.allow_values, self.selective):
                 flags.Add(item, 0, wx.RIGHT, 22)
                 item.Bind(wx.EVT_CHECKBOX, self.on_option)
             root.Add(flags, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
@@ -1353,6 +1361,7 @@ def create_tab(parent, native_call):
                 self.plan,
                 assets.MODES[self.clone_mode.GetSelection()],
                 self.include_graphics.GetValue(),
+                selective=self.selective.GetValue(),
             )
             rows = self.plan["pairs"]
             self.copper = sum(self.copper_by_ref.get(p["target"], 0) for p in rows)
@@ -1524,6 +1533,7 @@ def create_tab(parent, native_call):
                     include_graphics=self.include_graphics.GetValue(),
                     accept_value_changes=self.allow_values.GetValue(),
                     check_clearance=self.check_clearance.GetValue(),
+                    selective=self.selective.GetValue(),
                 )
                 self.run_native(
                     "Finding replicas, cloning and arranging grid",
@@ -1576,6 +1586,7 @@ def create_tab(parent, native_call):
                     mode=assets.MODES[self.clone_mode.GetSelection()],
                     include_graphics=self.include_graphics.GetValue(),
                     check_clearance=self.check_clearance.GetValue(),
+                    selective=self.selective.GetValue(),
                 )
                 self.run_native(
                     "Cloning layout: validate, copy copper/graphics and refill zones",
@@ -1596,6 +1607,9 @@ def create_tab(parent, native_call):
                 f"Applied {result['moved']} footprints and "
                 f"{result.get('cloned_assets', 0)} layout assets. "
                 "Use KiCad Edit > Undo to revert; run DRC before routing."
+                + ("\nSkipped source copper by net:\n" + "\n".join(
+                    f"{net}: {count}" for net, count in sorted(result["skipped_nets"].items())
+                ) if result.get("skipped_nets") else "")
             )
 
         def on_save(self, _event):

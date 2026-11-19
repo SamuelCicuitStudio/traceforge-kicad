@@ -32,6 +32,11 @@ Read the full saved schematic or live PCB, calculate order quantities with MOQ/m
 
 ### Layout Clone: repeated circuits without hierarchy
 
+For variants such as a master FPGA and its slave replicas, choose **Placement +
+routing** and enable **Copy only compatible routing**. TraceForge copies copper
+whose numbered-pad connections agree within the matched group and reports the
+skipped nets and item counts after Apply. Strict routing matching is the default.
+
 Record a selected group, select its counterpart and preview automatic matching. Copy placement, routing or both, with optional selected graphics/keepouts, rotated targets and net remapping. The interactive preview supports layer selection, before/after, zoom and pan. Apply performs safety checks and uses KiCad Undo.
 
 ![Layout Clone preview using repeated front-board filter components](docs/screenshots/0181-layout-clone.png)
