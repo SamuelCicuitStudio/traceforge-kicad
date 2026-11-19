@@ -166,3 +166,23 @@ the matched footprint rather than separate board graphics.
 Validated on the supplied FPGA PSU selection: 30 footprints, 135 tracks, 43 vias and
 33 copper graphics copied on a disposable board. The default clearance call was
 confirmed blocking; the unchecked option bypassed that call. No user PCB was written.
+
+## Routing clone activity
+
+Record, target selection reads and Apply native requests run off the TraceForge wx thread. A visible ActivityIndicator, phase label and elapsed seconds remain active during native capture, copper/graphics copying and zone refill. Editable clone controls are disabled until the request finishes. KiCad board edits remain on its native editor thread for undo/transaction safety; very large zone refills may still occupy PCB Editor while TraceForge continues displaying activity. A returned result or error stops the indicator and restores controls. Closing the tool prevents late callbacks from touching its destroyed panel.
+
+## Clone all replicas to grid
+
+Record a complete repeated sheet using Repeated sheet instance scope. Set Columns,
+X pitch mm and Y pitch mm, then click **Clone all replicas to grid (Undoable)**.
+The source stays at cell zero; other complete instances with the same relative symbol
+UUID paths and sheet files are ordered by reference and placed row by row. Pitch is
+anchor-to-anchor, not clearance; allow enough room for the source circuit's full size.
+The action supports placement, routing and both, plus the graphics/clearance options.
+Routing modes realign the target placement before copying copper. All replicas are
+applied in one undoable batch edit, followed by one zone refill. Up to 64 total
+instances are supported.
+
+Recloning automatically replaces unlocked tracks/vias on nets whose footprint pads all belong to the matched target group. Placement-only removes that local routing and moves components; routing modes also align source placement and copy the source copper. Shared/interface-net copper is preserved. Locked routing blocks the operation. Removal, placement and replacement share one native undo transaction. TraceForge never saves the live PCB under a temporary name or changes its schematic association during this operation.
+
+Clone all occurrences uses the recorded source, not target selection. Keep the source components/routing/artwork/zones selected after Record and press Clone all occurrences. Matching recorded subsets of repeated sheets is supported; other components remain untouched. Existing target local internal-net routing is replaced automatically. The source snapshot is checked for stale edits before any replicas change.

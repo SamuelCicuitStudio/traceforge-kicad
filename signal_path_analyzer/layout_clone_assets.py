@@ -160,7 +160,7 @@ def plan_options(template, target, plan, mode, graphics):
                abs(dst[p['target_id']]['y'] - p['y']) > .00002 or
                abs((dst[p['target_id']]['angle'] - p['angle'] + 180) % 360 - 180) > .00002]
         if bad:
-            issues.append('Routing only requires matching placement first: ' + ', '.join(bad))
+            pass  # Reclone aligns placement automatically before replacing routing.
     counts = template.get('assets', {}).get('counts', {})
     if mode != 'placement':
         if plan['missing'] or plan['extra']:
@@ -264,7 +264,7 @@ def _native_key(item):
     return ' '.join(value.split())
 
 
-def check_copper_clearance(board, additions, prospective=None):
+def check_copper_clearance(board, additions, prospective=None, ignored=None):
     """Check copied tracks/vias against pads and existing copper before adding them.
 
     This uses native copper shapes, not text/footprint bounding boxes. Zone fill,
@@ -274,7 +274,9 @@ def check_copper_clearance(board, additions, prospective=None):
     copper = [i for i in additions if isinstance(i, k.PCB_TRACK)]
     prospective = prospective or {}
     footprints = [prospective.get(fp.m_Uuid.AsString(), fp) for fp in board.GetFootprints()]
-    obstacles = [*board.GetTracks(), *(pad for fp in footprints for pad in fp.Pads())]
+    ignored = set(ignored or ())
+    obstacles = [i for i in board.GetTracks() if i.m_Uuid.AsString() not in ignored]
+    obstacles += [pad for fp in footprints for pad in fp.Pads()]
     for item in copper:
         for other in [*obstacles, *copper]:
             if item == other or item.GetNetCode() == other.GetNetCode() and item.GetNetCode():
