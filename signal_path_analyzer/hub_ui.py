@@ -63,6 +63,9 @@ class Tools:
     zoom_selection: Callable[[], str] = lambda: "zoom unavailable"
     highlight_groups: Optional[Callable[[list[str]], int]] = None
     routing_configuration: Callable[[], dict] = lambda: {}
+    chain_config: Optional[Callable] = None
+    commit_chains: Optional[Callable] = None
+    find_chains: Optional[Callable] = None
 
 
 class BusyOverlay(wx.Panel):
@@ -274,7 +277,7 @@ class TraceForgePanel(wx.Frame):
                 "ok": "#6EE7A0",
                 "warning": "#FFD166",
                 "error": "#FF8585",
-                "pending": "#A8B4C7",
+                "pending": "#b5b5b5",
                 "routed": "#7DCFFF",
             }
             if self.dark
@@ -295,8 +298,8 @@ class TraceForgePanel(wx.Frame):
         self.notebook = wx.Notebook(self)
         root = wx.Panel(self.notebook)
         if self.dark:
-            root.SetBackgroundColour("#222C3A")
-            root.SetForegroundColour("#E5EDF8")
+            root.SetBackgroundColour("#303030")
+            root.SetForegroundColour("#ededed")
         bar = wx.BoxSizer(wx.HORIZONTAL)
         buttons = (
             ("Highlight chain", self.on_chain),
@@ -321,7 +324,10 @@ class TraceForgePanel(wx.Frame):
         bar.AddStretchSpacer()
         self.active_operation = None
         self.refresh_cancelled = False
-        self.cancel_operation = wx.Button(self, label="Cancel operation", style=wx.BU_EXACTFIT)
+        self.cancel_operation = wx.BitmapButton(
+            self, bitmap=wx.ArtProvider.GetBitmapBundle(wx.ART_CLOSE, wx.ART_BUTTON, (16, 16))
+        )
+        self.cancel_operation.SetName("Cancel operation")
         self.cancel_operation.SetToolTip(
             "Cancel active research, BOM pricing, checks or previews. "
             "An atomic edit finishes safely."
@@ -344,8 +350,8 @@ class TraceForgePanel(wx.Frame):
             ),
         )
         if self.dark:
-            self.tree.SetBackgroundColour("#19212D")
-            self.tree.SetForegroundColour("#E5EDF8")
+            self.tree.SetBackgroundColour("#1b1b1b")
+            self.tree.SetForegroundColour("#ededed")
         right = wx.ALIGN_RIGHT
         columns = (
             ("Group / signal type / chain", 310, wx.ALIGN_LEFT),
@@ -510,16 +516,24 @@ class TraceForgePanel(wx.Frame):
         self._utility = None
         self._normalizing_tool = tool_id
         if self.dark:
-            self.stitching.SetBackgroundColour("#222C3A")
-            self.stitching.SetForegroundColour("#E5EDF8")
+            self.stitching.SetBackgroundColour("#303030")
+            self.stitching.SetForegroundColour("#ededed")
         frame_box = wx.BoxSizer(wx.VERTICAL)
         cancel_bar = wx.BoxSizer(wx.HORIZONTAL)
-        for title, target in [("View", "view"), ("About / Settings", "about")]:
-            utility = wx.Button(self, label=title)
-            utility.Bind(wx.EVT_BUTTON, lambda event, target=target: self.activate_tool(target))
-            cancel_bar.Add(utility, 0, wx.ALL, 4)
+        view_button = wx.Button(self, label="View")
+        view_button.Bind(wx.EVT_BUTTON, lambda event: self.activate_tool("view"))
+        cancel_bar.Add(view_button, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 4)
+        about_button = wx.BitmapButton(
+            self, bitmap=wx.ArtProvider.GetBitmapBundle(wx.ART_INFORMATION, wx.ART_BUTTON, (16, 16))
+        )
+        about_button.SetName("About and settings")
+        about_button.SetToolTip("About and settings")
+        about_button.Bind(wx.EVT_BUTTON, lambda event: self.activate_tool("about"))
+        cancel_bar.Add(about_button, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 4)
         cancel_bar.AddStretchSpacer()
-        cancel_bar.Add(self.cancel_operation, 0, wx.ALL, 4)
+        cancel_bar.Add(self.cancel_operation, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 4)
+        logo = wx.BitmapBundle.FromBitmap(wx.Bitmap(str(icon), wx.BITMAP_TYPE_PNG))
+        cancel_bar.Add(wx.StaticBitmap(self, bitmap=logo), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 4)
         frame_box.Add(cancel_bar, 0, wx.EXPAND)
         frame_box.Add(self.notebook, 1, wx.EXPAND)
         self.activity = BusyOverlay(self, self.dark)
@@ -990,7 +1004,7 @@ class TraceForgePanel(wx.Frame):
         bg = (
             ("#40232C" if self.dark else "#FFF0F1")
             if state == "error"
-            else ("#19212D" if self.dark else "#FFFFFF")
+            else ("#1b1b1b" if self.dark else "#FFFFFF")
         )
         self.tree.SetItemBackgroundColour(item, wx.Colour(bg))
         self.row_states[key] = state
@@ -1210,7 +1224,7 @@ class TraceForgePanel(wx.Frame):
         self.refresh.Disable()
         self.begin_activity("Scanning / working in KiCad...")
         page.message(
-            "Working in KiCad. Large previews and zone refill can take a moment.", "routed"
+            "Working in KiCad. Large previews can take a moment.", "routed"
         )
         # Keep the canvas and findings visible instead of graying out the whole tab.
         # Freeze only editable inputs while a preview is based on their values.
@@ -1427,9 +1441,18 @@ def run(
     app = wx.App(False)
     if kicad_dark_theme() and hasattr(app, "MSWEnableDarkMode"):
         app.MSWEnableDarkMode(1)  # wxWidgets 3.3 DarkMode_Always, matching KiCad's dark theme
-    panel = TraceForgePanel(
-        tools, stitching=stitching, endpoints=endpoints, native_info=native_info
-    )
+    native_panel = None
+
+    def open_native(tab=None):
+        nonlocal native_panel
+        if not native_panel or native_panel.closing:
+            native_panel = TraceForgePanel(
+                tools, stitching=stitching, endpoints=endpoints, native_info=native_info
+            )
+        _bring_front(native_panel, tab)
+        return native_panel
+
+    panel = open_native()
     if start_tab is not None:
         panel.activate_tool(start_tab)
     panel.Show()

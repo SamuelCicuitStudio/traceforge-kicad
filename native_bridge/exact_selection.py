@@ -27,6 +27,25 @@ def replace(board, identities):
     items = live_items(board)
     if any(key not in items or not isinstance(items[key], pcbnew.PCB_VIA) for key in wanted):
         raise ValueError('Via selection changed. Refresh the filters and select again.')
+    selected = _select(items, wanted)
+    if selected != wanted:
+        for item in live_items(board).values():
+            item.ClearSelected()
+        pcbnew.Refresh()
+        raise RuntimeError('KiCad did not select exactly the matching vias. '
+                           'Enable Vias in the PCB Editor Selection Filter and retry. '
+                           'Selection was cleared; no successful count is reported.')
+    return [items[key] for key in sorted(wanted)]
+
+
+def select_cloned_items(board, identities):
+    wanted = set(identities)
+    items = live_items(board)
+    selected = _select(items, wanted & items.keys())
+    return len(selected & wanted), selected == wanted
+
+
+def _select(items, wanted):
     # Remove old parents/groups before adding children/members. KiCad removes
     # child selection when it deselects a parent, so a single refresh can lose it.
     for item in items.values():
@@ -37,15 +56,7 @@ def replace(board, identities):
         items[key].SetSelected()
     # KiCad 10 RebuildAndRefresh updates the native selection container from flags.
     pcbnew.Refresh()
-    selected = {identity(item) for item in pcbnew.GetCurrentSelection()}
-    if selected != wanted:
-        for item in live_items(board).values():
-            item.ClearSelected()
-        pcbnew.Refresh()
-        raise RuntimeError('KiCad did not select exactly the matching vias. '
-                           'Enable Vias in the PCB Editor Selection Filter and retry. '
-                           'Selection was cleared; no successful count is reported.')
-    return [items[key] for key in sorted(wanted)]
+    return {identity(item) for item in pcbnew.GetCurrentSelection()}
 
 
 def dim_other_copper(board, identities):

@@ -16,7 +16,7 @@ class PadComparison(wx.Panel):
 
     def paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
-        dc.SetBackground(wx.Brush("#17202D"))
+        dc.SetBackground(wx.Brush("#1b1b1b"))
         dc.Clear()
         if not self.row or self.row.get("status") != "ready":
             return
@@ -62,8 +62,8 @@ class ComponentUpdatePanel(wx.Panel):
         self.host, self.native = host, native
         self.token, self.rows = None, []
         if host.dark:
-            self.SetBackgroundColour("#222C3A")
-            self.SetForegroundColour("#E5EDF8")
+            self.SetBackgroundColour("#303030")
+            self.SetForegroundColour("#ededed")
         box = wx.BoxSizer(wx.VERTICAL)
         note = wx.StaticText(
             self,

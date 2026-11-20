@@ -27,6 +27,9 @@ class VisualizationPanel(wx.Panel):
     def __init__(self, parent, host, native, board_file):
         super().__init__(parent)
         self.host, self.native = host, native
+        if host.dark:
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         self.sidecar = Path(board_file or 'TraceForge.kicad_pcb').with_suffix(
             '.traceforge-visual.json')
         self.groups, self.individuals, self.nets = [], {}, {}

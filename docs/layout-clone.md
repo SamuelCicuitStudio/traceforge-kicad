@@ -59,7 +59,7 @@ routing. Identical existing asset copies are rejected. The touching-copper guard
 conservative same-net bounding boxes and can require manual adjustment of a nearby route.
 
 Copied tracks/arcs/vias are checked with native copper shapes against foreign-net pads,
-existing tracks and each other. Zones are copied unfilled and refilled after the operation.
+existing tracks and each other. Zones are copied unfilled. Press B in KiCad when ready to refill.
 The native edit transaction supplies one Undo step and rolls back a failed edit. The board
 is not saved automatically. Locked targets block placement changes; routing-only may leave
 locked target components stationary.
@@ -169,7 +169,7 @@ confirmed blocking; the unchecked option bypassed that call. No user PCB was wri
 
 ## Routing clone activity
 
-Record, target selection reads and Apply native requests run off the TraceForge wx thread. A visible ActivityIndicator, phase label and elapsed seconds remain active during native capture, copper/graphics copying and zone refill. Editable clone controls are disabled until the request finishes. KiCad board edits remain on its native editor thread for undo/transaction safety; very large zone refills may still occupy PCB Editor while TraceForge continues displaying activity. A returned result or error stops the indicator and restores controls. Closing the tool prevents late callbacks from touching its destroyed panel.
+Record, target selection reads and Apply native requests run off the TraceForge wx thread. The activity indicator, phase label and elapsed time stay visible while KiCad processes the request. KiCad board edits run on its editor thread to support Undo. Refill zones manually in KiCad when ready.
 
 ## Clone all replicas to grid
 
@@ -180,7 +180,7 @@ UUID paths and sheet files are ordered by reference and placed row by row. Pitch
 anchor-to-anchor, not clearance; allow enough room for the source circuit's full size.
 The action supports placement, routing and both, plus the graphics/clearance options.
 Routing modes realign the target placement before copying copper. All replicas are
-applied in one undoable batch edit, followed by one zone refill. Up to 64 total
+applied in one undoable batch edit. Up to 64 total
 instances are supported.
 
 Recloning automatically replaces unlocked tracks/vias on nets whose footprint pads all belong to the matched target group. Placement-only removes that local routing and moves components; routing modes also align source placement and copy the source copper. Shared/interface-net copper is preserved. Locked routing blocks the operation. Removal, placement and replacement share one native undo transaction. TraceForge never saves the live PCB under a temporary name or changes its schematic association during this operation.

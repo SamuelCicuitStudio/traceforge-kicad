@@ -12,8 +12,8 @@ class TraceCleanupPanel(wx.Panel):
         self.filling_rows = False
         self.layer_names = {}
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         box = wx.BoxSizer(wx.VERTICAL)
         note = wx.StaticText(self, label='Remove duplicate / fully covered copper without changing '
                              'the copper shape. Dangling endpoints use KiCad connectivity checks.\n'
@@ -58,8 +58,8 @@ class TraceCleanupPanel(wx.Panel):
             selection.Add(button, 0, wx.LEFT, 6)
         box.Add(selection, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.table = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self.table.SetBackgroundColour('#19212D' if host.dark else '#FFFFFF')
-        self.table.SetForegroundColour('#E5EDF8' if host.dark else '#18212E')
+        self.table.SetBackgroundColour('#1b1b1b' if host.dark else '#FFFFFF')
+        self.table.SetForegroundColour('#ededed' if host.dark else '#18212E')
         self.table.EnableCheckBoxes()
         for i, (label, width) in enumerate([('Remove', 70), ('Net', 240), ('Layer', 85),
                                             ('Track length (mm)', 145), ('Finding', 280)]):

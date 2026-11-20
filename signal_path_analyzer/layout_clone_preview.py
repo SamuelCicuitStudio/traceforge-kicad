@@ -152,7 +152,7 @@ def create_preview(parent):
             dc.DrawBitmap(bitmap, 0, 0, False)
 
         def draw(self, dc, size):
-            dc.SetBackground(wx.Brush('#101923'))
+            dc.SetBackground(wx.Brush('#1b1b1b'))
             dc.Clear()
             visible = self.visible()
             points = [point for obj in visible for point in obj['points']]
@@ -186,7 +186,7 @@ def create_preview(parent):
                     draw.SetBrush(wx.Brush('#d2ba65'))
                     radius = max(2, round(obj['width']*scale/2))
                     draw.DrawCircle(pts[0], radius)
-                    draw.SetBrush(wx.Brush('#101923'))
+                    draw.SetBrush(wx.Brush('#1b1b1b'))
                     draw.SetPen(wx.TRANSPARENT_PEN)
                     draw.DrawCircle(pts[0], max(1, round(obj.get('drill', .2)*scale/2)))
                 elif kind == 'text':

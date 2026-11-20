@@ -527,13 +527,6 @@ def commit_pending():
         _pending['error'] = str(exc)
 
 
-def refill(board):
-    board.BuildConnectivity()
-    if list(board.Zones()) and not pcbnew.ZONE_FILLER(board).Fill(board.Zones()):
-        raise RuntimeError('Zone refill did not complete.')
-    board.BuildConnectivity()
-
-
 def remove_members(board, chosen):
     for _, vias in chosen:
         for via in vias:
@@ -638,15 +631,9 @@ def dispatch(board, operation, payload):
         remove_members(live, replace)
         for via in vias:
             live.Add(via)
-        refill(live)
-        # Native connectivity includes thermal spokes; an annulus-only polygon
-        # containment test would incorrectly reject thermally connected vias.
-        layers = list(live.GetEnabledLayers().CuStack())
-        required = len(layers) if values.get('connection') == 'all' else 2
-        connected = live.GetConnectivity()
-        if any(sum(connected.IsConnectedOnLayer(via, layer) for layer in layers) < required
-               for via in vias):
-            raise RuntimeError('Copper connectivity changed after refill; placement rolled back.')
+        # Preview checks existing copper. Final zone connectivity depends on
+        # the user's next KiCad refill.
+        live.BuildConnectivity()
         return dict(id=identity, count=len(vias))
 
     _preview = None  # A mutation token is single-use, including on failure.

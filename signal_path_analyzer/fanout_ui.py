@@ -18,7 +18,7 @@ class FanoutPreview(wx.Panel):
     def paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
         host = self.GetParent().host
-        dc.SetBackground(wx.Brush('#19212D' if host.dark else '#FFFFFF'))
+        dc.SetBackground(wx.Brush('#1b1b1b' if host.dark else '#FFFFFF'))
         dc.Clear()
         if not self.data:
             dc.SetTextForeground(host.colors['pending'])
@@ -65,8 +65,8 @@ class FanoutPanel(wx.Panel):
         super().__init__(parent)
         self.host, self.native, self.data, self.preview = host, native, None, None
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         outer = wx.BoxSizer(wx.VERTICAL)
         top = wx.BoxSizer(wx.HORIZONTAL)
         button = wx.Button(self, label='Analyze PCB selection (F5)')
@@ -180,12 +180,12 @@ class FanoutPanel(wx.Panel):
         for control in (self.netclass_width, self.allow_via_in_pad, self.adaptive_width):
             control.Bind(wx.EVT_CHECKBOX, self.settings_changed)
         if host.dark:
-            self.rows.SetBackgroundColour('#19212D')
-            self.rows.SetForegroundColour('#E5EDF8')
-            settings.SetBackgroundColour('#222C3A')
+            self.rows.SetBackgroundColour('#1b1b1b')
+            self.rows.SetForegroundColour('#ededed')
+            settings.SetBackgroundColour('#303030')
             for child in [*self.GetChildren(), *settings.GetChildren()]:
                 if isinstance(child, (wx.StaticText, wx.CheckBox)):
-                    child.SetForegroundColour('#E5EDF8')
+                    child.SetForegroundColour('#ededed')
         self.update_size()
         self.allow_via_in_pad.Disable()
 

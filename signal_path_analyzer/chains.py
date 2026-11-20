@@ -75,7 +75,10 @@ def selection_paths(group: GroupDef, name: str) -> tuple[tuple[str, ...], tuple[
 
 
 def load_config(path: Path) -> Config:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return config_from_data(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def config_from_data(data: dict) -> Config:
     groups = []
     for gname, g in data["groups"].items():
         chains = tuple(

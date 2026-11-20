@@ -9,8 +9,8 @@ class BoardRotatePanel(wx.Panel):
         super().__init__(parent)
         self.host, self.native = host, native
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(wx.StaticText(self, label='Rotate selected PCB components by an exact angle.'),
                   0, wx.ALL, 10)

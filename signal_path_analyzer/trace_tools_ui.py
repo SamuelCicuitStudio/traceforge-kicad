@@ -14,10 +14,10 @@ class TeardropDiagram(wx.Panel):
     def __init__(self, parent, kind, dark, curved):
         super().__init__(parent, size=(252, 78))
         self.kind, self.curved = kind, curved
-        self.background = wx.Colour('#19212D' if dark else '#F2F6FB')
+        self.background = wx.Colour('#1b1b1b' if dark else '#F2F6FB')
         self.copper = wx.Colour('#E79B45' if dark else '#B8621E')
         self.track = wx.Colour('#79C7E8' if dark else '#146C96')
-        self.text = wx.Colour('#D4DFEB' if dark else '#37485A')
+        self.text = wx.Colour('#D4DFEB' if dark else '#4a4a4a')
         self.SetMinSize((252, 78))
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.Bind(wx.EVT_PAINT, self.on_paint)
@@ -101,8 +101,8 @@ class TeardropPanel(wx.ScrolledWindow):
         self.host, self.native = host, native
         self.running = False
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(wx.StaticText(self, label='Set teardrops here, then Apply to the open PCB. '
                                 'KiCad generates the shapes and provides Undo.'), 0, wx.ALL, 10)
@@ -300,8 +300,8 @@ class FilletPanel(wx.Panel):
         self.host, self.native = host, native
         self.token = None
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(wx.StaticText(self, label='Round existing track corners on every copper layer. '
                                 'TraceForge skips branches, pad/via junctions, locked tracks, '
@@ -430,8 +430,8 @@ class TraceToolsPanel(wx.Panel):
         super().__init__(parent)
         self.host = host
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         outer = wx.BoxSizer(wx.VERTICAL)
         bar = wx.BoxSizer(wx.HORIZONTAL)
         bar.AddStretchSpacer()

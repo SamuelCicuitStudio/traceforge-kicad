@@ -51,11 +51,11 @@ def main(argv=None):
         def __init__(self):
             super().__init__(None, title="TraceForge / Schematic Components", size=(1240, 840))
             self.dark = True
-            self.SetBackgroundColour("#222c3a")
+            self.SetBackgroundColour("#303030")
             outer = wx.BoxSizer(wx.VERTICAL)
             bar = wx.BoxSizer(wx.HORIZONTAL)
             label = wx.StaticText(self, label="Schematic project:")
-            label.SetForegroundColour("#e5edf8")
+            label.SetForegroundColour("#ededed")
             bar.Add(label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
             self.picker = wx.FilePickerCtrl(
                 self,

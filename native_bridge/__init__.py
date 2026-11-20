@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,12 +19,23 @@ if str(ROOT) not in sys.path:
 
 from .python_runtime import panel_python  # noqa: E402
 from .server import start  # noqa: E402
+from signal_path_analyzer import NATIVE_BUILD_ID, __version__  # noqa: E402
 
 
 def launch(script, tab=None):
     board = pcbnew.GetBoard()
     if board is None or not board.GetFileName():
         wx.MessageBox('Open and save a board before launching TraceForge.', 'TraceForge')
+        return
+    try:
+        installed = (ROOT / 'signal_path_analyzer' / '__init__.py').read_text(encoding='utf-8')
+        versions = dict(re.findall(r'^(__version__|NATIVE_BUILD_ID) = "([^"]+)"$', installed, re.M))
+    except OSError as exc:
+        wx.MessageBox(str(exc), 'TraceForge')
+        return
+    if (versions.get('__version__'), versions.get('NATIVE_BUILD_ID')) != (__version__, NATIVE_BUILD_ID):
+        wx.MessageBox('TraceForge was updated while this PCB Editor was open. Save the board '
+                      'and restart this editor to load the installed build.', 'TraceForge')
         return
     if os.name == 'nt':
         from .net_focus import prepare_shortcut

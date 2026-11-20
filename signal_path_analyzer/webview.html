@@ -1,0 +1,1967 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>TraceForge</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#17202c;color:#e6edf6;font:14px "Segoe UI",sans-serif}
+header,nav,main,footer{padding:12px 18px}header,nav,footer{background:#101720}header{font-size:16px;font-weight:650}
+header{position:sticky;top:0;z-index:12;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-right:62px}
+#brand-logo{position:absolute;top:50%;right:16px;transform:translateY(-50%);width:36px;height:36px}
+.button-icon{width:1em;height:1em;vertical-align:-.14em;margin-inline-end:.38em;flex:none}
+small{color:#abb9cc}nav,.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,select,input:not([type=checkbox]){font:inherit;color:inherit;background:#182331;border:1px solid #577090;border-radius:6px;padding:7px}
+button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}button.primary,button[aria-selected=true]{background:#275ba6;border-color:#77a6e9}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #87bbff}
+#workspace-tools{margin-bottom:10px}#workspace-tools button[aria-pressed=true]{background:#275ba6;border-color:#77a6e9}
+h1{font-size:22px;margin:0 0 10px}h2{font-size:15px;margin:0 0 10px}label{display:block;margin:8px 0}input[type=checkbox]{accent-color:#75acff}input[type=number]{width:72px}
+.columns{display:grid;grid-template-columns:minmax(235px,290px) minmax(0,1fr);gap:12px;margin-top:12px}
+section{background:#222e3d;border:1px solid #405168;border-radius:8px;padding:13px;min-width:0}
+canvas{background:#111923;border-radius:6px;width:100%;height:clamp(180px,37vh,480px);display:block;margin:8px 0;touch-action:none}
+pre{color:#b9cbe0;font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}summary{cursor:pointer}.table{max-height:180px;overflow:auto}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px;border-bottom:1px solid #405168}
+footer{position:sticky;bottom:0;border-top:1px solid #405168}.error{color:#ffaaaa}.ok{color:#8be4b2}[hidden]{display:none!important}
+dialog{background:#222e3d;color:inherit;border:1px solid #577090;border-radius:8px;max-width:min(95vw,680px);max-height:90vh}dialog::backdrop{background:#080e17aa}
+#runtime-dialog label input{display:block;width:100%;margin-top:4px}#runtime-dialog{width:min(620px,95vw)}
+#operation{position:fixed;right:16px;bottom:46px;z-index:10;max-width:min(460px,calc(100vw - 32px));box-shadow:0 8px 28px #0008}
+#operation progress{width:100%;height:6px;accent-color:#78adf7}#operation p{margin:.45rem 0;overflow-wrap:anywhere}
+#fanout-settings{max-height:34vh;overflow:auto;padding:4px 8px;border:1px solid #405168;border-radius:6px}
+#fanout-settings label{margin:3px 0}#fanout-map{height:clamp(160px,32vh,340px)}
+.array-maps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.array-maps canvas{height:clamp(100px,24vh,230px)}
+.via-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(265px,35%);gap:16px}
+.via-split canvas{height:clamp(240px,52vh,600px)}
+.via-controls form{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0 8px}
+.via-controls label{min-width:0}
+.via-controls :is(input:not([type=checkbox]),select){max-width:100%}
+.workspace-picker{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:10px}
+.catalog-split{display:grid;grid-template-columns:minmax(155px,19%) minmax(0,1fr);gap:14px}
+.catalog-sidebar :is(input,select){width:100%}
+#bom-total{margin-inline-start:auto}
+@media(max-width:720px){.via-split,.catalog-split{grid-template-columns:1fr}.catalog-sidebar select{height:7rem}}
+:root{color-scheme:dark;--success:#76e0b0;--danger:#ff8787;--warning:#ffd166;--price-missing:#c5a3ff;--unknown:#9acbff}
+:root[data-theme=light]{color-scheme:light;--success:#087547;--danger:#ad2434;--warning:#805900;--price-missing:#633fa1;--unknown:#245a98}
+:root[data-theme=light] body{background:#edf0f4;color:#222a33}
+:root[data-theme=light] :is(header,nav,footer){background:#e0e5eb}
+:root[data-theme=light] :is(section,dialog){background:#fafbfc}
+:root[data-theme=light] :is(button,select,input:not([type=checkbox])){background:#fff;border-color:#8795a5}
+:root[data-theme=light] :is(button.primary,button[aria-selected=true],#workspace-tools button[aria-pressed=true]){background:#285da5;color:#fff;border-color:#285da5}
+:root[data-theme=light] :is(section,dialog,footer,th,td,#fanout-settings){border-color:#b7c1cb}
+:root[data-theme=light] :is(small,pre){color:#455568}
+:root[data-theme=light] .error{color:var(--danger)}
+:root[data-theme=light] .ok{color:var(--success)}
+@media(max-width:720px){.columns{grid-template-columns:1fr}header,nav,main,footer{padding:9px}.settings{order:2}}
+</style>
+<header><span>TraceForge <span id="version"></span></span><button id="open-settings" data-icon-only="info">About and settings</button><button id="cancel" data-icon-only="cancel" disabled>Cancel operation</button><img id="brand-logo" alt="TraceForge logo" hidden></header>
+<nav id="nav" aria-label="Workspaces"></nav>
+<main>
+<div id="workspace-tools" class="actions" aria-label="Workspace tools" hidden></div>
+<div id="components-picker" class="workspace-picker" hidden><label>Components <select id="components-tool"><option value="components.search">Search / details</option><option value="components.assets">Assets / import</option><option value="components.library">Project library</option></select></label><button id="catalog-runtime" title="Configure CAD download and conversion tools">Runtime settings</button></div>
+<div id="manufacturing-picker" class="workspace-picker" hidden><label>Tool <select id="manufacturing-tool"><option value="manufacturing">Manufacturing</option><option value="manufacturing.cost">BOM Cost</option></select></label></div>
+<dialog id="settings-dialog">
+<h2>TraceForge settings</h2>
+<pre id="settings-diagnostics"></pre>
+<p id="settings-error" class="error" aria-live="polite"></p>
+<form id="settings-shortcuts">
+<fieldset id="settings-fields"><legend>Keyboard shortcuts</legend></fieldset>
+<div class="actions"><button type="submit" class="primary">Save shortcuts</button><button type="button" id="settings-close" data-icon-only="cancel">Close settings</button></div>
+</form>
+</dialog>
+<dialog id="runtime-dialog">
+<h2>Component runtime settings</h2>
+<p id="runtime-status" role="status">Paths used to download and convert CAD assets.</p>
+<form id="runtime-form">
+<label>Component-browser folder <input name="browser"></label>
+<label>Node executable <input name="node"></label>
+<label>PCB download-helper scripts folder <input name="helpers"></label>
+<label>Converter Python executable <input name="python"></label>
+<div class="actions"><button type="submit" class="primary">Save runtime paths</button><button type="button" id="runtime-close" data-icon-only="cancel">Close runtime settings</button></div>
+</form>
+</dialog>
+<label id="layout-picker">Layout tool <select id="layout-tool"><option value="layout.clone">Layout Clone</option><option value="layout.references">Auto Text</option><option value="layout.rotate">PCB Rotation</option></select></label>
+<label id="routing-picker" hidden>Routing tool <select id="routing-tool"><option value="routing.fanout">BGA Fanout</option><option value="routing.cleanup">Trace Cleanup</option><option value="routing.corners">Trace Fillets</option><option value="routing.teardrops">Teardrops</option></select></label>
+<label id="vias-picker" hidden>Via tool <select id="vias-tool"><option value="vias.array">Via Array</option><option value="vias.sizes">Via Size Manager</option><option value="vias.inspector">Via-in-Pad Inspector</option><option value="vias.stitching">Via Stitching</option><option value="vias.fencing">Via Fencing</option></select></label>
+<div id="layout">
+<h1>Layout Clone</h1>
+<div class="actions">
+<button data-action="record">1. Record source</button><button data-action="preview">2. Preview target</button>
+<button class="primary" data-action="apply">3. Apply to selected group</button>
+<button id="clone-template-save">Save recorded template</button>
+<button id="clone-template-load">Load template</button>
+</div>
+<div class="columns">
+<section class="settings"><h2>Clone settings</h2>
+<label>Copy <select id="mode"><option value="both">Placement + routing</option><option value="placement">Placement only</option><option value="routing">Routing only</option></select></label>
+<label>Source scope <select id="scope"><option value="selection">Selected items</option><option value="hierarchy">Repeated sheet instance</option></select></label>
+<label>Anchor <select id="anchor"><option value="">Automatic</option></select></label>
+<label><input type="checkbox" id="clearance" checked> Check copper clearance</label>
+<label><input type="checkbox" id="selective"> Copy only compatible routing</label>
+<label><input type="checkbox" id="group_cloned"> Group cloned items</label>
+<label><input type="checkbox" id="graphics"> Include graphics / keepouts</label>
+<details><summary>Advanced matching</summary>
+<label><input type="checkbox" id="partial"> Allow partial matches</label>
+<label><input type="checkbox" id="values"> Accept different values</label>
+<label>Parent sheet levels <input id="parent_levels" type="number" min="0" max="8" value="0"></label>
+</details>
+<details><summary>Repeat in a grid</summary>
+<label>Columns <input id="columns" type="number" min="1" max="32" value="4"></label>
+<label>X pitch (mm) <input id="grid_x" type="number" min=".01" step="any" value="30"></label>
+<label>Y pitch (mm) <input id="grid_y" type="number" min=".01" step="any" value="25"></label>
+<button data-action="grid">Clone all occurrences</button>
+</details>
+</section>
+<section><div class="actions"><h2 style="margin-right:auto">Result preview</h2><select id="layer" aria-label="Layer"><option>All layers</option></select><button id="fit">Fit</button></div>
+<canvas id="canvas" aria-label="PCB layout preview"></canvas>
+<details><summary id="match">Footprint matches</summary>
+<button id="clone-clear-matches">Clear manual assignments</button>
+<div class="table"><table><thead><tr><th>Source</th><th>Target</th><th>Match</th><th>Manual assignment</th></tr></thead><tbody id="pairs"></tbody></table></div></details>
+<pre id="notes" aria-live="polite"></pre></section>
+</div>
+</div>
+<section id="rotate" hidden>
+<h2>PCB Rotation</h2><p>Select footprints in KiCad. Each rotates about its own anchor. Positive angles rotate counterclockwise.</p>
+<div class="actions"><label>Angle (degrees) <input id="rotation" type="number" value="45" min="-360" max="360" step="any"></label>
+<button class="primary" data-action="rotate_apply">Rotate selected footprints</button></div>
+</section>
+<section id="auto-text" hidden>
+<h2>Auto Text</h2><form id="text-settings" class="actions">
+<label>Scope <select name="scope"><option value="selected">Selected footprints</option><option value="all">Entire PCB</option></select></label>
+<label>Layer <select name="target_layer"><option value="keep">Keep current layers</option></select></label>
+<details><summary>Text placement options</summary>
+<div class="actions">
+<label>Clearance (mm) <input type="number" name="clearance" min=".05" max="2" step="any" value=".25"></label>
+<label>Search radius (mm) <input type="number" name="max_distance" min="1" max="30" step="any" value="8"></label>
+<label>Text height (mm, 0 keeps current) <input type="number" name="standard_size" min="0" max="3" step="any" value="1"></label>
+<label>Stroke (mm, 0 keeps current) <input type="number" name="text_thickness" min="0" max=".5" step="any" value=".15"></label>
+<label>Alignment grid (mm, 0 disables) <input type="number" name="grid_mm" min="0" max="1" step="any" value=".25"></label>
+</div>
+<div class="actions">
+<label><input type="checkbox" name="include_values"> Arrange visible values</label>
+<label><input type="checkbox" name="show_hidden_refs"> Show hidden references</label>
+<label><input type="checkbox" name="include_reference_copies" checked> Include reference text copies</label>
+<label><input type="checkbox" name="text_on_locked_footprints"> Text on locked footprints</label>
+<label><input type="checkbox" name="prefer_horizontal" checked> Prefer horizontal text</label>
+<label><input type="checkbox" name="preserve_good" checked> Keep clear nearby labels</label>
+<label><input type="checkbox" name="align_banks" checked> Align repeated rows and columns</label>
+</div></details>
+</form>
+<div class="actions"><button data-action="text_layout_preview">Preview labels</button><button class="primary" data-action="text_layout_apply" id="text-apply" disabled>Apply reviewed changes</button></div>
+<div class="table"><table><thead><tr><th>Reference</th><th>Kind</th><th>State</th><th>Layer</th><th>X / Y / Angle</th><th>Reason</th></tr></thead><tbody id="text-rows"></tbody></table></div>
+</section>
+<section id="signals" hidden>
+<h2>Signal paths</h2>
+<div class="actions">
+<button class="primary" data-action="signals_refresh">Refresh paths</button>
+<button data-action="signals_zoom">Zoom to highlight</button>
+<button data-action="signals_clear">Clear highlight</button>
+<button data-action="signals_export">Export paths</button>
+<button data-action="signals_targets">Write DRC targets</button>
+</div>
+<label>Filter paths <input id="signal-filter" type="search" placeholder="Group, path, or status"></label>
+<div class="actions"><button id="signal-focus-groups" disabled>Highlight checked groups</button>
+<button id="signal-clear-groups" disabled>Clear checked groups</button></div>
+<div class="table"><table><thead><tr><th>Group</th><th>Path</th><th>Status</th><th>Length (mm)</th><th>Delay (ps)</th><th>Target (ps)</th><th>Skew (ps)</th></tr></thead><tbody id="signal-rows"></tbody></table></div>
+<details><summary>Saved stackup and routing geometry</summary><pre id="stackup"></pre>
+<div class="table"><table><thead><tr><th>Profile</th><th>Class</th><th>Type</th><th>Ω</th><th>Layer</th><th>Reference</th><th>Width (mm)</th><th>Gap (mm)</th><th>Source</th></tr></thead><tbody id="geometry-rows"></tbody></table></div></details>
+</section>
+<section id="chain-editor" hidden>
+<h2>xSignal editor</h2>
+<div class="actions"><button data-action="signals_chains_load">Load project definitions</button>
+<button id="chain-add-group">Add group</button>
+<label>Pad-to-die delay (ps/mm) <input id="chain-die" type="number" min="0" step="any" value="6.952"></label>
+<button class="primary" data-action="signals_chains_save" id="chain-save" disabled>Save definitions</button></div>
+<form id="chain-find" class="actions">
+<label>Source references <input name="sources" required placeholder="U6"></label>
+<label>Destination references <input name="destinations" required placeholder="U12, U16"></label>
+<label>Max series resistance (Ω) <input name="ohms" type="number" min="0" step="any" value="100"></label>
+<label><input name="caps" type="checkbox"> Include series capacitors</label>
+<button type="submit">Find paths</button></form>
+<div id="chain-candidates"></div>
+<fieldset id="endpoint-editor"><legend>Routed endpoints</legend>
+<div class="actions">
+<button data-action="signals_endpoint_detect">Detect selected endpoints</button>
+<button data-action="signals_endpoint_pick">Pick two endpoints in KiCad</button>
+<button id="chain-pick-source">Use selected footprints as source</button>
+<button id="chain-pick-destination">Use selected footprints as destination</button>
+<label><input id="endpoint-pair" type="checkbox" checked> Include differential partner</label>
+<label><input id="endpoint-resistors" type="checkbox" checked> Include all series resistors</label>
+</div>
+<div id="endpoint-options"></div>
+<pre id="endpoint-preview" style="white-space:pre-wrap"></pre>
+<div class="actions">
+<label>Group <input id="endpoint-group"></label>
+<label>Path name <input id="endpoint-name"></label>
+<button class="primary" data-action="signals_endpoint_add" id="endpoint-add" disabled>Save reviewed path</button>
+</div></fieldset>
+<div id="chain-groups"></div>
+</section>
+<section id="gaps" hidden>
+<h2>Unrouted connections</h2>
+<div class="actions"><button class="primary" data-action="gaps_scan">Refresh gaps</button>
+<button id="gap-previous" disabled>Previous gap</button><button id="gap-next" disabled>Next gap</button>
+<button data-action="gaps_clear">Clear highlight</button></div>
+<label>Filter <input id="gap-filter" type="search" placeholder="Net, reference or class"></label>
+<label><input id="whole_net" type="checkbox"> Highlight whole net</label>
+<p id="gap-summary">Refresh to scan the current board.</p>
+<div class="table"><table><thead><tr><th>Net</th><th>Status</th><th>From</th><th>To</th><th>Gap (mm)</th><th>Netclass</th></tr></thead><tbody id="gap-rows"></tbody></table></div>
+</section>
+<section id="array" hidden>
+<h2>Via Array</h2><p>Select existing vias on the PCB. Preview aligns their centers inside the selection bounds.</p>
+<div class="actions">
+<label>Axis <select id="axis"><option value="auto">Auto detect</option><option value="columns">Columns</option><option value="rows">Rows</option></select></label>
+<label>Count <input id="count" type="number" min="1" value="4"></label>
+</div>
+<label><input id="ignore_drc" type="checkbox"> Ignore array clearance checks</label>
+<div class="actions"><button data-action="array_preview">Preview array</button><button class="primary" id="apply-array" data-action="array_apply" disabled>Apply array</button></div>
+<pre id="array-notes"></pre>
+<div class="array-maps" id="array-maps" hidden>
+<div><strong>Current positions</strong><canvas id="array-before" aria-label="Current via positions"></canvas></div>
+<div><strong>Proposed positions</strong><canvas id="array-after" aria-label="Proposed via positions"></canvas></div>
+</div>
+<div class="table"><table><thead><tr><th>Via</th><th>Current X / Y</th><th>New X / Y</th></tr></thead><tbody id="array-rows"></tbody></table></div>
+</section>
+<section id="fanout" hidden>
+<h2>BGA Fanout</h2><p>Place the BGA inside the board outline. Fanout stops at the BGA pad field. Refill zones manually in KiCad.</p>
+<button data-action="fanout_analyze">Analyze selected BGA</button>
+<p id="fanout-summary">Select a BGA in PCB Editor.</p>
+<form id="fanout-settings" class="actions" style="align-items:center">
+<label>Method <select name="mode"><option value="dogbone">Dogbone</option><option value="via-in-pad">Via-in-pad</option><option value="auto-escape">Auto escape</option></select></label>
+<label>Via size <select name="preset"><option value="active">Active preset</option><option value="netclass">Netclass</option><option value="custom">Custom</option></select></label>
+<label>Escape layer <select name="escape_layer"><option>B.Cu</option></select></label>
+<label>Order <select name="route_order"><option value="signals-first">Signals first</option><option value="inner-first">Inner first</option><option value="power-first">Power first</option></select></label>
+</form>
+<div class="actions"><button data-action="fanout_suggest">Suggest settings</button><button data-action="fanout_preview">Preview fanout</button>
+<button class="primary" data-action="fanout_apply" id="fanout-apply" disabled>Apply accepted</button><button data-action="fanout_remove" id="fanout-remove" disabled>Remove generated fanout</button></div>
+<label id="suggestions-label" hidden>Load suggested settings <select id="suggestions"></select></label>
+<canvas id="fanout-map" aria-label="Fanout pad and routing preview"></canvas>
+<div class="table"><table><thead><tr><th>Pad</th><th>Net</th><th>Status</th><th>Via / drill</th><th>Actual / preferred width</th></tr></thead><tbody id="fanout-rows"></tbody></table></div>
+</section>
+<section id="via-pad" hidden>
+<h2>Via-in-Pad Inspector</h2>
+<button class="primary" data-action="via_pad_scan">Scan pad contacts</button>
+<p>Click a component, contact category, or via to focus it in PCB Editor.</p>
+<div id="via-pad-results"></div>
+</section>
+<section id="via-size" hidden>
+<h2>Via Size Manager</h2>
+<button data-action="via_size_inventory">Refresh size inventory</button>
+<div class="actions">
+<label>Existing size <select id="via-existing"><option value="">All sizes</option></select></label>
+<label>Net <select id="via-net"><option value="">All nets</option></select></label>
+<label><input id="via-selected" type="checkbox"> Selected vias only</label>
+</div>
+<div class="actions">
+<label>Target diameter (mm) <input id="via-diameter" type="number" value=".45" step="any"></label>
+<label>Target drill (mm) <input id="via-drill" type="number" value=".25" step="any"></label>
+</div>
+<div class="actions">
+<button data-action="via_size_select" data-via-filter>Select matching vias</button>
+<button data-action="via_size_preview" data-via-filter>Check resize</button>
+<button id="via-resize" class="primary" data-action="via_size_apply" disabled>Apply resize</button>
+<button data-action="via_size_review_delete" data-via-filter>Review deletions</button>
+<button id="via-delete" data-action="via_size_delete" disabled>Delete reviewed vias</button>
+</div>
+<pre id="via-size-notes"></pre>
+<div class="table"><table><thead><tr><th>State</th><th>Net / focus</th><th>Diameter / drill</th><th>Location (mm)</th><th>Result</th></tr></thead><tbody id="via-size-rows"></tbody></table></div>
+</section>
+<section id="stitch" hidden>
+<h2 id="stitch-title">Via Stitching</h2>
+<div class="via-split">
+<div><canvas id="stitch-canvas" aria-label="Accepted and rejected via sites"></canvas>
+<pre id="stitch-notes"></pre></div>
+<div class="via-controls">
+<div class="actions"><button data-action="stitch_load">Read board and selection</button>
+<label id="stitch-path-label" hidden>Signal net <input id="signal-net"> <button data-action="stitch_path">Read signal path</button></label></div>
+<form id="stitch-settings" class="actions">
+<label>Via net <input name="net" list="stitch-nets" value="GND"><datalist id="stitch-nets"></datalist></label>
+<label>Size source <select name="size_source"><option value="board">Board preset</option><option value="netclass">Netclass</option><option value="custom">Custom</option></select></label>
+<label>Connection <select name="connection"><option value="two">At least two layers</option><option value="all">All layers</option></select></label>
+<label id="stitch-pattern-label">Pattern <select name="pattern"><option value="symmetric">Symmetric</option><option value="staggered">Staggered</option><option value="fence">Perimeter fence</option></select></label>
+<label id="stitch-side-label" hidden>Side <select name="side"><option value="both">Both</option><option value="left">Left</option><option value="right">Right</option></select></label>
+</form>
+<div class="actions">
+<label id="stitch-region-label">Region <select id="stitch-region"><option value="board">Whole board</option><option value="selected">Selected zone / drawing</option><option value="polygon">Polygon coordinates</option></select></label>
+<label id="stitch-polygon-label" hidden>Vertices in mm <input id="stitch-polygon" placeholder="10,10; 20,10; 20,20; 10,20"></label>
+<label>Name <input id="stitch-name" value="Ground stitching"></label>
+<label><input type="checkbox" id="stitch-replace"> Replace selected set on Apply</label>
+</div>
+<div class="actions"><button data-action="stitch_preview">Preview via sites</button>
+<button class="primary" data-action="stitch_apply" id="stitch-apply" disabled>Apply accepted vias</button></div>
+<div class="actions"><label>Generated set <select id="stitch-set"><option value="">Choose a set</option></select></label>
+<button data-action="stitch_select">Select vias in KiCad</button><button data-action="stitch_remove">Remove unchanged vias</button></div>
+</div></div>
+</section>
+<section id="fillet" hidden>
+<h2>Trace Fillets</h2>
+<div class="actions">
+<label>Scope <select id="fillet-scope"><option value="selected">Selected tracks</option><option value="all">Whole board</option></select></label>
+<label>Exact net <input id="fillet-net" placeholder="All nets"></label>
+<label>Radius (mm) <input id="fillet-radius" type="number" value=".25" min=".05" max="100" step=".05"></label>
+<label><input id="fillet-adaptive" type="checkbox" checked> Reduce radius near obstacles</label>
+</div>
+<div class="actions"><button data-action="fillet_preview">Preview corners</button><button class="primary" id="fillet-apply" data-action="fillet_apply" disabled>Apply fillets</button><button data-action="fillet_restore">Restore generated corners</button></div>
+<pre id="fillet-notes"></pre>
+<div class="table"><table><thead><tr><th>Net</th><th>Layer</th><th>Location (mm)</th><th>Reason skipped</th></tr></thead><tbody id="fillet-rows"></tbody></table></div>
+</section>
+<section id="cleanup" hidden>
+<h2>Trace Cleanup</h2>
+<div class="actions"><label>Exact net <input id="cleanup-net" placeholder="All nets"></label>
+<label>Layer <select id="cleanup-layer"><option value="">All copper layers</option></select></label></div>
+<div class="actions"><button data-action="cleanup_scan">Scan routing</button>
+<button id="cleanup-select-all">Check visible</button><button id="cleanup-clear-all">Uncheck visible</button>
+<button class="primary" id="cleanup-apply" data-action="cleanup_remove" disabled>Apply checked cleanup</button>
+<button id="cleanup-recheck" title="Open Signals and recalculate path lengths and timing after cleanup">Recheck length matching</button></div>
+<pre id="cleanup-notes"></pre>
+<div class="table"><table><thead><tr><th>Include</th><th>Net / focus</th><th>Layer</th><th>Length (mm)</th><th>Finding</th></tr></thead><tbody id="cleanup-rows"></tbody></table></div>
+</section>
+<section id="teardrops" hidden>
+<h2>Teardrops</h2>
+<p>Track junctions use KiCad Board Setup dimensions and apply to the whole board.</p>
+<form id="teardrop-settings" class="actions">
+<label>Operation <select name="operation"><option value="add">Add</option><option value="remove">Remove</option></select></label>
+</form>
+<svg id="teardrop-diagram" width="260" height="100" viewBox="0 0 260 100" role="img" aria-label="Teardrop length L and width W where a track meets a pad">
+ <path d="M86 50H237" stroke="#8098ae" stroke-width="10"/>
+ <path id="teardrop-profile" fill="#81baf6"/>
+ <circle cx="62" cy="50" r="23" fill="#81baf6"/>
+ <circle cx="62" cy="50" r="9" fill="#1c2734"/>
+ <path d="M64 78v7m0-3h87m0-4v7M43 26h-8m4 0v48m4 0h-8" fill="none" stroke="currentColor"/>
+ <g fill="currentColor" font-size="12"><text x="101" y="97">L</text><text x="23" y="54">W</text></g>
+</svg>
+<div class="actions"><button class="primary" data-action="teardrop_apply">Apply teardrops</button><button data-action="teardrop_advanced">Open advanced KiCad dialog</button></div>
+</section>
+<section id="visual" hidden>
+<h2>Visualization</h2>
+<div class="actions"><button data-action="visual_refresh">Refresh PCB nets</button></div>
+<h3>Net colors</h3>
+<div class="actions">
+<label>Net <input id="visual-net" list="visual-net-list"></label><datalist id="visual-net-list"></datalist>
+<label>Color <input type="color" id="visual-net-color" value="#44aaff"></label>
+<button data-visual="net">Set color</button><button data-visual="clear_net">Clear color</button>
+</div>
+<div class="actions">
+<label>Saved group <select id="visual-groups"></select></label>
+<label>Name <input id="visual-name"></label>
+<label>Net or class patterns <input id="visual-patterns" placeholder="*CLK*, class:USB*"></label>
+<label>Color <input type="color" id="visual-group-color" value="#44aaff"></label>
+<button data-visual="group">Save group</button><button data-visual="remove_group">Remove group</button>
+<button data-visual="reset">Reset all colors</button>
+</div>
+<h3>Ratsnest focus</h3>
+<div class="actions">
+<button data-focus="selection">Focus selected footprints</button><button data-focus="all">Show all</button>
+<button data-focus="none">Hide all</button>
+<label>Focused footprints <select id="visual-focus-list"></select></label>
+<button data-focus="remove">Remove from focus</button>
+</div>
+</section>
+<section id="catalog" hidden>
+<h2>Component Research</h2>
+<div id="schematic-project-bar" class="actions" hidden><button id="schematic-project-choose">Choose KiCad project</button><output id="schematic-project"></output></div>
+<div id="replacement-banner" hidden>
+<p id="replacement-summary"></p>
+<button id="replacement-cancel" data-icon-only="cancel">Cancel and return to BOM</button>
+</div>
+<form id="catalog-form">
+<div class="actions"><label>Search <input name="keyword" placeholder="Keyword, MPN or LCSC code" size="34"></label>
+<button class="primary" type="submit">Search</button>
+<button type="button" data-action="catalog_categories">Load categories</button></div>
+<div class="catalog-split"><div class="catalog-sidebar"><label>Find category <input id="catalog-find"></label>
+<label>Category <select name="category" size="10"><option value="">All categories</option></select></label></div>
+<div><div class="actions">
+<label><input type="checkbox" name="stock"> LCSC in stock</label>
+<label><input type="checkbox" name="assembly_stock"> JLCPCB in stock</label>
+<label>Assembly class <select name="tier"><option value="all">All</option><option value="basic">Basic</option><option value="extended">Extended</option><option value="preferred">Preferred</option></select></label>
+<label>Sort <select name="sort"><option value="">Default</option><option value="asc">Price ascending</option><option value="desc">Price descending</option></select></label>
+<label>Page size <select name="size"><option>25</option><option>50</option><option>100</option></select></label></div>
+<div id="catalog-filters" style="display:flex;gap:.6rem;overflow:auto"></div>
+<div class="actions"><button type="submit">Apply filters</button><button type="button" id="catalog-clear">Clear filters</button></div>
+</div></div>
+</form>
+<div style="overflow:auto"><table><thead><tr><th>LCSC code</th><th>MPN</th><th>Manufacturer</th><th>Package</th><th>LCSC stock</th><th>USD/unit</th><th>JLCPCB stock</th><th>Class</th></tr></thead><tbody id="catalog-rows"></tbody></table></div>
+<div class="actions"><button id="catalog-prev" data-icon-only="previous" disabled>Previous results page</button><span id="catalog-page"></span><button id="catalog-next" data-icon-only="next" disabled>Next results page</button></div>
+<div id="catalog-detail" hidden>
+<h3 id="catalog-part"></h3><p id="catalog-description"></p>
+<div class="actions"><button data-action="catalog_details">Load specifications</button><button data-action="catalog_check_cad">Check CAD</button>
+<button data-action="catalog_verify_step">Verify STEP</button><button id="catalog-datasheet">Datasheet</button><button id="catalog-hide">Hide details</button></div>
+<p id="catalog-cad"></p><button id="catalog-import">Prepare library import</button>
+<button class="primary" data-action="catalog_assign" id="catalog-assign" hidden>Set information and return to BOM</button><dl id="catalog-specs"></dl>
+</div>
+</section>
+<section id="library" hidden>
+<h2>Project CAD import</h2>
+<form id="library-form">
+<div class="actions">
+<label>LCSC code <input name="lcsc"></label><label>MPN <input name="mpn"></label>
+<label>Manufacturer <input name="manufacturer"></label><label>Package <input name="package"></label>
+<label>Datasheet <input name="datasheet"></label><label>Description <input name="description"></label>
+</div>
+<div class="actions">
+<label>Category <select name="category"><option value="custom">Custom</option><option value="resistor">Resistor</option><option value="capacitor">Capacitor</option><option value="inductor">Inductor</option><option value="bead">Ferrite bead</option><option value="led">LED</option></select></label>
+<label>Value <input name="value"></label><label>Tolerance <input name="tolerance"></label>
+<label>Voltage <input name="voltage"></label><label>Power <input name="power"></label><label>Dielectric <input name="dielectric"></label>
+</div>
+<div class="actions">
+<label>Symbol destination <select name="symbol_library"></select></label>
+<label>Footprint destination <select name="footprint_library"></select></label>
+<button type="button" data-action="library_inventory">Refresh libraries</button>
+<label>Reuse symbol <input name="reuse_symbol" list="library-symbols"></label><datalist id="library-symbols"></datalist>
+<label>Reuse footprint <input name="reuse_footprint" list="library-footprints"></label><datalist id="library-footprints"></datalist>
+</div>
+<div class="actions">
+<label>Download <select name="mode"><option value="both">Symbol and footprint</option><option value="symbol">Symbol</option><option value="footprint">Footprint</option><option value="none">Reuse existing assets</option></select></label>
+<label><input type="checkbox" name="step"> Include STEP model</label>
+<button type="button" data-action="library_stage">Stage downloads</button>
+<button type="button" data-action="library_preview">Preview symbols and pads</button>
+</div>
+<div class="actions">
+<label>STEP offset X/Y/Z (mm) <input name="ox" size="3" value="0"><input name="oy" size="3" value="0"><input name="oz" size="3" value="0"></label>
+<label>STEP rotation X/Y/Z (°) <input name="rx" size="3" value="0"><input name="ry" size="3" value="0"><input name="rz" size="3" value="0"></label>
+<label><input type="checkbox" name="model_reviewed"> STEP orientation reviewed</label>
+</div>
+<div class="actions"><label><input type="checkbox" name="reviewed"> Package and pin-to-pad mapping reviewed</label>
+<button type="button" data-action="library_plan">Build import plan</button>
+<button type="button" class="primary" id="library-install">Install reviewed assets</button></div>
+</form>
+<pre id="library-summary" style="white-space:pre-wrap"></pre>
+<div id="library-previews" style="display:flex;gap:.6rem;overflow:auto"></div>
+<output id="library-installed"></output>
+<button id="library-copy-symbol" hidden>Copy KiCad symbol ID</button>
+<details id="placed-footprint-update"><summary>Update placed footprints from library</summary>
+<div class="actions"><label><input id="footprint-models" type="checkbox"> Use library 3D models</label>
+<button data-action="footprints_preview">Preview selected footprints</button>
+<button data-action="footprints_apply" id="footprint-apply" class="primary" disabled>Apply reviewed updates (Undoable)</button></div>
+<div class="table"><table><thead><tr><th>Reference</th><th>Library footprint</th><th>Checks</th></tr></thead><tbody id="footprint-rows"></tbody></table></div>
+<canvas id="footprint-pads" width="700" height="250" style="width:100%;max-width:44rem"></canvas>
+</details>
+</section>
+<section id="bom" hidden>
+<h2>BOM Cost</h2>
+<form id="bom-settings">
+<div class="actions">
+<label>Source <select name="source"><option value="saved">Saved root schematic</option><option value="live">Live PCB</option></select></label>
+<label id="bom-file-label">Root schematic <input id="bom-file" name="schematic" size="42"></label>
+<button type="button" id="bom-browse">Browse</button>
+</div>
+<div class="actions">
+<label>Boards <input name="boards" type="number" value="1" min="1" required></label>
+<label>Spares (%) <input name="spares" type="number" value="0" min="0" step="0.1" required></label>
+<label><input name="refresh" type="checkbox"> Refresh live LCSC prices</label>
+</div>
+</form>
+<div class="actions"><button class="primary" data-action="bom_calculate">Calculate BOM cost</button>
+<button id="bom-export" disabled>Export JSON and CSV</button>
+<strong id="bom-total" style="color:var(--success);font-size:1.45rem"></strong></div>
+<p id="bom-summary">LCSC retail pricing in USD. Assembly, freight and taxes are excluded.</p>
+<details id="bom-review-panel"><summary>Assembly and assignment review</summary>
+<form id="bom-review-form" class="actions">
+<label>Review <select name="review_mode"><option value="assembly">JLCPCB assembly stock</option><option value="optimize">Basic part optimization</option><option value="passives">In-stock passive equivalents</option><option value="mpn">Exact MPN matches</option></select></label>
+<label>Passives <select name="passive_scope"><option>Both</option><option>Resistor</option><option>Capacitor</option></select></label>
+<label>Max tolerance <select name="tolerance"><option>Same or tighter</option><option>0.1%</option><option>1%</option><option>2%</option><option>5%</option><option>10%</option><option>20%</option></select></label>
+<label><input name="stock" type="checkbox" checked> Require stock</label>
+<label><input name="dielectric" type="checkbox" checked> Keep dielectric</label>
+<label>Exact MPN source <select name="identity_source"><option>Project supplier information</option><option>LCSC</option></select></label>
+<button type="submit" class="primary">Scan BOM</button>
+</form>
+<div style="overflow:auto"><table><thead><tr><th>Apply</th><th>References</th><th>Current code</th><th>Proposed part</th><th>Assembly stock</th><th>Class</th><th>Current USD</th><th>Proposed USD</th><th>Review</th></tr></thead><tbody id="bom-review-rows"></tbody></table></div>
+<button class="primary" id="bom-apply" disabled>Apply checked assignments</button>
+</details>
+<div style="overflow:auto"><table><thead><tr>
+<th>Availability</th><th>LCSC code</th><th>MPN</th><th>References</th><th>Fitted</th><th>MOQ</th><th>Multiple</th><th>Order</th><th>Leftover</th><th>USD/item</th><th>USD/line</th><th>Stock</th><th>Observed UTC</th><th>Status</th><th>Actions</th>
+</tr></thead><tbody id="bom-rows"></tbody></table></div>
+</section>
+<section id="manufacturing-package" hidden>
+<h2>Manufacturing Package</h2>
+<div class="actions">
+<label>Manufacturer <select id="manufacturing-vendor"><option value="pcbway">PCBWay</option><option value="pcbpower">PCBPower</option></select></label>
+<label><input id="manufacturing-bundle" type="checkbox"> Include sibling boards</label>
+<button data-action="manufacturing_setup">Set up project</button>
+<button data-action="manufacturing_inspect">Review project</button>
+<button data-action="manufacturing_preflight">Run KiCad checks</button>
+<button class="primary" data-action="manufacturing_export" id="manufacturing-export" disabled>Export package</button>
+<button id="manufacturing-replace" disabled>Replace generated package</button>
+</div>
+<details><summary>Manufacturer configuration</summary>
+<div class="actions"><label id="manufacturing-choice-label" hidden>Board <select id="manufacturing-choice"></select></label>
+<button data-action="manufacturing_read_config">Load configuration</button>
+<button data-action="manufacturing_save_config" id="manufacturing-save" disabled>Save configuration</button></div>
+<textarea id="manufacturing-config" rows="14" spellcheck="false" style="width:100%"></textarea></details>
+<pre id="manufacturing-report" style="white-space:pre-wrap"></pre>
+<details><summary>Project library cleanup</summary>
+<div class="actions"><button data-action="manufacturing_library_scan">Find unused entries</button>
+<button id="manufacturing-library-remove" disabled>Remove checked entries</button></div>
+<div id="manufacturing-library-list"></div>
+<p id="manufacturing-library-backup"></p>
+</details>
+</section>
+</main>
+<section id="operation" aria-label="Operation progress" hidden>
+<strong id="operation-title"></strong> <small id="operation-elapsed"></small><div role="status"><p id="operation-detail"></p></div>
+<progress aria-label="Operation running"></progress>
+<button id="operation-cancel" data-icon-only="cancel">Cancel operation</button>
+</section>
+<footer id="status" aria-live="polite">Select the source footprints and routing in KiCad, then Record source.</footer>
+<script>
+const el=id=>document.getElementById(id);
+const workspaces={
+ Signals:{'Signal paths':'signals.paths','xSignal editor':'editor','Unrouted gaps':'signals.unrouted','Visualization':'view'},
+ Layout:{'Layout Clone':'layout.clone','Auto Text':'layout.references','PCB Rotation':'layout.rotate'},
+ Vias:{Stitching:'vias.stitching',Fencing:'vias.fencing','Via Array':'vias.array','Via Size Manager':'vias.sizes','Via Inspector':'vias.inspector'},
+ Routing:{'BGA Fanout':'routing.fanout','Trace Cleanup':'routing.cleanup',Fillets:'routing.corners',Teardrops:'routing.teardrops'},
+ Components:{Research:'components.search','CAD Assets':'components.assets','Project Library':'components.library'},
+ Manufacturing:{'BOM Cost':'manufacturing.cost','Manufacturing Package':'manufacturing'}
+};
+let busy=false, scene=[], zoom=1, pan=[0,0], drag=null, gapRows=[], arrayReady=false;
+let focusedGap=null, gapSummary=null, visibleGaps=[];
+let fanoutReady=false, fanoutPartial=0, fanoutManaged=0, suggestions=[];
+let fanoutBoard=null, fanoutDrawing=null;
+let arrayDrawing=null;
+let signalRows=[];
+let filletReady=false;
+let cleanupRows=[], cleanupChecked=new Set();
+let viaInventory=false, viaResize=0, viaDelete=0;
+let stitchReady=false, stitchBoard=null, stitchResult=null;
+const isFence=()=>el('vias-tool').value==='vias.fencing';
+let textReady=false, currentWorkspace='Layout';
+function configureSchematic(project){
+ el('nav').hidden=true;
+ el('schematic-project-bar').hidden=false;
+ el('placed-footprint-update').hidden=true;
+ openWorkspace('Components');
+ setSchematicProject(project);
+}
+function setSchematicProject(project){
+ el('schematic-project').textContent=project||'Choose the root schematic or project.';
+ for(const id of ['library-summary','library-installed'])el(id).textContent='';
+ el('library-copy-symbol').hidden=true;
+ el('library-previews').replaceChildren();
+ for(const field of ['symbol_library','footprint_library'])libraryForm.elements[field].replaceChildren();
+ for(const id of ['library-symbols','library-footprints'])el(id).replaceChildren();
+ for(const field of ['reuse_symbol','reuse_footprint'])libraryForm.elements[field].value='';
+ invalidateLibraryPlan();
+}
+for(const [id,action] of [['schematic-project-choose','library_choose_project'],['library-copy-symbol','library_copy_symbol']]){
+ el(id).onclick=()=>{if(!busy)window.traceforge.postMessage(JSON.stringify({action}));};
+}
+let cloneOverrides=Object.create(null);
+for(const action of ['save','load'])el('clone-template-'+action).onclick=()=>{
+ if(!busy)window.traceforge.postMessage(JSON.stringify({action:'clone_template_'+action}));
+};
+el('clone-clear-matches').onclick=()=>{
+ if(busy||!Object.keys(cloneOverrides).length)return;
+ cloneOverrides=Object.create(null);run('preview');
+};
+const settingsDialog=el('settings-dialog');
+const runtimeDialog=el('runtime-dialog');
+const runtimeForm=el('runtime-form');
+el('catalog-runtime').onclick=()=>run('settings_runtime_load');
+el('runtime-close').onclick=()=>runtimeDialog.close();
+runtimeForm.onsubmit=event=>{
+ event.preventDefault();
+ run('settings_runtime_save',{runtime:Object.fromEntries(new FormData(runtimeForm))});
+};
+el('open-settings').onclick=()=>run('settings_load');
+el('settings-close').onclick=()=>settingsDialog.close();
+el('settings-shortcuts').onsubmit=event=>{
+ event.preventDefault();
+ run('settings_save',{shortcuts:Object.fromEntries(new FormData(event.currentTarget))});
+};
+function showSettings(settings){
+ el('settings-error').textContent='';
+ const fields=el('settings-fields');
+ fields.replaceChildren();
+ for(const [key,value] of Object.entries(settings.shortcuts)){
+  const row=chainInput(settings.labels[key],value);
+  row.querySelector('input').name=key;fields.append(row);
+ }
+ el('settings-diagnostics').textContent=[
+  'TraceForge '+el('version').textContent,
+  'PCB Editor helper '+(settings.helper||'Unavailable'),
+  'Python '+settings.python,
+  settings.board||'',
+  settings.conflicts.length?'Unavailable shortcuts: '+settings.conflicts.join(', '):''
+ ].filter(Boolean).join('\n');
+ if(!settingsDialog.open)settingsDialog.showModal();
+}
+let footprintReady=false;
+el('footprint-models').onchange=()=>{
+ footprintReady=false;el('footprint-apply').disabled=true;
+ el('footprint-rows').replaceChildren();paintFootprintPads();
+};
+function paintFootprintPads(row){
+ const canvas=el('footprint-pads'),ctx=canvas.getContext('2d'),{width,height}=canvas;
+ ctx.fillStyle='#17202d';ctx.fillRect(0,0,width,height);
+ if(row?.status!=='ready')return;
+ const extent=Math.max(1,...[...row.old.pads,...row.new.pads].flatMap(pad=>[0,1].map(i=>Math.abs(pad.local[i])+pad.size[i]/2)));
+ const scale=Math.min(width/4-22,height/2-24)/extent;
+ for(const [index,key] of ['old','new'].entries()){
+  const cx=width*(index*2+1)/4,cy=height/2;
+  ctx.strokeStyle=ctx.fillStyle=key==='old'?'#7dcfff':'#6ee7a0';
+  ctx.font='13px sans-serif';ctx.fillText(key==='old'?'Current footprint':'Library footprint',index*width/2+10,16);
+  for(const pad of row[key].pads){
+   ctx.save();ctx.translate(cx+pad.local[0]*scale,cy+pad.local[1]*scale);
+   ctx.rotate(-pad.local_angle*Math.PI/180);
+   const [w,h]=pad.size.map(size=>size*scale);
+   ctx.strokeRect(-w/2,-h/2,w,h);
+   ctx.restore();
+   ctx.fillText(pad.number,cx+pad.local[0]*scale,cy+pad.local[1]*scale);
+  }
+ }
+}
+function showFootprintReview(result){
+ const body=el('footprint-rows');body.replaceChildren();
+ for(const item of result.rows){
+  const row=body.insertRow(),button=chainButton(item.reference,()=>paintFootprintPads(item));
+  row.insertCell().append(button);row.insertCell().textContent=item.footprint;
+  row.insertCell().textContent=item.reason||item.pads+' pads · '+item.checked_contacts+' routed contacts · '+item.models;
+ }
+ footprintReady=result.ready;paintFootprintPads(result.rows[0]);
+}
+let manufacturingReview=null, manufacturingConfigLoaded=false;
+function syncManufacturingButtons(){
+ el('manufacturing-export').disabled=!manufacturingReview?.create;
+ el('manufacturing-replace').disabled=!manufacturingReview?.replace;
+ el('manufacturing-save').disabled=!manufacturingConfigLoaded;
+}
+for(const id of ['manufacturing-vendor','manufacturing-bundle','manufacturing-choice']){
+ el(id).onchange=()=>{
+  manufacturingConfigLoaded=false;el('manufacturing-config').value='';
+  if(id!=='manufacturing-choice'){
+   manufacturingReview=null;el('manufacturing-report').textContent='';
+   el('manufacturing-choice').replaceChildren();el('manufacturing-choice-label').hidden=true;
+  }
+  syncManufacturingButtons();
+ };
+}
+el('manufacturing-replace').onclick=()=>run('manufacturing_export',{replace:true});
+const cleanupLibraries=el('manufacturing-library-list');
+el('manufacturing-library-remove').onclick=()=>{
+ const checked=Array.from(cleanupLibraries.querySelectorAll('input:checked'));
+ if(new Set(checked.map(input=>input.dataset.table)).size!==1){
+  setStatus('Choose entries from a single project-local library table.');return;
+ }
+ if(confirm('Remove these unused table entries? TraceForge will create a backup.\n\n'+
+            checked.map(input=>input.dataset.name).join('\n'))){
+  run('manufacturing_library_remove',{indices:checked.map(input=>Number(input.value))});
+ }
+};
+function showLibraryCleanup(entries){
+ cleanupLibraries.replaceChildren();
+ el('manufacturing-library-remove').disabled=true;
+ for(const [index,item] of entries.entries()){
+  const label=document.createElement('label'),check=document.createElement('input');
+  label.style.display='block';check.type='checkbox';check.value=index;
+  check.dataset.table=item.table;check.dataset.name=item.name;
+  check.onchange=()=>{el('manufacturing-library-remove').disabled=!cleanupLibraries.querySelector('input:checked');};
+  label.append(check,' '+item.table+' / '+item.name+' → '+item.uri);
+  cleanupLibraries.append(label);
+ }
+ if(!entries.length)cleanupLibraries.textContent='No unused entries to remove.';
+}
+let chainsLoaded=false, savedChainDraft=null, endpointReady=false;
+const chainGroups=el('chain-groups');
+function chainInput(label,value='',type='text'){
+ const wrapper=document.createElement('label'),input=document.createElement('input');
+ input.type=type;input.value=value??'';input.dataset.field=label;
+ if(type==='number'){input.min=0;input.step='any';}
+ wrapper.append(label+' ',input);return wrapper;
+}
+function chainButton(label,action){
+ const button=document.createElement('button');
+ button.type='button';button.textContent=label;button.onclick=action;return button;
+}
+function addChain(group,name='',path={}){
+ const row=document.createElement('div');row.className='actions chain-path';
+ row.append(chainInput('Path',name),chainInput('Ordered nets',(path.nets||[]).join(', ')),
+  chainInput('Series references',(path.series||[]).join(', ')),chainInput('Differential partner',path.pair),
+  chainButton('Remove path',()=>row.remove()));
+ group.querySelector('.chain-paths').append(row);
+}
+function addChainGroup(name='',definition={}){
+ const group=document.createElement('fieldset'), controls=document.createElement('div');
+ controls.className='actions';
+ controls.append(chainInput('Group',name),chainInput('Group skew (ps)',definition.skew_ps,'number'),
+  chainInput('Pair skew (ps)',definition.pair_skew_ps,'number'),chainInput('Stub max (ps)',definition.stub_max_ps,'number'),
+  chainButton('Add path',()=>addChain(group)),chainButton('Remove group',()=>group.remove()));
+ const paths=document.createElement('div');paths.className='chain-paths';group.append(controls,paths);
+ for(const [name,path] of Object.entries(definition.chains||{}))addChain(group,name,path);
+ chainGroups.append(group);return group;
+}
+const chainValue=(element,name)=>element.querySelector('[data-field="'+name+'"]').value.trim();
+function chainDraft(){
+ const groups=Object.create(null);
+ for(const group of chainGroups.children){
+  const name=chainValue(group,'Group');
+  if(!name||name in groups)throw Error('Enter a unique name for every group.');
+  const definition={chains:Object.create(null)};
+  for(const [label,key] of [['Group skew (ps)','skew_ps'],['Pair skew (ps)','pair_skew_ps'],['Stub max (ps)','stub_max_ps']]){
+   const value=chainValue(group,label);if(value)definition[key]=Number(value);
+  }
+  for(const row of group.querySelectorAll('.chain-path')){
+   const path=chainValue(row,'Path');
+   if(!path||path in definition.chains)throw Error('Enter a unique path name in '+name+'.');
+   const split=label=>chainValue(row,label).split(',').map(value=>value.trim()).filter(Boolean);
+   definition.chains[path]={nets:split('Ordered nets'),series:split('Series references'),pair:chainValue(row,'Differential partner')||null};
+  }
+  groups[name]=definition;
+ }
+ return {pad_to_die_ps_per_mm:Number(el('chain-die').value),groups};
+}
+el('chain-add-group').onclick=()=>{if(chainsLoaded)addChain(addChainGroup());else setStatus('Load the current project definitions first.');};
+el('chain-find').onsubmit=event=>{
+ event.preventDefault();
+ if(!chainsLoaded){setStatus('Load the current project definitions first.');return;}
+ const form=event.currentTarget.elements;
+ run('signals_chains_find',{sources:form.sources.value,destinations:form.destinations.value,ohms:form.ohms.value,caps:form.caps.checked});
+};
+for(const [id,field] of [['chain-pick-source','sources'],['chain-pick-destination','destinations']]){
+ el(id).onclick=()=>run('signals_chain_selection',{field});
+}
+function showEndpointReview(result){
+ const options=el('endpoint-options'), preview=el('endpoint-preview');
+ options.replaceChildren();preview.textContent='';
+ endpointReady=Boolean(result.primary)&&(!result.pair_note||Boolean(result.partner));
+ el('endpoint-add').disabled=!endpointReady;
+ if(result.choices){
+  const select=document.createElement('select');
+  select.setAttribute('aria-label','Routed path options');
+  for(const [index,choice] of result.choices.entries())select.add(new Option(choice.label,index));
+  options.append(select,chainButton('Review selected path',()=>run('signals_endpoint_choose',{index:select.value})));
+  return;
+ }
+ preview.textContent=[result.primary,result.partner].filter(Boolean).map(path=>
+  path.endpoints.map(endpoint=>endpoint.label).join(' → ')+'\n'+path.nets.join(' → ')+
+  '\nSeries: '+(path.series.join(', ')||'None')).concat(result.pair_note||[]).join('\n\n');
+}
+function showChainCandidates(candidates){
+ const target=el('chain-candidates');target.replaceChildren();
+ const choices=[];
+ for(const candidate of candidates){
+  const label=document.createElement('label'),input=document.createElement('input');
+  label.style.display='block';input.type='checkbox';input.checked=candidate.keep;
+  label.append(input,' '+candidate.name+' · '+candidate.nets.join(' → '));target.append(label);
+  choices.push([input,candidate]);
+ }
+ if(choices.length)target.append(chainButton('Add checked paths',()=>{
+  for(const [input,candidate] of choices){
+   if(!input.checked)continue;
+   const name=candidate.group||'Detected paths';
+   const group=Array.from(chainGroups.children).find(item=>chainValue(item,'Group')===name)||addChainGroup(name);
+   if(Array.from(group.querySelectorAll('.chain-path')).some(row=>chainValue(row,'Path')===candidate.name))continue;
+   addChain(group,candidate.name,candidate);
+  }
+  target.replaceChildren();
+ }));
+}
+const catalogForm=el('catalog-form');
+const libraryForm=el('library-form');
+let libraryPlanReady=false;
+function invalidateLibraryPlan(){
+ libraryPlanReady=false;el('library-install').disabled=true;
+}
+libraryForm.onsubmit=event=>event.preventDefault();
+libraryForm.oninput=invalidateLibraryPlan;
+invalidateLibraryPlan();
+el('library-install').onclick=()=>{if(libraryPlanReady)run('library_install');};
+let catalogCategories=[], catalogPart=null, catalogPage=1;
+let replacement=null, closeReplacementAfterCancel=false, replacementScroll=null;
+const bomViewport=()=>el('bom-rows').closest('table').parentElement;
+function closeReplacement(){
+ replacement=null;
+ el('replacement-banner').hidden=true;el('catalog-assign').hidden=true;
+ el('catalog-import').hidden=false;
+ activate('manufacturing.cost');
+ if(replacementScroll){
+  const {top,left,page}=replacementScroll;
+  replacementScroll=null;
+  bomViewport().scrollTo(left,top);
+  window.scrollTo(0,page);
+ }
+}
+el('replacement-cancel').onclick=()=>{
+ if(busy){
+  closeReplacementAfterCancel=true;
+  window.traceforge.postMessage(JSON.stringify({action:'cancel'}));
+ }else window.traceforge.postMessage(JSON.stringify({action:'bom_cancel_replacement'}));
+};
+el('catalog-import').onclick=()=>{
+ if(!catalogPart||busy)return;
+ for(const [name,value] of Object.entries({lcsc:catalogPart.code,mpn:catalogPart.mpn,
+  manufacturer:catalogPart.manufacturer,package:catalogPart.package,description:catalogPart.description,
+  datasheet:catalogPart.datasheet_url}))libraryForm.elements[name].value=value;
+ libraryForm.elements.reviewed.checked=false;libraryForm.elements.model_reviewed.checked=false;
+ invalidateLibraryPlan();activate('components.assets');
+ if(!libraryForm.elements.symbol_library.options.length)run('library_inventory');
+};
+function searchCatalog(page=1, preset=null){
+ const request={page,filters:{}};
+ for(const input of catalogForm.elements){
+  if(!input.name)continue;
+  if(input.dataset.facet){
+   if(input.checked)(request.filters[input.name]??=[]).push(input.value);
+  }else request[input.name]=input.type==='checkbox'?input.checked:input.value;
+ }
+ if(preset)request.filters=preset;
+ run('catalog_search',request);
+}
+catalogForm.onsubmit=event=>{event.preventDefault();searchCatalog();};
+el('catalog-clear').onclick=()=>{
+ for(const input of el('catalog-filters').querySelectorAll('input')){input.checked=false;if(input.type==='search')input.value='';}
+ searchCatalog();
+};
+function showCatalogCategories(){
+ const select=catalogForm.elements.category;
+ const previous=select.value, filter=el('catalog-find').value.toLowerCase();
+ select.replaceChildren(new Option('All categories',''));
+ for(const category of catalogCategories){
+  if(category.label.toLowerCase().includes(filter)||String(category.id)===previous){
+   select.add(new Option(category.label,category.id));
+  }
+ }
+ select.value=previous;
+}
+function collectCategories(items, path=''){
+ for(const item of items){
+  const label=path+item.name;
+  catalogCategories.push({id:item.id,label});
+  collectCategories(item.children,label+' / ');
+ }
+}
+el('catalog-find').oninput=showCatalogCategories;
+catalogForm.elements.category.onchange=()=>{
+ catalogForm.elements.keyword.value='';
+ el('catalog-filters').replaceChildren();
+ searchCatalog();
+};
+el('catalog-prev').onclick=()=>searchCatalog(catalogPage-1);
+el('catalog-next').onclick=()=>searchCatalog(catalogPage+1);
+el('catalog-hide').onclick=()=>{el('catalog-detail').hidden=true;catalogPart=null;};
+el('catalog-datasheet').onclick=()=>{
+ if(catalogPart)window.traceforge.postMessage(JSON.stringify({action:'catalog_datasheet',code:catalogPart.code}));
+};
+function showCatalogPart(part){
+ catalogPart=part;
+ el('catalog-detail').hidden=false;
+ el('catalog-part').textContent=part.mpn+' / '+part.code;
+ el('catalog-description').textContent=part.description;
+ el('catalog-datasheet').disabled=!part.datasheet_url;
+ const cad=el('catalog-cad');
+ cad.replaceChildren();
+ for(const [label,state] of [['Symbol',part.cad_symbol],['Footprint',part.cad_footprint],['STEP',part.cad_step]]){
+  const badge=document.createElement('span');
+  badge.textContent=label+': '+state+'   ';
+  if(state.startsWith('confirmed'))badge.style.color='var(--success)';
+  else if(/missing|failed|invalid/i.test(state))badge.style.color='var(--danger)';
+  cad.append(badge);
+ }
+ const specs=el('catalog-specs');specs.replaceChildren();
+ for(const [name,value] of Object.entries(part.specs)){
+  const term=document.createElement('dt'),detail=document.createElement('dd');
+  term.textContent=name;detail.textContent=value;specs.append(term,detail);
+ }
+}
+function showCatalogPage(page, filters){
+ const selected=new Set(Array.from(el('catalog-filters').querySelectorAll('input:checked'),i=>i.name+'\n'+i.value));
+ if(replacement?.preset){
+  for(const [key,values] of Object.entries(replacement.preset))for(const value of values)selected.add(key+'\n'+value);
+  replacement.preset=null;
+ }
+ el('catalog-filters').replaceChildren();
+ for(const group of filters){
+  const field=document.createElement('fieldset'), title=document.createElement('legend');
+  field.style.minWidth='11rem';title.textContent=group.title;field.append(title);
+  const find=document.createElement('input');find.type='search';find.placeholder='Find option';field.append(find);
+  const choices=document.createElement('div');choices.style='height:6rem;overflow:auto';field.append(choices);
+  for(const option of group.options){
+   const label=document.createElement('label'),input=document.createElement('input');
+   label.style.display='block';input.type='checkbox';input.name=group.key;input.value=option.value;
+   input.dataset.facet='true';input.checked=selected.has(group.key+'\n'+option.value);
+   label.append(input,option.label);choices.append(label);
+  }
+  find.oninput=()=>{for(const row of choices.children)row.hidden=!row.textContent.toLowerCase().includes(find.value.toLowerCase());};
+  el('catalog-filters').append(field);
+ }
+ el('catalog-hide').click();
+ const body=el('catalog-rows');body.replaceChildren();
+ for(const part of page.parts){
+  const row=body.insertRow();
+  const button=document.createElement('button');button.textContent=part.mpn;button.onclick=()=>showCatalogPart(part);
+  row.insertCell().textContent=part.code;row.insertCell().append(button);
+  for(const value of [part.manufacturer,part.package,part.stock,
+   part.price_tiers.map(tier=>tier.quantity+'+: '+tier.currency+' '+tier.unit_price).join(' · '),part.assembly_stock,part.assembly_tier]){
+   row.insertCell().textContent=value??'Unknown';
+  }
+ }
+ catalogPage=page.current_page;
+ el('catalog-prev').disabled=catalogPage<=1;
+ el('catalog-next').disabled=page.total_pages==null?!page.parts.length:catalogPage>=page.total_pages;
+ el('catalog-page').textContent='Page '+catalogPage+' · '+(page.total??page.parts.length)+' results · '+page.source;
+}
+let visualGroups=[], visualNets={};
+el('visual-groups').onchange=()=>{
+ const group=visualGroups.find(item=>item.name===el('visual-groups').value);
+ if(group){
+  el('visual-name').value=group.name;el('visual-patterns').value=group.patterns;
+  el('visual-group-color').value=group.color;
+ }
+};
+el('visual-net').onchange=()=>{
+ const color=visualNets[el('visual-net').value]?.color;
+ if(/^#[0-9a-f]{6}$/i.test(color))el('visual-net-color').value=color;
+};
+for(const button of document.querySelectorAll('[data-visual]')){
+ button.onclick=()=>{
+  const mode=button.dataset.visual;
+  if(mode==='reset'&&!confirm('Reset all PCB net colors?'))return;
+  const group=['group','remove_group'].includes(mode);
+  run('visual_edit',{mode,name:el(mode==='remove_group'?'visual-groups':group?'visual-name':'visual-net').value,
+   patterns:el('visual-patterns').value,color:el(group?'visual-group-color':'visual-net-color').value});
+ };
+}
+for(const button of document.querySelectorAll('[data-focus]')){
+ button.onclick=()=>run('visual_focus',{mode:button.dataset.focus,reference:el('visual-focus-list').value});
+}
+function setStatus(message){
+ el('status').textContent=message;
+ if(!el('operation').hidden)el('operation-detail').textContent=message;
+}
+const operationHelp={
+ record:['Recording source layout','Select the source footprints, routing and graphics in PCB Editor before recording.'],
+ preview:['Matching target footprints','Select the equivalent target footprints to see the proposed placement and routing.'],
+ apply:['Applying selected layout','KiCad validates the target and applies the clone as one undoable edit.'],
+ grid:['Cloning repeated sheets','TraceForge finds matching sheet instances and places them in the configured grid.'],
+ catalog_replacement:['Preparing part research','TraceForge reads the current part and its matching references to prepare the search.'],
+ catalog_assign:['Assigning component information','TraceForge checks the selected part, updates the saved references, and refreshes affected BOM rows.'],
+ catalog_search:['Searching component catalogs','Search by manufacturer part number, LCSC code, or keyword. Apply filters to narrow the results.'],
+ bom_calculate:['Calculating BOM cost','Reads the selected BOM source and calculates quantities, stock and prices.'],
+ bom_review:['Reviewing BOM parts','Checks assembly stock or finds candidates using the selected review settings.'],
+ bom_apply:['Applying checked assignments','Applies only checked groups and refreshes the affected BOM rows.'],
+ library_stage:['Downloading CAD assets','Downloads the selected part’s files for review before installation.'],
+ library_preview:['Rendering CAD previews','Opens symbol and pad previews here so you can check numbering and orientation.'],
+ library_plan:['Preparing library import','Shows exactly which project files the reviewed import will update.'],
+ library_install:['Installing library assets','Writes the reviewed symbol, footprint and model into the project libraries.'],
+ fanout_preview:['Computing BGA fanout','Checks candidate routes against the board geometry and selected constraints.'],
+ footprints_apply:['Updating selected footprints','Applies the reviewed library changes as an undoable KiCad edit.'],
+ manufacturing_preflight:['Running KiCad checks','Shows the results for each board in the selected manufacturing scope.'],
+ manufacturing_export:['Generating manufacturing files','KiCad exports fabrication and assembly files, including the STEP model. The package is checked before TraceForge reports the result.']
+};
+for(const button of document.querySelectorAll('[data-action]')){
+ button.title=operationHelp[button.dataset.action]?.[1]||button.textContent.trim();
+}
+let operationClock=null;
+function operationStart(action){
+ const help=operationHelp[action];
+ const control=Array.from(document.querySelectorAll('[data-action]')).find(button=>button.dataset.action===action);
+ el('operation-title').textContent=help?.[0]||control?.textContent.trim()||'Running TraceForge';
+ el('operation-detail').textContent=help?.[1]||'Waiting for the operation to complete.';
+ el('operation-cancel').hidden=el('cancel').disabled;
+ el('operation-cancel').disabled=false;
+ el('operation').hidden=false;
+ const start=performance.now();
+ el('operation-elapsed').textContent='';
+ clearInterval(operationClock);
+ operationClock=setInterval(()=>{
+  const seconds=Math.floor((performance.now()-start)/1000);
+  el('operation-elapsed').textContent=seconds<60?seconds+' s':Math.floor(seconds/60)+' min '+seconds%60+' s';
+ },1000);
+}
+function setBOMSource(path){el('bom-file').value=path;}
+el('bom-review-form').onsubmit=event=>{
+ event.preventDefault();
+ const request=Object.fromEntries(Array.from(event.currentTarget.elements)
+  .filter(input=>input.name).map(input=>[input.name,input.type==='checkbox'?input.checked:input.value]));
+ request.scope=request.passive_scope;
+ run('bom_review',request);
+};
+function showBOMReview(rows){
+ const body=el('bom-review-rows');body.replaceChildren();
+ for(const item of rows){
+  const row=body.insertRow();
+  const choice=row.insertCell();
+  if(item.index!=null){
+   const check=document.createElement('input');
+   check.type='checkbox';check.value=item.index;
+   check.setAttribute('aria-label','Apply assignment for '+item.references.join(', '));
+   check.onchange=()=>{el('bom-apply').disabled=!body.querySelector('input:checked');};
+   choice.append(check);
+  }
+  for(const value of [item.references.join(', '),item.code,item.candidate,item.stock,item.tier,item.before,item.after,item.reason]){
+   row.insertCell().textContent=value??'—';
+  }
+ }
+}
+el('bom-apply').onclick=()=>{
+ const indices=Array.from(el('bom-review-rows').querySelectorAll('input:checked'),input=>Number(input.value));
+ if(indices.length&&confirm('Apply component information for '+indices.length+' checked groups?'))run('bom_apply',{indices});
+};
+el('bom-settings').onsubmit=event=>{event.preventDefault();run('bom_calculate');};
+el('bom-settings').elements.source.onchange=()=>{
+ const live=el('bom-settings').elements.source.value==='live';
+ el('bom-file-label').hidden=live;el('bom-browse').hidden=live;
+};
+for(const [id,action] of [['bom-browse','bom_browse'],['bom-export','bom_export']]){
+ el(id).onclick=()=>{if(!busy)window.traceforge.postMessage(JSON.stringify({action}));};
+}
+function showBOM(result){
+ const fields=['lcsc','mpn','references','fitted_quantity','minimum_order','order_multiple','order_quantity',
+ 'leftover_quantity','unit_price_usd','extended_usd','stock','observed_at','status'];
+ const body=el('bom-rows');
+ const current=new Map(Array.from(body.rows,row=>[row.dataset.references,row]));
+ const viewport=bomViewport();
+ const scrollTop=viewport.scrollTop,scrollLeft=viewport.scrollLeft;
+ for(const [index,line] of result.lines.entries()){
+  const key=JSON.stringify(line.references);
+  const fingerprint=JSON.stringify(line);
+  const existing=current.get(key);
+  current.delete(key);
+  if(existing?.dataset.fingerprint===fingerprint){
+   if(body.rows[index]!==existing)body.insertBefore(existing,body.rows[index]||null);
+   continue;
+  }
+  const row=document.createElement('tr');
+  row.dataset.references=key;row.dataset.fingerprint=fingerprint;
+  if(existing)existing.remove();
+  body.insertBefore(row,body.rows[index]||null);
+  const state=row.insertCell();
+  state.textContent=line.availability;
+  state.style.fontWeight='600';
+  state.style.color=({
+   Ready:'var(--success)','Stock short':'var(--warning)',Unassigned:'var(--danger)',
+   'Identity conflict':'var(--danger)','Price missing':'var(--price-missing)'
+  })[line.availability]||'var(--unknown)';
+  for(const field of fields){
+   const value=line[field];
+   row.insertCell().textContent=Array.isArray(value)?value.join(', '):(value??'Unknown');
+  }
+  const actions=row.insertCell();
+  const focus=document.createElement('button');
+  focus.textContent='Locate in PCB';
+  focus.onclick=()=>run('bom_focus',{row:row.sectionRowIndex});
+  const research=document.createElement('button'), replace=document.createElement('button');
+  research.textContent='Research and assign';
+  research.onclick=()=>run('catalog_replacement',{row:row.sectionRowIndex,replacement:false});
+  replace.textContent='Find replacement';
+  replace.onclick=()=>run('catalog_replacement',{row:row.sectionRowIndex,replacement:true});
+  actions.append(focus,research,replace);
+ }
+ for(const stale of current.values())stale.remove();
+ viewport.scrollTop=scrollTop;viewport.scrollLeft=scrollLeft;
+ const complete=result.complete_parts_total_usd;
+ const total=Number(complete??result.known_parts_subtotal_usd);
+ el('bom-total').textContent='USD '+total.toFixed(2);
+ el('bom-summary').textContent=result.source+' · '+(complete==null?'Known-price subtotal · '+result.unpriced_lines+' unpriced lines':'Priced parts total');
+ el('bom-export').disabled=false;
+}
+function showLayoutTool(){
+ const active=currentWorkspace==='Layout', tool=el('layout-tool').value;
+ el('layout-picker').hidden=!active;
+ el('layout').hidden=!active||tool!=='layout.clone';
+ el('auto-text').hidden=!active||tool!=='layout.references';
+ el('rotate').hidden=!active||tool!=='layout.rotate';
+ if(active)requestAnimationFrame(draw);
+}
+el('layout-tool').onchange=showLayoutTool;
+function showRoutingTool(){
+ const active=currentWorkspace==='Routing', tool=el('routing-tool').value;
+ el('routing-picker').hidden=!active;
+ for(const [panel,id] of Object.entries({fanout:'routing.fanout',cleanup:'routing.cleanup',fillet:'routing.corners',teardrops:'routing.teardrops'})){
+  el(panel).hidden=!active||tool!==id;
+ }
+ if(active&&tool==='routing.fanout')requestAnimationFrame(drawFanout);
+}
+el('routing-tool').onchange=showRoutingTool;
+function showViaTool(){
+ const active=currentWorkspace==='Vias', tool=el('vias-tool').value;
+ el('vias-picker').hidden=!active;
+ el('array').hidden=!active||tool!=='vias.array';
+ el('via-pad').hidden=!active||tool!=='vias.inspector';
+ el('via-size').hidden=!active||tool!=='vias.sizes';
+ el('stitch').hidden=!active||!['vias.stitching','vias.fencing'].includes(tool);
+ el('stitch-title').textContent=isFence()?'Via Fencing':'Via Stitching';
+ for(const id of ['stitch-path-label','stitch-side-label'])el(id).hidden=!isFence();
+ for(const id of ['stitch-pattern-label','stitch-region-label'])el(id).hidden=isFence();
+ el('stitch-polygon-label').hidden=isFence()||el('stitch-region').value!=='polygon';
+ if(active&&tool==='vias.array')requestAnimationFrame(drawViaArray);
+}
+function drawViaArray(){
+ if(!arrayDrawing)return;
+ const maps=[el('array-before'),el('array-after')];
+ const width=Math.min(...maps.map(canvas=>canvas.clientWidth));
+ const height=Math.min(...maps.map(canvas=>canvas.clientHeight));
+ if(!width||!height)return;
+ const {moves,diameter_mm:diameter,issues}=arrayDrawing;
+ const points=moves.flatMap(move=>[move.old,move.new]);
+ if(!points.length)return;
+ const xs=points.map(point=>point[0]),ys=points.map(point=>point[1]);
+ const lowX=Math.min(...xs),highX=Math.max(...xs),lowY=Math.min(...ys),highY=Math.max(...ys);
+ const scale=Math.min((width-18)/Math.max(highX-lowX+diameter,1),
+                      (height-18)/Math.max(highY-lowY+diameter,1));
+ const ratio=devicePixelRatio||1;
+ const blocked=new Set((issues||[]).map(issue=>issue[0]));
+ for(const [index,canvas] of maps.entries()){
+  canvas.width=width*ratio;canvas.height=height*ratio;
+  const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);ctx.lineWidth=2;
+  for(const move of moves){
+   const [x,y]=move[index?'new':'old'];
+   const cx=(x-(highX+lowX)/2)*scale+width/2,cy=(y-(highY+lowY)/2)*scale+height/2;
+   const moved=move.old.some((coordinate,axis)=>coordinate!==move.new[axis]);
+   ctx.strokeStyle=index?(blocked.has(move.uuid)?'#ff948d':moved?'#75dfb1':'#91accd'):'#eaba73';
+   ctx.beginPath();ctx.arc(cx,cy,Math.max(3,diameter*scale/2),0,Math.PI*2);ctx.stroke();
+   ctx.fillStyle='#e6edf6';ctx.fillRect(cx-1,cy-1,2,2);
+  }
+ }
+}
+new ResizeObserver(drawViaArray).observe(el('array-before'));
+el('vias-tool').onchange=()=>{invalidateStitch();showViaTool();};
+const toolPanels={
+ 'signals.paths':'signals',editor:'chain-editor','signals.unrouted':'gaps',view:'visual',
+ 'manufacturing.cost':'bom',manufacturing:'manufacturing-package',
+ 'components.search':'catalog','components.assets':'library','components.library':'library'
+};
+const activeTools={};
+const refreshActions={
+ 'signals.paths':'signals_refresh','signals.unrouted':'gaps_scan',view:'visual_refresh',
+ 'vias.array':'array_preview','vias.inspector':'via_pad_scan','vias.sizes':'via_size_inventory',
+ 'routing.fanout':'fanout_analyze','routing.cleanup':'cleanup_scan','layout.references':'text_layout_preview',
+ 'components.assets':'library_inventory',manufacturing:'manufacturing_inspect'
+};
+document.addEventListener('keydown',event=>{
+ if(event.key!=='F5'||event.ctrlKey||event.altKey||event.shiftKey||event.metaKey)return;
+ event.preventDefault();
+ if(settingsDialog.open||busy)return;
+ const picker={'Layout':'layout-tool','Routing':'routing-tool','Vias':'vias-tool'}[currentWorkspace];
+ const tool=picker?el(picker).value:activeTools[currentWorkspace];
+ if(tool==='components.search')searchCatalog();
+ else if(refreshActions[tool])run(refreshActions[tool]);
+});
+function openWorkspace(name,tool){
+ currentWorkspace=name;
+ tool=tool||activeTools[name]||Object.values(workspaces[name])[0];
+ activeTools[name]=tool;
+ showLayoutTool();
+ showRoutingTool();
+ showViaTool();
+ for(const panel of new Set(Object.values(toolPanels)))el(panel).hidden=toolPanels[tool]!==panel;
+ const toolbar=el('workspace-tools');
+ toolbar.hidden=name!=='Signals'||!toolPanels[tool];
+ el('components-picker').hidden=name!=='Components';
+ el('manufacturing-picker').hidden=name!=='Manufacturing';
+ if(name==='Components')el('components-tool').value=tool;
+ if(name==='Manufacturing')el('manufacturing-tool').value=tool;
+ toolbar.replaceChildren();
+ for(const [label,tool] of Object.entries(workspaces[name])){
+  if(!toolPanels[tool]||tool==='components.library')continue;
+  const button=document.createElement('button');button.textContent=label;
+  button.setAttribute('aria-pressed',toolPanels[tool]===toolPanels[activeTools[name]]);
+  button.onclick=()=>openWorkspace(name,tool);
+  toolbar.append(button);
+ }
+ for(const button of el('nav').children)button.setAttribute('aria-selected',button.textContent===name);
+}
+el('components-tool').onchange=event=>openWorkspace('Components',event.target.value);
+el('manufacturing-tool').onchange=event=>openWorkspace('Manufacturing',event.target.value);
+function activate(tool){
+ if(tool==='about'){run('settings_load');return;}
+ for(const [name,entries] of Object.entries(workspaces)){
+  if(Object.values(entries).includes(tool)){
+   if(name==='Layout')el('layout-tool').value=tool;
+   if(name==='Routing')el('routing-tool').value=tool;
+   if(name==='Vias'&&Array.from(el('vias-tool').options).some(option=>option.value===tool))el('vias-tool').value=tool;
+   openWorkspace(name,tool);
+   return;
+  }
+ }
+}
+for(const name of Object.keys(workspaces)){
+ const button=document.createElement('button');button.textContent=name;button.onclick=()=>openWorkspace(name);
+ el('nav').append(button);
+}
+function run(action, extra={}){
+ if(busy)return;
+ if(action==='fanout_apply'&&(!fanoutReady||fanoutPartial&&!confirm('Some pads are blocked. Apply accepted routes only?')))return;
+ if(action==='fanout_remove'&&!confirm('Remove the unchanged generated routes for this BGA?'))return;
+ if(action==='fillet_restore'&&!confirm('Restore generated fillets within the chosen scope?'))return;
+ if(action==='signals_targets'&&!confirm('Write the analyzed timing targets to this project?'))return;
+ if(action==='via_size_delete'&&(!viaDelete||!confirm('Delete '+viaDelete+' reviewed vias? KiCad Undo is available.')))return;
+ const request={action};
+ for(const key of ['mode','scope','anchor','parent_levels','columns','grid_x','grid_y'])request[key]=el(key).value;
+ for(const key of ['graphics','clearance','selective','partial','values','group_cloned'])request[key]=el(key).checked;
+ Object.assign(request,extra);
+ if(['preview','apply'].includes(action))request.overrides=cloneOverrides;
+ if(action.startsWith('footprints_')){
+  if(action==='footprints_apply'&&(!footprintReady||!confirm('Update the reviewed footprints from the project libraries?')))return;
+  request.models=el('footprint-models').checked;
+  footprintReady=false;el('footprint-models').disabled=true;
+ }
+ if(action.startsWith('manufacturing_')){
+  Object.assign(request,{vendor:el('manufacturing-vendor').value,bundle:el('manufacturing-bundle').checked,
+   board_config:el('manufacturing-choice').value});
+  if(action==='manufacturing_export'){
+   if(!manufacturingReview)return;
+   request.replace=extra.replace===true;
+   if(!confirm((request.replace?'Replace generated package at ':'Export package to ')+manufacturingReview.output+'?'))return;
+  }
+  if(action==='manufacturing_save_config')request.config=el('manufacturing-config').value;
+  if(action==='manufacturing_library_scan'){
+   showLibraryCleanup([]);el('manufacturing-library-backup').textContent='';
+  }
+  if(!['manufacturing_read_config'].includes(action))manufacturingReview=null;
+  el('manufacturing-package').inert=true;
+ }
+ if(action.startsWith('signals_endpoint_')){
+  if(action==='signals_endpoint_add'){
+   if(!endpointReady)return;
+   try{
+    if(chainsLoaded&&JSON.stringify(chainDraft())!==savedChainDraft)throw Error('Save your xSignal edits before adding the routed path.');
+   }catch(error){setStatus(error.message);return;}
+   request.group=el('endpoint-group').value;request.name=el('endpoint-name').value;
+  }
+  const fields=el('chain-find').elements;
+  Object.assign(request,{ohms:fields.ohms.value,caps:fields.caps.checked,pair:el('endpoint-pair').checked,resistors:el('endpoint-resistors').checked});
+ }
+ if(action==='signals_chains_save'){
+  if(!chainsLoaded)return;
+  try{request.config=chainDraft();}catch(error){setStatus(error.message);return;}
+  if(!confirm('Save these xSignal definitions to the project?'))return;
+ }
+ if(action.startsWith('library_')){
+  invalidateLibraryPlan();
+  if(action==='library_stage'){
+   libraryForm.elements.reviewed.checked=false;libraryForm.elements.model_reviewed.checked=false;
+   el('library-previews').replaceChildren();
+  }
+  Object.assign(request,Object.fromEntries(Array.from(libraryForm.elements)
+   .filter(input=>input.name).map(input=>[input.name,input.type==='checkbox'?input.checked:input.value])));
+ }
+ if(['catalog_details','catalog_check_cad','catalog_verify_step','catalog_assign'].includes(action)){
+  if(!catalogPart)return;
+  if(action==='catalog_assign'&&(!replacement||!confirm('Assign '+catalogPart.code+' to '+replacement.references.join(', ')+'?')))return;
+  request.code=catalogPart.code;
+ }
+ if(action==='bom_calculate'){
+  const form=el('bom-settings');
+  if(!form.reportValidity())return;
+  Object.assign(request,Object.fromEntries(Array.from(form.elements)
+   .filter(input=>input.name).map(input=>[input.name,input.type==='checkbox'?input.checked:input.value])));
+  if(request.source==='saved'&&!request.schematic.trim()){setStatus('Select the root schematic.');return;}
+ }
+ if(['bom_review','bom_calculate','bom_apply'].includes(action)){
+  el('bom-review-rows').replaceChildren();el('bom-apply').disabled=true;
+ }
+ if(action.startsWith('stitch_')){
+  const setId=el('stitch-set').value;
+  if(['stitch_remove','stitch_select'].includes(action)&&!setId){el('status').textContent='Choose a generated set first.';return;}
+  if(action==='stitch_remove'&&!confirm('Remove the unchanged vias in this set?'))return;
+  if(action==='stitch_preview'&&el('stitch-replace').checked&&!setId){el('status').textContent='Choose a set to replace.';return;}
+  const settings=Object.fromEntries(Array.from(el('stitch-settings').elements)
+   .filter(input=>input.name).map(input=>[input.name,input.type==='checkbox'?input.checked:input.value]));
+  Object.assign(request,{fence:isFence(),settings,set_id:setId,signal_net:el('signal-net').value.trim(),
+   region:el('stitch-region').value,points:el('stitch-polygon').value.split(';').map(pair=>pair.split(',').map(Number)),
+   name:el('stitch-name').value,replace:el('stitch-replace').checked?setId:null});
+  if(action!=='stitch_select')invalidateStitch();
+ }
+ if(action.startsWith('via_size_')){
+  if(action!=='via_size_inventory'&&!viaInventory){el('status').textContent='Refresh the via inventory first.';return;}
+  Object.assign(request,{size:el('via-existing').value,net:el('via-net').value,
+   selected_only:el('via-selected').checked,diameter:el('via-diameter').value,drill:el('via-drill').value});
+  if(action!=='via_size_select')clearViaReview();
+ }
+ if(action==='teardrop_apply')request.settings=Object.fromEntries(Array.from(
+  el('teardrop-settings').elements,input=>[input.name,input.type==='checkbox'?input.checked:input.value]));
+ if(action==='cleanup_scan'){request.net=el('cleanup-net').value;resetCleanup();}
+ if(action==='cleanup_remove'){
+  request.ids=visibleCleanup().filter(row=>cleanupChecked.has(row.id)).map(row=>row.id);
+  if(!request.ids.length||!confirm('Apply cleanup to '+request.ids.length+' checked findings?'))return;
+  resetCleanup();
+ }
+ if(action==='rotate_apply')request.angle=el('rotation').value;
+ if(action.startsWith('text_layout_')){
+  if(!el('text-settings').reportValidity())return;
+  textReady=false;
+  request.settings=Object.fromEntries(Array.from(el('text-settings').elements,
+   input=>[input.name,input.type==='checkbox'?input.checked:input.value]));
+ }
+ if(action.startsWith('fillet_')){
+  filletReady=false;
+  Object.assign(request,{scope:el('fillet-scope').value,net:el('fillet-net').value,
+   radius:el('fillet-radius').value,adaptive:el('fillet-adaptive').checked});
+ }
+ if(action==='array_preview'){
+  arrayReady=false;
+  Object.assign(request,{axis:el('axis').value,count:el('count').value,ignore_drc:el('ignore_drc').checked});
+ }
+ if(action==='array_apply')arrayReady=false;
+ if(action.startsWith('fanout_')){
+  fanoutReady=false;
+  request.settings=Object.fromEntries(Array.from(el('fanout-settings').elements,
+   input=>[input.name,input.type==='checkbox'?input.checked:input.value]));
+ }
+ busy=true;el('status').className='';el('status').textContent='Working in KiCad…';
+ libraryForm.inert=true;
+ el('cancel').disabled=!action.startsWith('catalog_')&&!['fanout_preview','cleanup_scan','via_size_preview','stitch_preview','bom_calculate','bom_review','bom_apply','library_stage','library_preview','manufacturing_inspect','manufacturing_preflight'].includes(action);
+ if(!action.startsWith('settings_'))operationStart(action);
+ document.querySelectorAll('[data-action]').forEach(b=>b.disabled=true);
+ window.traceforge.postMessage(JSON.stringify(request));
+}
+function receive(result){
+ el('operation').hidden=true;
+ clearInterval(operationClock);
+ busy=false;document.querySelectorAll('[data-action]').forEach(b=>b.disabled=false);
+ libraryForm.inert=false;
+ if(result.settings)showSettings(result.settings);
+ if(result.runtime_settings){
+  for(const [key,value] of Object.entries(result.runtime_settings))runtimeForm.elements[key].value=value??'';
+  el('runtime-status').textContent=result.message;
+  if(!runtimeDialog.open)runtimeDialog.showModal();
+ }
+ if(result.error&&runtimeDialog.open)el('runtime-status').textContent=result.error;
+ if(result.schematic_project)setSchematicProject(result.schematic_project);
+ if(result.error&&settingsDialog.open)el('settings-error').textContent=result.error;
+ el('footprint-models').disabled=false;
+ if(result.footprints)showFootprintReview(result.footprints);
+ el('footprint-apply').disabled=!footprintReady;
+ el('manufacturing-package').inert=false;
+ if(result.manufacturing_choices){
+  const select=el('manufacturing-choice'), prior=select.value;
+  select.replaceChildren(...result.manufacturing_choices.map(path=>new Option(path)));
+  if(result.manufacturing_choices.includes(prior))select.value=prior;
+  el('manufacturing-choice-label').hidden=!select.options.length;
+ }
+ if(result.manufacturing_config!=null){
+  el('manufacturing-config').value=result.manufacturing_config;manufacturingConfigLoaded=true;
+ }
+ if(result.manufacturing_report!=null)el('manufacturing-report').textContent=result.manufacturing_report;
+ if(result.manufacturing_ready)manufacturingReview=result.manufacturing_ready;
+ if(result.cleanup_libraries)showLibraryCleanup(result.cleanup_libraries);
+ if(result.cleanup_backup)el('manufacturing-library-backup').textContent='Backup saved at '+result.cleanup_backup;
+ syncManufacturingButtons();
+ el('chain-save').disabled=!chainsLoaded;
+ if(result.chain_config){
+  chainsLoaded=true;el('chain-save').disabled=false;
+  el('chain-die').value=result.chain_config.pad_to_die_ps_per_mm;
+  chainGroups.replaceChildren();
+  for(const [name,definition] of Object.entries(result.chain_config.groups))addChainGroup(name,definition);
+  savedChainDraft=JSON.stringify(chainDraft());
+ }
+ if(result.chain_saved)savedChainDraft=JSON.stringify(chainDraft());
+ if(result.chain_candidates)showChainCandidates(result.chain_candidates);
+ el('endpoint-add').disabled=!endpointReady;
+ if(result.endpoint_review)showEndpointReview(result.endpoint_review);
+ if(result.endpoint_added)showEndpointReview({});
+ if(result.chain_selection)el('chain-find').elements[result.chain_selection.field].value=result.chain_selection.references.join(', ');
+ el('cancel').disabled=true;
+ if(result.schematic)setBOMSource(result.schematic);
+ if(result.bom)showBOM(result.bom);
+ if(result.bom_review)showBOMReview(result.bom_review);
+ if(result.catalog_categories){catalogCategories=[];collectCategories(result.catalog_categories);showCatalogCategories();}
+ if(result.replacement&&!closeReplacementAfterCancel){
+  if(!el('bom').hidden){
+   const viewport=bomViewport();
+   replacementScroll={top:viewport.scrollTop,left:viewport.scrollLeft,page:window.scrollY};
+  }
+  replacement=result.replacement;
+  el('replacement-banner').hidden=false;el('catalog-assign').hidden=false;el('catalog-import').hidden=true;
+  el('replacement-summary').textContent='Updating '+replacement.references.join(', ')+' · '+[replacement.value,replacement.footprint].filter(Boolean).join(' · ');
+  el('catalog-hide').click();el('catalog-rows').replaceChildren();el('catalog-filters').replaceChildren();
+  el('catalog-find').value='';showCatalogCategories();
+  catalogForm.elements.keyword.value=replacement.keyword;
+  catalogForm.elements.category.value=replacement.category??'';
+  catalogForm.elements.stock.checked=replacement.stock;catalogForm.elements.assembly_stock.checked=false;
+  catalogForm.elements.tier.value='all';replacement.preset=replacement.filters;
+  activate('components.search');
+  if(replacement.keyword||replacement.stock)setTimeout(()=>searchCatalog(1,replacement?.preset),0);
+ }
+ if(result.replacement_closed)closeReplacement();
+ if(closeReplacementAfterCancel){
+  closeReplacementAfterCancel=false;
+  if(!result.replacement_closed)window.traceforge.postMessage(JSON.stringify({action:'bom_cancel_replacement'}));
+ }
+ if(result.catalog_page)showCatalogPage(result.catalog_page,result.catalog_filters);
+ if(result.catalog_part&&catalogPart?.code===result.catalog_part.code)showCatalogPart(result.catalog_part);
+ if(result.library_inventory){
+  for(const [key,field,list] of [['symbols','symbol_library','library-symbols'],['footprints','footprint_library','library-footprints']]){
+   const select=libraryForm.elements[field], previous=select.value||result.library_inventory[key==='symbols'?'symbol':'footprint']?.nickname;
+   select.replaceChildren(...result.library_inventory[key].map(item=>new Option(item.nickname)));
+   if(Array.from(select.options).some(option=>option.value===previous))select.value=previous;
+   el(list).replaceChildren(...result.library_inventory[key].flatMap(item=>item.assets.map(asset=>new Option(item.nickname+':'+asset))));
+  }
+ }
+ if(result.library_stage){
+  const staged=result.library_stage;
+  const files=['symbol','footprint','model'].filter(key=>staged[key]).map(key=>key+': '+staged[key]);
+  el('library-summary').textContent=[...files,...(staged.issues||[])].join('\n')||'No new CAD files staged.';
+ }
+ if(result.library_preview){
+  el('library-previews').replaceChildren(...result.library_preview.map(item=>{
+   const figure=document.createElement('figure'), image=document.createElement('img'), caption=document.createElement('figcaption');
+   image.alt=item.name;image.src='data:image/svg+xml;base64,'+item.svg;
+   image.style='width:20rem;height:15rem;object-fit:contain;background:white';
+   caption.textContent=item.name;figure.append(image,caption);return figure;
+  }));
+ }
+ if(result.library_plan){
+  el('library-summary').textContent=[...result.library_plan.summary,'','Files to update',...result.library_plan.files].join('\n');
+  libraryPlanReady=true;el('library-install').disabled=false;
+ }
+ if(result.library_symbol){
+  el('library-installed').textContent='KiCad symbol: '+result.library_symbol;
+  el('library-copy-symbol').hidden=false;
+ }
+ if(result.visual){
+  visualGroups=result.visual.groups;
+  visualNets=result.visual.nets;
+  el('visual-groups').replaceChildren(new Option('Choose a group',''),...visualGroups.map(group=>new Option(group.name,group.name)));
+  el('visual-net-list').replaceChildren(...Object.keys(visualNets).sort().map(name=>new Option(name)));
+ }
+ if(result.focus)el('visual-focus-list').replaceChildren(...Object.entries(result.focus)
+  .map(([ref,nets])=>new Option(ref+' ('+nets.length+' nets)',ref)));
+ if(result.stitch_scene)showStitchScene(result.stitch_scene);
+ if(result.stitch_preview){
+  stitchResult=result.stitch_preview;stitchReady=stitchResult.accepted.length>0;
+  el('stitch-notes').textContent=stitchResult.accepted.length+' accepted · '+stitchResult.rejected.length+' rejected\n'+
+   Object.entries(stitchResult.reasons||{}).map(([reason,count])=>count+' '+reason).join('\n');
+  drawStitch();
+ }
+ el('stitch-apply').disabled=!stitchReady;
+ if(result.via_inventory_stale)viaInventory=false;
+ if(result.via_inventory)showViaInventory(result.via_inventory);
+ if(result.via_review)showViaReview(result);
+ updateViaButtons();
+ if(result.cleanup){
+  const c=result.cleanup;
+  cleanupRows=[...c.redundant,...c.fusions,...c.dangling];
+  cleanupChecked=new Set([...c.redundant,...c.fusions].map(row=>row.id));
+  el('cleanup-layer').replaceChildren(new Option('All copper layers',''),...c.layers.map(layer=>new Option(layer,layer)));
+  el('cleanup-notes').textContent=c.redundant.length+' redundant · '+c.fusions.length+' fusion groups · '+c.dangling.length+' dangling (unchecked) · '+c.partial.length+' retained overlaps';
+  drawCleanup();
+ }
+ el('cleanup-apply').disabled=!visibleCleanup().some(item=>cleanupChecked.has(item.id));
+ if(result.text_layout){
+  textReady=result.text_layout.counts.move>0;
+  el('text-rows').replaceChildren();
+  for(const item of result.text_layout.rows){
+   const row=el('text-rows').insertRow();
+   for(const value of [item.reference,item.kind,item.status,item.layer,item.new.join(' / '),item.why])row.insertCell().textContent=value;
+  }
+ }
+ el('text-apply').disabled=!textReady;
+ if(result.fillet){
+  const f=result.fillet;
+  filletReady=f.accepted>0;
+  el('fillet-notes').textContent=f.accepted+' eligible · '+f.adjusted+' adjusted · '+f.skipped+' skipped · '+f.existing+' generated';
+  el('fillet-rows').replaceChildren();
+  for(const example of f.examples){
+   const row=el('fillet-rows').insertRow();
+   for(const value of [example.net,example.layer,example.point.join(' / '),example.reason])row.insertCell().textContent=value;
+  }
+ }
+ el('fillet-apply').disabled=!filletReady;
+ if(result.fanout)showFanout(result.fanout);
+ if(result.fanout_preview)showFanoutPreview(result.fanout_preview);
+ if(result.suggestions){
+  suggestions=result.suggestions.candidates;
+  el('suggestions-label').hidden=!suggestions.length;
+  el('suggestions').replaceChildren(new Option('Choose a candidate',''),...suggestions.map((candidate,i)=>new Option(candidate.accepted+' accepted / '+candidate.blocked+' blocked',i)));
+ }
+ el('fanout-apply').disabled=!fanoutReady;el('fanout-remove').disabled=!fanoutManaged;
+ if(result.gaps){
+  gapRows=result.gaps;gapSummary=result.gap_summary;
+  if(!gapRows.some(row=>row.id===focusedGap))focusedGap=null;
+  drawGaps();
+ }
+ if(Object.hasOwn(result,'focused_gap')){
+  focusedGap=result.focused_gap;
+  drawGaps();
+  el('gap-rows').querySelector('[aria-current="true"]')?.scrollIntoView({block:'nearest'});
+ }
+ if(result.via_pad)showViaContacts(result.via_pad);
+ if(result.signals){
+  signalRows=result.signals;
+  drawSignals();
+  el('stackup').textContent=[result.routing.stackup,result.routing.note].filter(Boolean).join('\n');
+  el('geometry-rows').replaceChildren();
+  for(const values of result.routing.rows||[]){
+   const row=el('geometry-rows').insertRow();
+   for(const value of values)row.insertCell().textContent=value;
+  }
+ }
+ if(result.array){
+  arrayDrawing=result.array;el('array-maps').hidden=false;drawViaArray();
+  arrayReady=result.array.accepted===true;
+  el('array-notes').textContent=result.array.count+' vias · '+result.array.rows+' rows × '+result.array.columns+
+   ' columns · X '+result.array.pitch_x_mm.toFixed(3)+' mm · Y '+result.array.pitch_y_mm.toFixed(3)+' mm\n'+
+   (result.array.issues||[]).map(issue=>issue.join(' · ')).join('\n');
+  el('array-rows').replaceChildren();
+  for(const move of result.array.moves){
+   const row=el('array-rows').insertRow();
+   for(const value of [move.uuid.slice(0,12),move.old.join(' / '),move.new.join(' / ')])row.insertCell().textContent=value;
+  }
+ }
+ el('apply-array').disabled=!arrayReady;
+ el('status').className=result.error||result.issues?.length?'error':'ok';
+ el('status').textContent=result.error||result.message||'Ready.';
+ el('notes').textContent=[...(result.issues||[]),...(result.warnings||[]),...(result.counts?[Object.entries(result.counts).map(([kind,count])=>count+' '+kind).join(' · ')]:[])].join('\n');
+ if(result.anchors){
+  cloneOverrides=Object.create(null);
+  el('anchor').replaceChildren(new Option('Automatic',''),...result.anchors.map(ref=>new Option(ref,ref)));
+ }
+ if(result.anchors||result.pairs){
+  el('pairs').replaceChildren();
+  for(const pair of result.pairs||[]){
+   const row=el('pairs').insertRow();
+   for(const text of [pair.source,pair.target,pair.status])row.insertCell().textContent=text;
+   const select=document.createElement('select');
+   select.setAttribute('aria-label','Override '+pair.source);
+   select.add(new Option('Automatic',''));
+   const assigned=new Set(Object.entries(cloneOverrides).filter(([ref])=>ref!==pair.source).map(([,ref])=>ref));
+   for(const ref of result.match_choices?.[pair.source]||[])if(!assigned.has(ref))select.add(new Option(ref));
+   select.value=cloneOverrides[pair.source]||'';
+   select.onchange=()=>{
+    if(busy)return;
+    if(select.value)cloneOverrides[pair.source]=select.value;
+    else delete cloneOverrides[pair.source];
+    run('preview');
+   };
+   row.insertCell().append(select);
+  }
+  el('match').textContent='Footprint matches · '+(result.pairs?.length||0);
+ }
+ if(result.scene){
+  scene=result.scene;zoom=1;pan=[0,0];
+  el('layer').replaceChildren(...['All layers',...new Set(scene.map(item=>item.layer).filter(Boolean))].map(layer=>new Option(layer,layer)));
+  draw();
+ }
+}
+function drawGaps(){
+ const filter=el('gap-filter').value.trim().toLowerCase();
+ el('gap-rows').replaceChildren();
+ visibleGaps=gapRows.filter(gap=>!filter||[gap.net,gap.netclass,gap.a.label,gap.b.label].join(' ').toLowerCase().includes(filter));
+ if(gapSummary)el('gap-summary').textContent=visibleGaps.length+' shown / '+gapRows.length+
+  ' gaps across '+gapSummary.nets+' nets · KiCad airwires: '+(gapSummary.native_airwires??'Unavailable');
+ el('gap-previous').disabled=el('gap-next').disabled=!visibleGaps.length;
+ for(const gap of visibleGaps){
+  const row=el('gap-rows').insertRow(), button=document.createElement('button');
+  button.textContent=gap.net;
+  if(gap.id===focusedGap){row.setAttribute('aria-current','true');button.className='primary';}
+  button.onclick=()=>focusGap(gap);
+  row.insertCell().append(button);
+  for(const value of [gap.status,gap.a.label,gap.b.label,gap.gap_mm.toFixed(4),gap.netclass])row.insertCell().textContent=value;
+ }
+}
+function focusGap(gap){run('gaps_focus',{id:gap.id,whole_net:el('whole_net').checked});}
+function stepGap(direction){
+ if(busy||!visibleGaps.length)return;
+ const index=visibleGaps.findIndex(row=>row.id===focusedGap),count=visibleGaps.length;
+ focusGap(visibleGaps[index<0?(direction>0?0:count-1):(index+direction+count)%count]);
+}
+el('gap-previous').onclick=()=>stepGap(-1);
+el('gap-next').onclick=()=>stepGap(1);
+function showViaContacts(vias){
+ const output=el('via-pad-results'), groups=new Map();
+ output.replaceChildren();
+ for(const via of vias)for(const pad of via.pads){
+  if(!groups.has(pad.reference))groups.set(pad.reference,new Map());
+  const byContact=groups.get(pad.reference);
+  if(!byContact.has(pad.contact))byContact.set(pad.contact,[]);
+  byContact.get(pad.contact).push({via,pad});
+ }
+ function focus(text,entries){
+  const button=document.createElement('button');
+  button.textContent=text;
+  button.onclick=()=>run('via_pad_focus',{ids:[...new Set(entries.map(entry=>entry.via.uuid))]});
+  return button;
+ }
+ for(const [reference,contacts] of [...groups].sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true}))){
+  const block=document.createElement('details'), title=document.createElement('summary');
+  title.textContent=reference;block.append(title,focus('Focus all '+reference+' vias',[...contacts.values()].flat()));
+  for(const [contact,entries] of contacts){
+   const category=document.createElement('details'), label=document.createElement('summary');
+   label.textContent=contact.replaceAll('_',' ')+' · '+entries.length;
+   category.append(label,focus('Focus contact category',entries));
+   const list=document.createElement('ul');
+   for(const entry of entries){
+    const {pad,via}=entry, row=document.createElement('li');
+    row.append(focus('Pad '+pad.pad,[entry]),' '+via.net+' / '+pad.pad_net+
+     ' · '+via.x_mm.toFixed(3)+', '+via.y_mm.toFixed(3)+' mm · drill '+via.drill_mm.toFixed(3)+' mm · '+pad.layers.join(', '));
+    list.append(row);
+   }
+   category.append(list);block.append(category);
+  }
+  output.append(block);
+ }
+}
+function updateViaButtons(){
+ document.querySelectorAll('[data-via-filter]').forEach(button=>button.disabled=busy||!viaInventory);
+ el('via-resize').disabled=busy||!viaResize;
+ el('via-delete').disabled=busy||!viaDelete;
+}
+function clearViaReview(){
+ viaResize=viaDelete=0;
+ el('via-size-notes').textContent='';
+ el('via-size-rows').replaceChildren();
+ updateViaButtons();
+}
+function showViaInventory(result){
+ viaInventory=true;
+ const sizes=el('via-existing'), nets=el('via-net'), oldSize=sizes.value, oldNet=nets.value;
+ sizes.replaceChildren(new Option('All sizes',''),...result.sizes.map(row=>new Option(
+  row.diameter_mm+' / '+row.drill_mm+' mm · '+row.count+' placed'+(row.sources.length?' · preset':''),row.diameter_mm+'/'+row.drill_mm)));
+ nets.replaceChildren(new Option('All nets',''),...result.nets.map(net=>new Option(net,net)));
+ if(Array.from(sizes.options).some(option=>option.value===oldSize))sizes.value=oldSize;
+ if(Array.from(nets.options).some(option=>option.value===oldNet))nets.value=oldNet;
+}
+function showViaReview(result){
+ const review=result.via_review;
+ viaResize=result.resize_ready||0;viaDelete=result.delete_count||0;
+ el('via-size-notes').textContent=[review.method, review.fallback_reason,
+  review.baseline_findings===undefined?'':review.baseline_findings+' baseline DRC findings',
+  review.board_remaining_small===undefined?'':review.board_remaining_small+' vias remain below the target drill'].filter(Boolean).join(' · ');
+ el('via-size-rows').replaceChildren();
+ for(const item of review.vias){
+  const row=el('via-size-rows').insertRow(),focus=document.createElement('button');
+  row.insertCell().textContent=item.status;
+  focus.textContent=item.net||'(no net)';
+  focus.onclick=()=>run('via_pad_focus',{ids:[item.uuid]});
+  row.insertCell().append(focus);
+  for(const value of [item.diameter_mm+' / '+item.drill_mm,item.x_mm.toFixed(3)+' / '+item.y_mm.toFixed(3),item.reason])row.insertCell().textContent=value;
+ }
+}
+for(const id of ['via-existing','via-net','via-selected','via-diameter','via-drill'])el(id).oninput=clearViaReview;
+updateViaButtons();
+const checkedSignalGroups=new Set();
+function syncSignalGroups(){
+ el('signal-focus-groups').disabled=!checkedSignalGroups.size;
+ el('signal-clear-groups').disabled=!checkedSignalGroups.size;
+}
+el('signal-focus-groups').onclick=()=>run('signals_focus_groups',{groups:[...checkedSignalGroups]});
+el('signal-clear-groups').onclick=()=>{checkedSignalGroups.clear();drawSignals();};
+function drawSignals(){
+ const filter=el('signal-filter').value.trim().toLowerCase();
+ const known=new Set(signalRows.map(item=>item.group));
+ for(const group of checkedSignalGroups)if(!known.has(group))checkedSignalGroups.delete(group);
+ const groupChecks=new Map();
+ el('signal-rows').replaceChildren();
+ for(const item of signalRows){
+  if(filter&&![item.group,item.name,item.status].join(' ').toLowerCase().includes(filter))continue;
+  const row=el('signal-rows').insertRow();
+  for(const name of ['group','name']){
+   const button=document.createElement('button');
+   button.textContent=item[name];
+   button.onclick=()=>run('signals_focus',{group:item.group,name:name==='name'?item.name:null});
+   const cell=row.insertCell();
+   if(name==='group'){
+    const check=document.createElement('input');
+    check.type='checkbox';check.checked=checkedSignalGroups.has(item.group);
+    check.setAttribute('aria-label','Include group '+item.group);
+    if(!groupChecks.has(item.group))groupChecks.set(item.group,[]);
+    groupChecks.get(item.group).push(check);
+    check.onchange=()=>{
+     if(check.checked)checkedSignalGroups.add(item.group);else checkedSignalGroups.delete(item.group);
+     for(const peer of groupChecks.get(item.group))peer.checked=check.checked;
+     syncSignalGroups();
+    };
+    cell.append(check);
+   }
+   cell.append(button);
+  }
+  row.insertCell().textContent=item.status;
+  for(const field of ['length','delay','target','skew'])row.insertCell().textContent=item[field]?.toFixed(3)??'—';
+ }
+ syncSignalGroups();
+}
+el('signal-filter').oninput=drawSignals;
+el('gap-filter').oninput=drawGaps;
+function visibleCleanup(){return cleanupRows.filter(row=>!el('cleanup-layer').value||row.layer===el('cleanup-layer').value);}
+function drawCleanup(){
+ el('cleanup-rows').replaceChildren();
+ const rows=visibleCleanup();
+ for(const item of rows){
+  const row=el('cleanup-rows').insertRow(), checked=document.createElement('input'), focus=document.createElement('button');
+  checked.type='checkbox';checked.checked=cleanupChecked.has(item.id);
+  checked.onchange=()=>{if(checked.checked)cleanupChecked.add(item.id);else cleanupChecked.delete(item.id);
+   el('cleanup-apply').disabled=busy||!rows.some(item=>cleanupChecked.has(item.id));};
+  focus.textContent=item.net||'(no net)';focus.onclick=()=>run('cleanup_highlight',{ids:[item.id]});
+  row.insertCell().append(checked);row.insertCell().append(focus);
+  for(const value of [item.layer,item.length_mm.toFixed(6),item.reason])row.insertCell().textContent=value;
+ }
+ el('cleanup-apply').disabled=busy||!rows.some(item=>cleanupChecked.has(item.id));
+}
+function resetCleanup(){cleanupRows=[];cleanupChecked.clear();el('cleanup-notes').textContent='';drawCleanup();}
+el('cleanup-net').oninput=resetCleanup;
+el('cleanup-layer').onchange=drawCleanup;
+el('cleanup-select-all').onclick=()=>{for(const item of visibleCleanup())cleanupChecked.add(item.id);drawCleanup();};
+el('cleanup-clear-all').onclick=()=>{for(const item of visibleCleanup())cleanupChecked.delete(item.id);drawCleanup();};
+el('cleanup-recheck').onclick=()=>{
+ if(busy)return;
+ activate('signals.paths');
+ run('signals_refresh');
+};
+for(const id of ['fillet-scope','fillet-net','fillet-radius','fillet-adaptive'])el(id).oninput=()=>{
+ filletReady=false;el('fillet-apply').disabled=true;
+ el('fillet-notes').textContent='Settings changed. Preview again.';
+};
+for(const id of ['axis','count','ignore_drc'])el(id).onchange=()=>{
+ arrayReady=false;el('apply-array').disabled=true;
+ el('array-notes').textContent='Settings changed. Preview again.';
+ arrayDrawing=null;el('array-maps').hidden=true;
+};
+const canvas=el('canvas');
+const stitchForm=el('stitch-settings'), stitchCanvas=el('stitch-canvas');
+for(const [name,title,value] of [
+ ['diameter','Via diameter (mm)',.6],['drill','Drill (mm)',.25],['pitch_x','X / along-trace pitch (mm)',5],
+ ['pitch_y','Y pitch (mm)',5],['offset_x','X offset (mm)',0],['offset_y','Y offset (mm)',0],
+ ['boundary','Region setback (mm)',.2],['edge','Board edge setback (mm)',.5],['trace_gap','Trace copper gap (mm)',.3],
+ ['fiducial_clearance','Fiducial clearance (mm)',1],['component_clearance','Courtyard margin (mm)',.25],
+ ['critical_clearance','Critical footprint margin (mm)',.5],['protected_refs','Protected references','X*,Y*,J*'],
+ ['respect_courtyards','Respect courtyards',true],['avoid_pad','Avoid pads',true]]){
+ const label=document.createElement('label'),input=document.createElement('input');
+ input.name=name;
+ if(typeof value==='boolean'){input.type='checkbox';input.checked=value;label.append(input,' '+title);}
+ else{input.type=typeof value==='number'?'number':'text';input.step='any';input.value=value;label.append(title+' ',input);}
+ stitchForm.append(label);
+}
+stitchForm.onsubmit=event=>event.preventDefault();
+stitchForm.oninput=invalidateStitch;
+for(const id of ['stitch-name','stitch-set','stitch-replace','stitch-polygon','signal-net'])el(id).oninput=invalidateStitch;
+el('stitch-region').onchange=()=>{invalidateStitch();showViaTool();};
+function invalidateStitch(){stitchReady=false;stitchResult=null;el('stitch-apply').disabled=true;drawStitch();}
+function showStitchScene(scene){
+ stitchBoard=scene;
+ el('stitch-nets').replaceChildren(...Object.keys(scene.nets).map(net=>new Option(net)));
+ const sizes=stitchForm.elements.size_source;
+ while(sizes.options.length>3)sizes.remove(3);
+ scene.presets.slice(1).forEach(([d,h],i)=>sizes.add(new Option('Preset '+(i+1)+' · '+d+' / '+h+' mm','preset:'+(i+1))));
+ el('stitch-set').replaceChildren(new Option('Choose a set',''),...scene.sets.map(s=>new Option(s.name+' · '+s.count+' vias · '+s.status,s.id)));
+ if(scene.selected_trace)el('signal-net').value=scene.selected_trace.net;
+ el('stitch-notes').textContent=(scene.trace_error&&isFence()?scene.trace_error:'')||
+  (scene.selected_region&&!isFence()?'Selected '+scene.selected_region.kind+' captured.':'');
+ drawStitch();
+}
+function drawStitch(){
+ const w=stitchCanvas.clientWidth,h=stitchCanvas.clientHeight,dpr=devicePixelRatio||1;
+ if(!w||!h)return;
+ stitchCanvas.width=w*dpr;stitchCanvas.height=h*dpr;
+ const ctx=stitchCanvas.getContext('2d');ctx.scale(dpr,dpr);
+ const rings=stitchBoard?.outline.flat()||[], points=rings.flat();
+ if(!points.length)return;
+ const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]),x0=Math.min(...xs),y0=Math.min(...ys);
+ const scale=Math.min((w-24)/Math.max(1,Math.max(...xs)-x0),(h-24)/Math.max(1,Math.max(...ys)-y0));
+ const project=([x,y])=>[12+(x-x0)*scale,12+(y-y0)*scale];
+ for(const ring of rings){
+  if(!ring.length)continue;
+  ctx.beginPath();ctx.moveTo(...project(ring[0]));
+  for(const point of ring.slice(1))ctx.lineTo(...project(point));
+  ctx.closePath();ctx.strokeStyle='#92a9c5';ctx.stroke();
+ }
+ for(const [items,color] of [[stitchResult?.rejected||[],'#f09487'],[stitchResult?.accepted||[],'#83dfab']]){
+  ctx.fillStyle=color;
+  for(const item of items){const [x,y]=project(item);ctx.fillRect(x-1,y-1,3,3);}
+ }
+}
+new ResizeObserver(drawStitch).observe(stitchCanvas);
+const teardropForm=el('teardrop-settings');
+for(const [name,title,value] of [
+ ['selected_only','Selected vias and pads only',false],['curved','Curved shape',true],
+ ['prefer_zone','Prefer zone connection',false],['span_two','Allow two track segments',true],
+ ['vias','Vias',true],['pth','PTH pads',true],['smd','SMD pads',true],['tracks','Track junctions',false],
+ ['track_limit','Track-width limit (%)','70'],['length','Length (%)','75'],['width','Width (%)','35'],
+ ['max_length','Maximum length (mm)',''],['max_width','Maximum width (mm)','']]){
+ const label=document.createElement('label'), input=document.createElement('input');
+ input.name=name;
+ if(typeof value==='boolean'){input.type='checkbox';input.checked=value;label.append(input,' '+title);}
+ else{input.type='number';input.step='any';input.value=value;label.append(title+' ',input);}
+ teardropForm.append(label);
+}
+teardropForm.onsubmit=event=>event.preventDefault();
+function updateTeardropOptions(){
+ const fields=teardropForm.elements, adding=fields.operation.value==='add';
+ el('teardrop-diagram').toggleAttribute('hidden',!adding);
+ el('teardrop-profile').setAttribute('d',fields.curved.checked?
+  'M63 27C106 27 118 45 151 45V55C118 55 106 73 63 73Z':
+  'M63 27L151 45V55L63 73Z');
+ for(const key of ['curved','prefer_zone','span_two','track_limit','length','width','max_length','max_width'])fields[key].disabled=!adding;
+ fields.tracks.disabled=fields.selected_only.checked;
+ if(fields.tracks.disabled)fields.tracks.checked=false;
+}
+teardropForm.onchange=updateTeardropOptions;
+updateTeardropOptions();
+const textForm=el('text-settings');
+function setTextLayers(layers){
+ const select=textForm.elements.target_layer;
+ const selected=select.value;
+ select.replaceChildren(new Option('Keep current layers','keep'),...layers.map(layer=>new Option(layer)));
+ if(layers.includes(selected))select.value=selected;
+}
+textForm.onsubmit=event=>event.preventDefault();
+textForm.oninput=()=>{textReady=false;el('text-apply').disabled=true;};
+const fanoutForm=el('fanout-settings');
+for(const [name,title,value] of [
+ ['diameter','Via diameter (mm)',.6],['drill','Drill (mm)',.25],['width','Track width (mm)',.15],
+ ['escape_min_width','Local neck-down minimum (mm)',.127],['clearance','Clearance (mm)',.15],
+ ['offset_x','Dogbone X offset (mm)',0],['offset_y','Dogbone Y offset (mm)',0],['edge','Edge setback (mm)',.5],
+ ['include','Include nets','*'],['exclude','Exclude nets',''],['pads','Pad filter','*'],['power_nets','Power nets','*GND*,*VDD*,*VCC*,*PWR*,+*'],
+ ['allow_via_in_pad','Fabrication supports via-in-pad',false],['netclass_width','Respect netclass widths',true],
+ ['adaptive_width','Allow local neck-down',false]]){
+ const label=document.createElement('label'), input=document.createElement('input');
+ input.name=name;
+ if(typeof value==='boolean'){input.type='checkbox';input.checked=value;label.append(input,' '+title);}
+ else{input.type=typeof value==='number'?'number':'text';input.step='any';input.value=value;label.append(title+' ',input);}
+ fanoutForm.append(label);
+}
+fanoutForm.onsubmit=event=>event.preventDefault();
+fanoutForm.oninput=()=>{
+ fanoutReady=false;fanoutDrawing=null;el('fanout-apply').disabled=true;
+ el('fanout-rows').replaceChildren();drawFanout();
+};
+function cancelOperation(){
+ window.traceforge.postMessage(JSON.stringify({action:'cancel'}));
+ el('cancel').disabled=true;el('operation-cancel').disabled=true;
+ setStatus('Cancelling… Changes already being saved will finish.');
+}
+el('cancel').onclick=cancelOperation;
+el('operation-cancel').onclick=cancelOperation;
+function showFanout(data){
+ fanoutReady=false;fanoutManaged=data.managed_items;
+ fanoutBoard=data;fanoutDrawing=null;drawFanout();
+ el('fanout-rows').replaceChildren();
+ el('fanout-summary').textContent=data.reference+' · '+data.pads.length+' pads · '+data.layer+' · '+fanoutManaged+' generated items';
+ const layer=fanoutForm.elements.escape_layer;
+ layer.replaceChildren(...data.copper_layers.filter(v=>v!==data.layer).map(v=>new Option(v,v)));
+ const preset=fanoutForm.elements.preset;
+ while(preset.options.length>3)preset.remove(3);
+ data.presets.slice(1).forEach(([diameter,drill],i)=>preset.add(new Option('Preset '+(i+1)+' · '+diameter+' / '+drill+' mm',i+1)));
+ for(const [name,value] of Object.entries(data.defaults))if(fanoutForm.elements[name])fanoutForm.elements[name].value=value;
+}
+function showFanoutPreview(result){
+ fanoutDrawing=result;drawFanout();
+ fanoutReady=result.accepted.length>0;
+ fanoutPartial=result.rejected.length+result.breakout_only.length;
+ el('fanout-rows').replaceChildren();
+ for(const key of ['accepted','breakout_only','rejected','already_routed','skipped']){
+  for(const item of result[key]){
+   const row=el('fanout-rows').insertRow();
+   const via=item.diameter===undefined?'':item.diameter+' / '+item.drill;
+   const track=item.width===undefined?'':item.width+' / '+(item.preferred_width??item.width);
+   for(const value of [item.pad,item.net||'',item.reason||item.status||key,via,track])row.insertCell().textContent=value;
+  }
+ }
+}
+function drawFanout(){
+ const canvas=el('fanout-map'),width=canvas.clientWidth,height=canvas.clientHeight;
+ if(!width||!height)return;
+ const ratio=devicePixelRatio||1;
+ canvas.width=width*ratio;canvas.height=height*ratio;
+ const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);
+ if(!fanoutBoard?.pads.length)return;
+ const routes=[...(fanoutDrawing?.accepted||[]),...(fanoutDrawing?.breakout_only||[])];
+ const points=[...fanoutBoard.pads.map(pad=>pad.position),
+  ...routes.flatMap(row=>[row.start,row.end,...(row.route||[])])];
+ const xs=points.map(point=>point[0]),ys=points.map(point=>point[1]);
+ const left=Math.min(...xs)-1,right=Math.max(...xs)+1,top=Math.min(...ys)-1,bottom=Math.max(...ys)+1;
+ const scale=Math.min((width-18)/(right-left),(height-18)/(bottom-top));
+ const pixel=([x,y])=>[(width-(right-left)*scale)/2+(x-left)*scale,(height-(bottom-top)*scale)/2+(y-top)*scale];
+ const rejected=new Set((fanoutDrawing?.rejected||[]).map(row=>row.pad));
+ function circle(point,radius,fill){
+  ctx.beginPath();ctx.arc(...pixel(point),Math.max(radius*scale,2),0,2*Math.PI);
+  if(fill)ctx.fill();else ctx.stroke();
+ }
+ for(const pad of fanoutBoard.pads){
+  ctx.fillStyle=rejected.has(pad.number)?'#ff9c90':'#a8b8ce';
+  circle(pad.position,Math.min(...pad.size)/2,true);
+ }
+ for(const row of routes){
+  const color=row.reason?'#eaba73':'#75dfb1';
+  ctx.strokeStyle=color;ctx.lineWidth=Math.max(1,row.width*scale);
+  ctx.beginPath();ctx.moveTo(...pixel(row.start));ctx.lineTo(...pixel(row.end));ctx.stroke();
+  ctx.strokeStyle='#88baff';ctx.beginPath();
+  for(const [index,point] of (row.route||[]).entries()){
+   if(index)ctx.lineTo(...pixel(point));else ctx.moveTo(...pixel(point));
+  }
+  ctx.stroke();ctx.strokeStyle=color;ctx.lineWidth=1;circle(row.end,row.diameter/2,false);
+ }
+}
+new ResizeObserver(drawFanout).observe(el('fanout-map'));
+el('suggestions').onchange=()=>{
+ if(el('suggestions').value==='')return;
+ for(const [key,value] of Object.entries(suggestions[Number(el('suggestions').value)].settings)){
+  const input=fanoutForm.elements[key];
+  if(input){if(input.type==='checkbox')input.checked=value;else input.value=value;}
+ }
+ fanoutForm.oninput();
+};
+function draw(){
+ const width=canvas.clientWidth,height=canvas.clientHeight,dpr=devicePixelRatio||1;
+ if(!width||!height)return;
+ canvas.width=width*dpr;canvas.height=height*dpr;
+ const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+ const items=scene.filter(s=>el('layer').value==='All layers'||s.layer===el('layer').value||s.layer==='via');
+ let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+ for(const item of items)for(const [x,y] of item.points){x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}
+ if(!Number.isFinite(x0)){ctx.fillStyle='#abb9cc';ctx.fillText('Record a source layout to preview.',12,22);return;}
+ const scale=Math.min((width-32)/Math.max(x1-x0,1),(height-32)/Math.max(y1-y0,1))*zoom;
+ const screen=([x,y])=>[(x-(x0+x1)/2)*scale+width/2+pan[0],(y-(y0+y1)/2)*scale+height/2+pan[1]];
+ for(const item of items){
+  if(!item.points.length)continue;
+  const first=screen(item.points[0]);ctx.beginPath();ctx.moveTo(...first);
+  ctx.strokeStyle=ctx.fillStyle=item.ghost?'#647285':item.layer==='B.Cu'?'#77abff':item.layer==='F.Cu'?'#ed9677':'#b9ca9b';
+  ctx.lineWidth=Math.max(.7,item.width*scale);
+  if(item.kind==='text'){ctx.fillText(item.text,...first);continue;}
+  if(item.kind==='via'){ctx.arc(...first,Math.max(1,item.width*scale/2),0,2*Math.PI);}
+  else for(const point of item.points.slice(1))ctx.lineTo(...screen(point));
+  if(item.kind==='pad'){ctx.closePath();ctx.fill();}else ctx.stroke();
+ }
+}
+document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>run(button.dataset.action));
+el('layer').onchange=draw;el('fit').onclick=()=>{zoom=1;pan=[0,0];draw();};
+canvas.onwheel=event=>{event.preventDefault();zoom=Math.max(.25,Math.min(20,zoom*(event.deltaY<0?1.15:1/1.15)));draw();};
+canvas.onpointerdown=event=>{drag=[event.clientX,event.clientY];canvas.setPointerCapture(event.pointerId);};
+canvas.onpointermove=event=>{if(!drag)return;pan[0]+=event.clientX-drag[0];pan[1]+=event.clientY-drag[1];drag=[event.clientX,event.clientY];draw();};
+canvas.onpointerup=canvas.onpointercancel=()=>{drag=null;};
+new ResizeObserver(draw).observe(canvas);
+openWorkspace('Layout');
+function setLogo(source){
+ const logo=el('brand-logo');logo.src=source;logo.hidden=false;
+}
+const buttonGlyphs={
+ info:'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0ZM12 11v6m0-10h.01',
+ settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 12v3m-9-9h3m12 0h3M6 6l2 2m8 8 2 2m0-12-2 2m-8 8-2 2',
+ cancel:'m6 6 12 12M18 6 6 18', search:'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 6 6',
+ apply:'m4 12 5 5L20 6', refresh:'M20 10a8 8 0 1 0-2 8m2-14v6h-6',
+ save:'M4 3h13l4 4v14H3V3Zm3 0v6h10V3M7 21v-7h10v7',
+ copy:'M8 8h12v12H8zM16 8V4H4v12h4', remove:'M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7',
+ next:'m9 5 7 7-7 7',previous:'m15 5-7 7 7 7',
+ preview:'M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Zm10-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z',
+ add:'M12 5v14M5 12h14', layout:'M4 4h16v16H4zM4 10h16M10 10v10'
+};
+function decorateButton(button){
+ if(button.firstElementChild?.classList.contains('button-icon'))return;
+ const text=button.textContent.trim();
+ const label=text.toLowerCase();
+ const iconOnly=button.dataset.iconOnly;
+ const key=iconOnly||Object.keys(buttonGlyphs).find(name=>label.includes(name))||
+  (/^(find|scan|locate|browse)/.test(label)?'search':/^(export|load|install)/.test(label)?'save':
+   /^(set|check|verify|highlight|calculate)/.test(label)?'apply':/^(delete|clear)/.test(label)?'remove':
+   /^(close|hide)/.test(label)?'cancel':'layout');
+ const ns='http://www.w3.org/2000/svg';
+ const svg=document.createElementNS(ns,'svg'),path=document.createElementNS(ns,'path');
+ svg.setAttribute('class','button-icon');svg.setAttribute('aria-hidden','true');svg.setAttribute('viewBox','0 0 24 24');
+ svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');
+ svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
+ path.setAttribute('d',buttonGlyphs[key]);svg.append(path);
+ if(iconOnly){
+  button.setAttribute('aria-label',text);
+  button.title=text;
+  button.replaceChildren(svg);
+ }else button.prepend(svg);
+}
+document.querySelectorAll('button').forEach(decorateButton);
+new MutationObserver(records=>{
+ for(const record of records)for(const node of record.addedNodes){
+  if(!(node instanceof HTMLElement))continue;
+  if(node.matches('button'))decorateButton(node);
+  node.querySelectorAll('button').forEach(decorateButton);
+ }
+}).observe(document.body,{childList:true,subtree:true});
+</script>
+</html>

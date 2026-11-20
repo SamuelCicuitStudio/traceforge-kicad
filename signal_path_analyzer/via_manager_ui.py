@@ -23,9 +23,9 @@ class ViaSizePreview(wx.Panel):
 
     def paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
-        dc.SetBackground(wx.Brush('#19212D'))
+        dc.SetBackground(wx.Brush('#1b1b1b'))
         dc.Clear()
-        dc.SetTextForeground(wx.Colour('#E5EDF8'))
+        dc.SetTextForeground(wx.Colour('#ededed'))
         dc.DrawText('Green: can grow   Red: blocked   Gray: skipped | select row to focus PCB',
                     12, 9)
         if not self.rows:
@@ -44,13 +44,13 @@ class ViaSizePreview(wx.Panel):
             proposed = self.target if self.target and row['status'] == 'ready' else (
                 row['diameter_mm'], row['drill_mm'])
             dc.SetPen(wx.Pen(color, 2))
-            dc.SetBrush(wx.Brush('#263747'))
+            dc.SetBrush(wx.Brush('#343434'))
             dc.DrawCircle(x, y, max(3, round(proposed[0]*scale/2)))
             dc.SetPen(wx.Pen('#8C9AAB', 1, wx.PENSTYLE_DOT))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
             dc.DrawCircle(x, y, max(2, round(row['diameter_mm']*scale/2)))
             dc.SetPen(wx.Pen(color, 1))
-            dc.SetBrush(wx.Brush('#19212D'))
+            dc.SetBrush(wx.Brush('#1b1b1b'))
             dc.DrawCircle(x, y, max(1, round(proposed[1]*scale/2)))
 
 

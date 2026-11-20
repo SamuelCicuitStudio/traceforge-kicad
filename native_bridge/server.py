@@ -306,7 +306,18 @@ def dispatch(board, operation, payload):
     if operation.startswith('layout_clone_'):
         from signal_path_analyzer.traceforge_layout_clone import dispatch as clone_dispatch
 
-        return clone_dispatch(board, operation, payload)
+        result = clone_dispatch(board, operation, payload)
+        if operation in ('layout_clone_apply', 'layout_clone_grid'):
+            from .exact_selection import select_cloned_items
+
+            identities = result.pop('selection_ids')
+            try:
+                count, exact = select_cloned_items(board, identities)
+                result['selection_note'] = (f'Selected {count} cloned items.' if exact else
+                    f'KiCad selected {count} of {len(identities)} cloned items.')
+            except Exception as exc:
+                result['selection_note'] = f'Clone applied. Selection update failed: {exc}'
+        return result
 
     if operation.startswith('teardrop_'):
         from signal_path_analyzer.teardrop_native import dispatch as teardrop_dispatch

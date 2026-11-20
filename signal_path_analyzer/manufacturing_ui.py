@@ -29,8 +29,8 @@ class ManufacturingPanel(wx.ScrolledWindow):
         self.atomic = self.started = False
         self.working = False
         if host.dark:
-            self.SetBackgroundColour("#222C3A")
-            self.SetForegroundColour("#E5EDF8")
+            self.SetBackgroundColour("#303030")
+            self.SetForegroundColour("#ededed")
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(wx.StaticText(self, label="Manufacturing & Project Maintenance"), 0, wx.ALL, 9)
         note = wx.StaticText(

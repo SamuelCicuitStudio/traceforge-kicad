@@ -12,7 +12,7 @@ from pathlib import Path
 import pcbnew
 
 from .cancellation import check_payload
-from .stitching_native import refill, transaction, uid
+from .stitching_native import transaction, uid
 from .via_manager import digest, resize_text, size_catalog, via_blocks
 
 _session = None
@@ -293,19 +293,10 @@ def dispatch(board, operation, payload):
                 else:
                     via.SetWidth(round(saved['diameter'] * 1e6))
                     via.SetDrill(round(saved['drill'] * 1e6))
-            if operation == 'via_manage_delete':
-                # Remove first, then let the user refill once after a cleanup
-                # batch. A deletion cannot add an electrical copper short.
-                live.BuildConnectivity()
-            elif result.get('method') == 'local hole checks':
-                live.BuildConnectivity()  # Copper envelopes and zone clearances are unchanged.
-            else:
-                refill(live)
+            live.BuildConnectivity()
             pcbnew.Refresh()
             verb = 'Deleted' if operation == 'via_manage_delete' else 'Resized'
-            suffix = ('Zones were not refilled. Press B in KiCad when ready, '
-                      'before DRC/export. '
-                      if operation == 'via_manage_delete' else '')
+            suffix = 'Press B in KiCad to refill zones before DRC/export. '
             return dict(count=len(identities),
                         message=f'{verb} {len(identities)} vias. '
                                 + suffix + 'Undo restores them; save normally.')

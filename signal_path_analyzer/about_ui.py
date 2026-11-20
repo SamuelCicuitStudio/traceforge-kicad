@@ -15,10 +15,10 @@ class AboutPanel(wx.ScrolledWindow):
     def __init__(self, parent, dark, native_info=None):
         super().__init__(parent)
         self.SetScrollRate(0, 12)
-        bg = '#222C3A' if dark else '#FFFFFF'
-        card_bg = '#19212D' if dark else '#F2F6FB'
-        text = '#E5EDF8' if dark else '#1C2735'
-        muted = '#A8B4C7' if dark else '#536579'
+        bg = '#303030' if dark else '#FFFFFF'
+        card_bg = '#1b1b1b' if dark else '#F2F6FB'
+        text = '#ededed' if dark else '#1C2735'
+        muted = '#b5b5b5' if dark else '#536579'
         accent = '#7DCFFF' if dark else '#145FA0'
         self.SetBackgroundColour(bg)
 

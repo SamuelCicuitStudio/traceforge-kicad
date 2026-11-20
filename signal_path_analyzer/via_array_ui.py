@@ -27,10 +27,10 @@ class ViaArrayPreview(wx.Panel):
         self.render(dc, size.width, size.height)
 
     def render(self, dc, width, height):
-        dc.SetBackground(wx.Brush('#19212D'))
+        dc.SetBackground(wx.Brush('#1b1b1b'))
         dc.Clear()
         if not self.result:
-            dc.SetTextForeground(wx.Colour('#A8B4C7'))
+            dc.SetTextForeground(wx.Colour('#b5b5b5'))
             dc.DrawText('Select vias in PCB Editor, then click Read & preview selection.', 16, 16)
             return
         data = self.result
@@ -42,10 +42,10 @@ class ViaArrayPreview(wx.Panel):
         for index, title in enumerate(('Current positions', 'Proposed array')):
             left = gap + index * (card_width + gap)
             box = wx.Rect(left, gap, card_width, max(1, height - 2 * gap))
-            dc.SetPen(wx.Pen('#37475C', 1))
-            dc.SetBrush(wx.Brush('#222C3A'))
+            dc.SetPen(wx.Pen('#4a4a4a', 1))
+            dc.SetBrush(wx.Brush('#303030'))
             dc.DrawRoundedRectangle(box, 6)
-            dc.SetTextForeground(wx.Colour('#E5EDF8'))
+            dc.SetTextForeground(wx.Colour('#ededed'))
             dc.DrawText(title, left + 12, gap + 9)
             plot = wx.Rect(left + 32, gap + 40, max(1, card_width - 64),
                            max(1, height - 76))
@@ -87,7 +87,7 @@ class ViaArrayPreview(wx.Panel):
                 color = ('#F36C6C' if index and move['uuid'] in issue_ids else
                          '#54D7A2' if index else '#F5B95D')
                 dc.SetPen(wx.Pen(color, 2))
-                dc.SetBrush(wx.Brush('#263747'))
+                dc.SetBrush(wx.Brush('#343434'))
                 dc.DrawCircle(px, py, radius)
                 dc.SetPen(wx.Pen('#EAF5FF', 1))
                 dc.SetBrush(wx.Brush('#EAF5FF'))

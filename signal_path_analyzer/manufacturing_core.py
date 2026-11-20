@@ -321,6 +321,8 @@ def project_inventory(board_file: Path) -> dict[str, Any]:
 
 def library_cleanup_candidates(inventory: dict[str, Any]) -> list[dict[str, str]]:
     """Offer only project-local, unused table entries; never touch global tables."""
+    if any(issue["kind"] == "missing_sheet" for issue in inventory["issues"]):
+        raise ValueError("Restore the missing schematic sheets before reviewing unused libraries.")
     return [
         {"table": item["table"], "name": item["name"], "uri": item["uri"]}
         for item in inventory["libraries"]
@@ -334,6 +336,10 @@ def apply_library_cleanup(
     if table_name not in TABLE_FILES or not names:
         raise ValueError("Select project-local table entries to remove")
     inventory = project_inventory(board_file)
+    unused = {item["name"] for item in library_cleanup_candidates(inventory)
+              if item["table"] == table_name}
+    if not set(names) <= unused:
+        raise ValueError("Selected entries are no longer unused in the current project.")
     project = Path(inventory["project"])
     table = project / table_name
     if not table.is_file() or table.is_symlink() or digest(table) != expected_sha256:

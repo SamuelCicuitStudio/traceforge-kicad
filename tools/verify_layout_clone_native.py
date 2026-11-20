@@ -77,21 +77,30 @@ def main():
             assert 'changed' in str(exc)
         else:
             raise AssertionError('Stale placement was accepted')
-        # A routed target cannot be moved away from its existing copper.
-        pad = next(iter(target[1].Pads()))
-        track = pcbnew.PCB_TRACK(board)
-        track.SetStart(pad.GetPosition())
-        track.SetEnd(pad.GetPosition() + pcbnew.VECTOR2I(pcbnew.FromMM(2), 0))
-        track.SetWidth(pcbnew.FromMM(.2))
-        track.SetLayer(pcbnew.F_Cu)
-        track.SetNet(pad.GetNet())
-        board.Add(track)
+        def copper(pad):
+            track = pcbnew.PCB_TRACK(board)
+            track.SetStart(pad.GetPosition())
+            track.SetEnd(pad.GetPosition() + pcbnew.VECTOR2I(pcbnew.FromMM(2), 0))
+            track.SetWidth(pcbnew.FromMM(.2))
+            track.SetLayer(pcbnew.F_Cu)
+            track.SetNet(pad.GetNet())
+            board.Add(track)
+            return track
+
+        local = copper(next(pad for pad in target[1].Pads() if pad.GetNetname() == 'c'))
+        shared = copper(next(pad for pad in target[0].Pads() if pad.GetNetname() == 'VCC'))
+        local_id, shared_id = (item.m_Uuid.AsString() for item in (local, shared))
+        local.SetLocked(True)
         try:
             clone._apply_to_board(board, dict(template=template, expected_target=actual))
         except ValueError as exc:
-            assert 'copper' in str(exc)
+            assert 'locked' in str(exc)
         else:
-            raise AssertionError('Routed target was moved')
+            raise AssertionError('Locked local routing was accepted')
+        local.SetLocked(False)
+        clone._apply_to_board(board, dict(template=template, expected_target=actual))
+        remaining = {item.m_Uuid.AsString() for item in board.GetTracks()}
+        assert local_id not in remaining and shared_id in remaining
     finally:
         stitching_native.transaction = original_transaction
         pcbnew.Refresh = original_refresh
@@ -197,10 +206,8 @@ def verify_routing_assets():
     expected = clone._snapshot(board, [target])
     source_ids = {x.m_Uuid.AsString() for x in board.GetTracks()}
     source_graphic = graphic.GetPosition()
-    transaction, refresh, refill = (stitching_native.transaction, pcbnew.Refresh,
-                                    stitching_native.refill)
+    transaction, refresh = stitching_native.transaction, pcbnew.Refresh
     stitching_native.transaction = lambda board, job: job(board)
-    stitching_native.refill = lambda board: None
     pcbnew.Refresh = lambda: None
     try:
         result = clone._apply_to_board(board, dict(
@@ -224,8 +231,15 @@ def verify_routing_assets():
         target2.SetOrientationDegrees(90)
         expected2 = clone._snapshot(board, [target2])
         result2 = clone._apply_to_board(board, dict(
-            template=template, expected_target=expected2, mode='both', include_graphics=True))
+            template=template, expected_target=expected2, mode='both', include_graphics=True,
+            group_cloned=True))
         assert result2['moved'] == 1 and result2['cloned_assets'] == 5
+        assert result2['groups_created'] == 1
+        group = next(iter(board.Groups()))
+        assert len(group.GetItems()) == 6
+        parent = pcbnew.Cast_to_PCB_GROUP(pcbnew.Cast_to_BOARD_ITEM(target2.GetParentGroup().AsEdaItem()))
+        assert parent.m_Uuid.AsString() == group.m_Uuid.AsString()
+        assert result2['selection_ids'] == [group.m_Uuid.AsString()]
         assert target2.GetOrientationDegrees() == 90
         assert target2.GetPosition() == pcbnew.VECTOR2I(80000000, 60000000)
         rotated_only = component('U6', 200, 'DST')
@@ -283,12 +297,11 @@ def verify_routing_assets():
             clone._apply_to_board(board, dict(
                 template=template, expected_target=expected, mode='routing'))
         except ValueError as exc:
-            assert 'copper' in str(exc)
+            assert 'identical' in str(exc)
         else:
             raise AssertionError('Repeated routing duplicated existing target copper')
     finally:
-        stitching_native.transaction, pcbnew.Refresh, stitching_native.refill = (
-            transaction, refresh, refill)
+        stitching_native.transaction, pcbnew.Refresh = transaction, refresh
     print('PASS: None-factory regression, native routing/graphics, '
           'remapped nets and routing-only placement')
 

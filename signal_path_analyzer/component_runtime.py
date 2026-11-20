@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -36,6 +37,23 @@ def save_settings(data):
 
 class Cancelled(RuntimeError):
     pass
+
+
+def export_cad_previews(worker, stage):
+    cli = shutil.which("kicad-cli") or str(Path(sys.executable).with_name("kicad-cli.exe"))
+    out = Path(stage["staging"]) / "preview"
+    out.mkdir(exist_ok=True)
+    if stage.get("symbol"):
+        worker.run([cli, "sym", "export", "svg", "-o", str(out), stage["symbol"]])
+    if stage.get("footprint"):
+        footprint = Path(stage["footprint"])
+        with tempfile.TemporaryDirectory(dir=stage["staging"]) as temp:
+            library = Path(temp) / "preview.pretty"
+            library.mkdir()
+            shutil.copy2(footprint, library / footprint.name)
+            worker.run([cli, "fp", "export", "svg", "-o", str(out), "-l", "F.Cu,F.SilkS,F.Fab",
+                        "--sp", "--footprint", footprint.stem, str(library)])
+    return sorted(out.glob("*.svg"))
 
 
 class Worker:

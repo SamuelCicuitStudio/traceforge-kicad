@@ -7,7 +7,7 @@ LONG_OPERATIONS = ('stitch_', 'fanout_', 'tracefence_', 'endpoint_', 'pick_',
 
 def editor_timeout(operation):
     # Dense whole-board stitching includes a complete copper clearance preview
-    # and, on apply, zone refill and native connectivity validation.
+    # and, on apply, geometry revalidation and a connectivity update.
     if operation == 'stitch_apply':
         return 300
     if operation == 'stitch_preview':

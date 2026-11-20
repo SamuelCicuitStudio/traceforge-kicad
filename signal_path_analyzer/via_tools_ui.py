@@ -18,8 +18,8 @@ class ViaToolsPanel(wx.Panel):
         super().__init__(parent)
         self.host = host
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         outer = wx.BoxSizer(wx.VERTICAL)
         bar = wx.BoxSizer(wx.HORIZONTAL)
         bar.AddStretchSpacer()

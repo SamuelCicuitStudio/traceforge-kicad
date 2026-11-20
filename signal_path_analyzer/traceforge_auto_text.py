@@ -876,8 +876,8 @@ def create_tab(parent: Any, host: Any, native_call: Any) -> Any:
             self.records = []
             self.setting_style = False
             if getattr(host, 'dark', False):
-                self.SetBackgroundColour('#222C3A')
-                self.SetForegroundColour('#E5EDF8')
+                self.SetBackgroundColour('#303030')
+                self.SetForegroundColour('#ededed')
 
             root = wx.BoxSizer(wx.VERTICAL)
             title = wx.StaticText(self, label='Auto Text | Readable reference layout')

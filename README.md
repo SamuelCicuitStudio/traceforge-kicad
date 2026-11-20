@@ -32,6 +32,10 @@ Read the full saved schematic or live PCB, calculate order quantities with MOQ/m
 
 ### Layout Clone: repeated circuits without hierarchy
 
+**0.18.1 local test build (Windows).** TraceForge uses the native wxPython interface
+across all workspaces. Layout Clone uses KiCad’s live board for record, preview,
+single-target Apply, and grid Apply. The test ZIP is separate from the 0.18.1 release.
+
 For variants such as a master FPGA and its slave replicas, choose **Placement +
 routing** and enable **Copy only compatible routing**. TraceForge copies copper
 whose numbered-pad connections agree within the matched group and reports the

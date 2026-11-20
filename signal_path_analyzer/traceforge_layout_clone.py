@@ -576,6 +576,8 @@ def _snapshot(board, fps):
         duplicate = fp.Duplicate(False).Cast()
         duplicate.Flip(duplicate.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
         flipped = _snapshot_fp(board, duplicate)
+        for pad in flipped["pads"]:
+            pad.pop("pad_id")
         record["flipped_geometry"] = dict(layer=flipped["layer"], pads=flipped["pads"])
         items.append(record)
     return dict(
@@ -700,7 +702,7 @@ _grid_assets = {}
 def _apply_to_board(board, payload, prepared_jobs=None):
     import pcbnew
 
-    from signal_path_analyzer.stitching_native import refill, transaction
+    from signal_path_analyzer.stitching_native import transaction
 
     template = payload.get("template")
     expected = payload.get("expected_target")
@@ -754,8 +756,8 @@ def _apply_to_board(board, payload, prepared_jobs=None):
                 [source["x"], source["y"]], plan["transform"]
             )
             pair["angle"] = source["angle"]
-    if mode == "routing":
-        # Reclone routing also reapplies source placement before copying copper.
+    if mode == "routing" and payload.get("grid_transform"):
+        # The grid action explicitly relocates instances to its computed positions.
         mode = "both"
     plan = assets.plan_options(template, current, plan, mode, graphics,
                                selective=payload.get("selective") is True)
@@ -851,8 +853,22 @@ def _apply_to_board(board, payload, prepared_jobs=None):
                 raise RuntimeError(f"Pad geometry/orientation changed: {a['ref']}. Undoing.")
             if _pad_identity(a) != _pad_identity(now):
                 raise RuntimeError(f"Pad identity or net changed: {a['ref']}. Undoing.")
+        selected = [refreshed[entry["target_id"]] for entry in plan["pairs"]] + additions
+        grouped = False
+        group_note = ""
+        if payload.get("group_cloned") is True and len(selected) > 1:
+            if any(item.GetParentGroup() for item in selected):
+                group_note = "Existing group membership preserved."
+            else:
+                group = pcbnew.PCB_GROUP(live)
+                group.SetName("TraceForge clone " + plan["pairs"][0]["target"])
+                live.Add(group)
+                for item in selected:
+                    group.AddItem(item)
+                selected = [group]
+                grouped = True
         if prepared_jobs is None:
-            refill(live)
+            live.BuildConnectivity()
             pcbnew.Refresh()
         return dict(
             moved=len(changes),
@@ -860,6 +876,9 @@ def _apply_to_board(board, payload, prepared_jobs=None):
             removed_routing=len(removal_ids),
             asset_counts=dict(Counter(assets.category(a) for a in additions)),
             skipped_nets=dict(skipped),
+            selection_ids=[_uuid(item) for item in selected],
+            groups_created=int(grouped),
+            grouping_note=group_note,
             anchor=plan["anchor"],
             distance=[rmm(n) for n in plan["delta"]],
             ownership={_uuid(item): assets._native_key(item) for item in additions}
@@ -879,7 +898,7 @@ def _apply_to_board(board, payload, prepared_jobs=None):
 def clone_grid(board, payload):
     import pcbnew
 
-    from .stitching_native import refill, transaction
+    from .stitching_native import transaction
 
     template = payload["template"]
     # Verify the recorded source is still current; ignore the current selection
@@ -965,13 +984,17 @@ def clone_grid(board, payload):
         skipped = Counter()
         for result in results:
             skipped.update(result["skipped_nets"])
-        refill(live)
+        live.BuildConnectivity()
         pcbnew.Refresh()
         return dict(
             instances=len(results),
             moved=sum(r["moved"] for r in results),
             cloned_assets=sum(r["cloned_assets"] for r in results),
             skipped_nets=dict(skipped),
+            selection_ids=[item for result in results for item in result["selection_ids"]],
+            groups_created=sum(result["groups_created"] for result in results),
+            grouping_note="Existing group membership preserved."
+            if any(result["grouping_note"] for result in results) else "",
             ownership=[r["ownership"] for r in results],
         )
 
@@ -1241,7 +1264,7 @@ def create_tab(parent, native_call):
                     if control.IsEnabled():
                         self._disabled.append(control)
                         control.Disable()
-            self.message(phase + ". Large routing copies and zone refill can take time.")
+            self.message(phase + ". Large routing copies can take time.")
             self.Layout()
 
             def finish(result, error):
@@ -1542,7 +1565,7 @@ def create_tab(parent, native_call):
                     lambda result: self.message(
                         f"Grid complete: {result['instances']} replicas, "
                         f"{result['moved']} components, {result['cloned_assets']} assets. "
-                        "Undo available."
+                        "Undo available. " + result.get("selection_note", "")
                     ),
                 )
             except Exception as exc:
@@ -1589,7 +1612,7 @@ def create_tab(parent, native_call):
                     selective=self.selective.GetValue(),
                 )
                 self.run_native(
-                    "Cloning layout: validate, copy copper/graphics and refill zones",
+                    "Cloning layout: validate and copy copper/graphics",
                     "layout_clone_apply",
                     payload,
                     self.applied,
@@ -1606,7 +1629,8 @@ def create_tab(parent, native_call):
             self.message(
                 f"Applied {result['moved']} footprints and "
                 f"{result.get('cloned_assets', 0)} layout assets. "
-                "Use KiCad Edit > Undo to revert; run DRC before routing."
+                "Use KiCad Edit > Undo to revert. Refill zones manually before DRC. "
+                + result.get("selection_note", "")
                 + ("\nSkipped source copper by net:\n" + "\n".join(
                     f"{net}: {count}" for net, count in sorted(result["skipped_nets"].items())
                 ) if result.get("skipped_nets") else "")

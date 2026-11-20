@@ -54,6 +54,9 @@ def files():
     paths["plugins/signal_path_analyzer/component_schema.json"] = (
         ROOT / "signal_path_analyzer/component_schema.json"
     )
+    paths["plugins/signal_path_analyzer/webview.html"] = ROOT / "signal_path_analyzer/webview.html"
+    paths["plugins/signal_path_analyzer/traceforge-logo.png"] = ROOT / "icons/traceforge-dark-48.png"
+    paths["plugins/signal_path_analyzer/traceforge-logo-light.png"] = ROOT / "icons/traceforge-light-48.png"
     for source in (ROOT / "signal_path_analyzer" / "manufacturing_resources").rglob("*"):
         if source.is_file() and "__pycache__" not in source.parts:
             relative = source.relative_to(ROOT / "signal_path_analyzer").as_posix()
@@ -66,7 +69,7 @@ def files():
     return paths
 
 
-def main(*, local_only=False):
+def main(*, local_only=False, output=None):
     metadata = json.loads(METADATA.read_text(encoding="utf-8"))
     if len(metadata["versions"]) != 1:
         raise ValueError("Packaged PCM metadata must have exactly one version")
@@ -82,8 +85,8 @@ def main(*, local_only=False):
     if "download_url" in metadata["versions"][0] or "download_sha256" in metadata["versions"][0]:
         raise ValueError("Download fields belong in submission metadata, not the archive")
 
-    output = ROOT / "dist"
-    output.mkdir(exist_ok=True)
+    output = Path(output) if output is not None else ROOT / "dist"
+    output.mkdir(parents=True, exist_ok=True)
     name = f"TraceForge-{version}-KiCad10-PCM.zip"
     archive = output / name
     paths = files()

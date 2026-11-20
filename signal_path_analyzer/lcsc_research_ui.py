@@ -13,7 +13,7 @@ import wx.dataview as dv
 from . import lcsc_research_backend as api
 from .combined_research import CombinedBackend
 
-BG, INPUT, FG, MUTED = "#222c3a", "#17212e", "#e5edf8", "#a8b4c7"
+BG, INPUT, FG, MUTED = "#303030", "#1b1b1b", "#ededed", "#b5b5b5"
 BLUE, GOLD, GREEN = "#285aa0", "#ffd166", "#6ee7a0"
 
 

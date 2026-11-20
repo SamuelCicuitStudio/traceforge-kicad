@@ -10,8 +10,8 @@ class ToolWorkspace(wx.Panel):
         super().__init__(parent)
         self.host = host
         if host.dark:
-            self.SetBackgroundColour("#222C3A")
-            self.SetForegroundColour("#E5EDF8")
+            self.SetBackgroundColour("#303030")
+            self.SetForegroundColour("#ededed")
         self.selector = wx.Choice(self, choices=names)
         self.selector.SetSelection(0)
         self.book = wx.Simplebook(self)

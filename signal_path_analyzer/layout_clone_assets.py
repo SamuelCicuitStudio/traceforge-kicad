@@ -184,7 +184,7 @@ def plan_options(template, target, plan, mode, graphics, selective=False):
                abs(dst[p['target_id']]['y'] - p['y']) > .00002 or
                abs((dst[p['target_id']]['angle'] - p['angle'] + 180) % 360 - 180) > .00002]
         if bad:
-            pass  # Reclone aligns placement automatically before replacing routing.
+            issues.append('Routing only requires identical relative placement: ' + ', '.join(bad))
     counts = template.get('assets', {}).get('counts', {})
     if mode != 'placement':
         if plan['missing'] or plan['extra']:

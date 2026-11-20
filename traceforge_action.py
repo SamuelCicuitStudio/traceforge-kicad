@@ -118,7 +118,9 @@ def build_tools(session: Session):
     clear = lambda: native.call('clear')  # noqa: E731
     return Tools(session.evaluate, hl_chain, hl_group, hl_selection, clear, write,
                  export, save, source, edit, zoom, highlight_groups=hl_groups,
-                 routing_configuration=lambda: routing_configuration(session.board_file))
+                 routing_configuration=lambda: routing_configuration(session.board_file),
+                 chain_config=lambda: session.config, commit_chains=lambda config: session.save_config(config),
+                 find_chains=lambda *args: session.find_between(*args))
 
 
 def _log_to_file() -> None:

@@ -130,7 +130,7 @@ class BoardOverview(wx.Panel):
     def paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
         dark = self.GetTopLevelParent().dark
-        dc.SetBackground(wx.Brush('#19212D' if dark else '#FFFFFF'))
+        dc.SetBackground(wx.Brush('#1b1b1b' if dark else '#FFFFFF'))
         dc.Clear()
         if not self.scene:
             dc.SetTextForeground(self.colors['pending'])
@@ -199,8 +199,8 @@ class StitchingPanel(wx.ScrolledWindow):
         # Preview, Apply and the managed-set controls.
         self.SetScrollRate(0, 12)
         if host.dark:
-            self.SetBackgroundColour('#222C3A')
-            self.SetForegroundColour('#E5EDF8')
+            self.SetBackgroundColour('#303030')
+            self.SetForegroundColour('#ededed')
         self.host, self.native, self.scene = host, native, None
         self.trace_mode = trace_mode
         self.preview, self.region, self.replace = None, dict(kind='board'), None
@@ -391,11 +391,11 @@ class StitchingPanel(wx.ScrolledWindow):
         self.toggle_advanced()
         self.FitInside()
         if host.dark:
-            self.sets.SetBackgroundColour('#19212D')
-            self.sets.SetForegroundColour('#E5EDF8')
+            self.sets.SetBackgroundColour('#1b1b1b')
+            self.sets.SetForegroundColour('#ededed')
             for child in self.GetChildren():
                 if isinstance(child, wx.StaticText) and child is not self.status:
-                    child.SetForegroundColour('#E5EDF8')
+                    child.SetForegroundColour('#ededed')
         for control in (self.name, self.net, self.source, self.connection, self.pattern):
             control.Bind(wx.EVT_TEXT if control is self.name or
                          (trace_mode and control is self.net) else wx.EVT_CHOICE
@@ -669,7 +669,7 @@ class StitchingPanel(wx.ScrolledWindow):
             self.apply.SetLabel('Apply trace fence' if self.trace_mode else 'Apply stitching')
             self.accept_scene(result[1])
             self.message(f"Placed {result[0]['count']} stitching vias. Undo is available in KiCad; "
-                         'save the PCB normally.', 'ok')
+                         'press B in KiCad when ready to refill zones.', 'ok')
 
         self.task(work, done)
 

@@ -515,15 +515,24 @@ class LCSCBackend:
         if cancel is not None and cancel.is_set():
             raise Cancelled("Cancelled")
         key = method + ":" + url + ":" + json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        catalog_api = url.startswith(BASE + "/")
         if ttl and self.cache_enabled:
             hit = self.cache.get(key, ttl)
             if hit:
-                return hit
+                try:
+                    if catalog_api:
+                        unwrap(hit.data)
+                except LCSCError:
+                    pass
+                else:
+                    return hit
         raw = self.transport.request(method, url, payload, cancel=cancel)
         if cancel is not None and cancel.is_set():
             raise Cancelled("Cancelled")
         observed = utc_now()
         if ttl and self.cache_enabled:
+            if catalog_api:
+                unwrap(raw)
             self.cache.put(key, raw)
         return Response(
             raw, "mocked" if getattr(self.transport, "is_mock", False) else "live-tested", observed

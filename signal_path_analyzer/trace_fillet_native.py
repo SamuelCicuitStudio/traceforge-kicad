@@ -324,11 +324,15 @@ def dispatch(board, operation, payload):
     if operation != 'fillet_restore':
         raise ValueError('Unsupported trace fillet operation.')
     store = _load(board)
+    current = {_uid(item): item for item in board.GetTracks()}
     scope = payload.get('scope', 'selected')
     if scope not in ('selected', 'all'):
         raise ValueError('Choose selected corners or all generated corners.')
     if scope == 'all':
-        chosen = list(store['records'])
+        # An undone fillet leaves a journal record but none of its generated
+        # items. Retain that record for Redo without treating it as a live edit.
+        chosen = [record for record in store['records']
+                  if record['arc'] in current or any(track in current for track in record['tracks'])]
     else:
         selected = _selected_ids()
         if not selected:
@@ -337,7 +341,6 @@ def dispatch(board, operation, payload):
                   any(identity in selected for identity in record['tracks'])]
     if not chosen:
         raise ValueError('No TraceForge fillets found for this restore scope.')
-    current = {_uid(item): item for item in board.GetTracks()}
     for record in chosen:
         arc = current.get(record['arc'])
         if (not isinstance(arc, pcbnew.PCB_ARC) or arc.IsLocked() or
@@ -374,12 +377,16 @@ def dispatch(board, operation, payload):
     replacements = transaction(board, restore)
     removed = {record['arc'] for record in chosen}
     store['records'] = [record for record in store['records'] if record['arc'] not in removed]
+    live_tracks = {_uid(item): item for item in board.GetTracks()}
     for record in store['records']:
+        if not any(identity in replacements for identity in record['tracks']):
+            continue
         record['tracks'] = [replacements.get(identity, identity)
                             for identity in record['tracks']]
-        record['track_shapes'] = [_signature(next(item for item in board.GetTracks()
-                                                  if _uid(item) == identity))
-                                  for identity in record['tracks']]
+        record['track_shapes'] = [
+            _signature(live_tracks[identity]) if identity in live_tracks else previous
+            for identity, previous in zip(record['tracks'], record['track_shapes'])
+        ]
     _save(board, store)
     _preview = None
     return {'restored': len(chosen)}

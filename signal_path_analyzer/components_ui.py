@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -22,8 +21,8 @@ class ComponentsPanel(wx.Panel):
     def __init__(self, parent, host, native, board_file):
         super().__init__(parent)
         if host.dark:
-            self.SetBackgroundColour("#222C3A")
-            self.SetForegroundColour("#E5EDF8")
+            self.SetBackgroundColour("#303030")
+            self.SetForegroundColour("#ededed")
         self.host, self.native = host, native
         self.board_file = str(board_file or "")
         self.project = None
@@ -142,7 +141,7 @@ class ComponentsPanel(wx.Panel):
 
         if self.assignment and not self.assignment.detach():
             return
-        self.status.SetForegroundColour("#e5edf8")
+        self.status.SetForegroundColour("#ededed")
         self.assignment = BomAssignmentSession(report, self, row)
         self.catalog_panel.reset_context("" if replacement else (row["mpn"] or row["lcsc"]))
         self.host.activate_tool("components.search")
@@ -709,31 +708,7 @@ class ComponentsPanel(wx.Panel):
             self.message("Stage a component first.")
             return
         stage = dict(self.stage)
-        cli = shutil.which("kicad-cli") or str(Path(sys.executable).parent / "kicad-cli.exe")
-
-        def work(worker):
-            out = Path(stage["staging"]) / "preview"
-            out.mkdir(exist_ok=True)
-            if stage.get("symbol"):
-                worker.run([cli, "sym", "export", "svg", "-o", str(out), stage["symbol"]])
-            if stage.get("footprint"):
-                worker.run(
-                    [
-                        cli,
-                        "fp",
-                        "export",
-                        "svg",
-                        "-o",
-                        str(out),
-                        "-l",
-                        "F.Cu,F.SilkS,F.Fab",
-                        "--sp",
-                        stage["footprint"],
-                    ]
-                )
-            return [str(p) for p in out.glob("*.svg")]
-
-        self.submit(work, self.show_preview)
+        self.submit(lambda worker: runtime.export_cad_previews(worker, stage), self.show_preview)
 
     def show_preview(self, paths):
         if not paths:
@@ -755,7 +730,7 @@ class ComponentsPanel(wx.Panel):
         box.Add(image, 1, wx.EXPAND | wx.ALL, 6)
 
         def draw(event=None):
-            svg = wx.svg.SVGimage.CreateFromFile(paths[choice.GetSelection()])
+            svg = wx.svg.SVGimage.CreateFromFile(str(paths[choice.GetSelection()]))
             image.SetBitmap(svg.ConvertToScaledBitmap(wx.Size(790, 520)))
             dialog.Layout()
 

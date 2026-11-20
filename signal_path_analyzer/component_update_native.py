@@ -9,7 +9,7 @@ from pathlib import Path
 import pcbnew
 
 from .component_library import digest, discover, read_bytes, table_libraries, within
-from .stitching_native import refill, transaction
+from .stitching_native import transaction
 from .traceforge_layout_clone import _snapshot_fp
 
 _preview = None
@@ -294,7 +294,7 @@ def dispatch(board, operation, payload, revision):
             if group:
                 group.AddItem(new)
             new.SetSelected()
-        refill(live)
+        live.BuildConnectivity()
         pcbnew.Refresh()
         return dict(
             updated=[row["reference"] for row in rows],

@@ -23,8 +23,8 @@ class BomCostPanel(wx.Panel):
     def __init__(self, parent, host, native, board_file):
         super().__init__(parent)
         if host.dark:
-            self.SetBackgroundColour("#222C3A")
-            self.SetForegroundColour("#E5EDF8")
+            self.SetBackgroundColour("#303030")
+            self.SetForegroundColour("#ededed")
         self.host, self.native, self.board_file = host, native, board_file
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="traceforge-bom")
         self.cancel = threading.Event()
@@ -86,7 +86,7 @@ class BomCostPanel(wx.Panel):
         self.total_amount.SetFont(self.total_amount.GetFont().Bold().Larger().Larger().Larger())
         self.total_amount.SetForegroundColour(GREEN)
         self.total_caption = wx.StaticText(self, label="Calculate BOM cost")
-        self.total_caption.SetForegroundColour("#a8b4c7")
+        self.total_caption.SetForegroundColour("#b5b5b5")
         total_box.Add(self.total_amount, 0, wx.ALIGN_RIGHT)
         total_box.Add(self.total_caption, 0, wx.ALIGN_RIGHT | wx.TOP, 2)
         controls.Add(total_box, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, 16)
@@ -217,7 +217,7 @@ class BomCostPanel(wx.Panel):
         self.calculate.Disable()
         self.total_amount.SetLabel("USD --")
         self.total_caption.SetLabel("Calculating...")
-        self.total_caption.SetForegroundColour("#a8b4c7")
+        self.total_caption.SetForegroundColour("#b5b5b5")
         self.status.SetLabel("Reading live PCB fields and supplier observations...")
 
         def show_progress(text):
@@ -417,12 +417,12 @@ class BomCostPanel(wx.Panel):
             state = bom_cost.availability_state(row)
             colours = {
                 "Ready": (FG, "#1c3529"),
-                "Other supplier": ("#9acbff", "#233145"),
+                "Other supplier": ("#9acbff", "#333333"),
                 "Unassigned": ("#ff8585", "#3b2831"),
                 "Identity conflict": ("#ff8585", "#3b2831"),
                 "Stock short": ("#ffd166", "#3b3020"),
                 "Price missing": ("#c5a3ff", "#302a40"),
-                "Stock unknown": ("#9acbff", "#233145"),
+                "Stock unknown": ("#9acbff", "#333333"),
             }
             if incremental:
                 i = index

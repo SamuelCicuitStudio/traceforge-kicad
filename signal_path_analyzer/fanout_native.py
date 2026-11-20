@@ -223,6 +223,40 @@ def _clear_of_boundary(index, shape, setback):
     return True
 
 
+class ZoneCollision:
+    """Cache the filled copper within the tile envelope of a candidate."""
+
+    def __init__(self, board):
+        self.zones = [(zone, zone.GetBoundingBox()) for zone in board.Zones()]
+        self.fills = {}
+        self.clipped = {}
+
+    def collides(self, zone_index, layer, envelope, shape, gap):
+        zone, box = self.zones[zone_index]
+        if not box.Intersects(envelope):
+            return False
+        fill_key = (zone_index, layer)
+        if fill_key not in self.fills:
+            self.fills[fill_key] = zone.GetFilledPolysList(layer)
+        tile = 5_000_000
+        # Leave more than one integer unit around the entire clearance envelope
+        # so polygon clipping cannot put a new boundary on the tested geometry.
+        left = (envelope.GetLeft() - 2) // tile * tile
+        top = (envelope.GetTop() - 2) // tile * tile
+        right = ((envelope.GetRight() + 2) // tile + 1) * tile
+        bottom = ((envelope.GetBottom() + 2) // tile + 1) * tile
+        key = (*fill_key, left, top, right, bottom)
+        if key not in self.clipped:
+            window = pcbnew.SHAPE_POLY_SET()
+            window.NewOutline()
+            for x, y in ((left, top), (right, top), (right, bottom), (left, bottom)):
+                window.Append(x, y)
+            clipped = pcbnew.SHAPE_POLY_SET()
+            clipped.BooleanIntersection(self.fills[fill_key], window)
+            self.clipped[key] = clipped
+        return self.clipped[key].Collide(shape, gap)
+
+
 def clear_escape_route(route, layer, width, gap, edge, board_poly, boundary_index,
                        zones, obstacle_index, reserved, reserved_routes, ds, net):
     """Check every proposed segment against copper, holes, zones and board edges."""
@@ -241,7 +275,11 @@ def clear_escape_route(route, layer, width, gap, edge, board_poly, boundary_inde
         if not _clear_of_boundary(boundary_index, pcbnew.SEG(a, b), limit):
             return None
         bbox = shape.BBox()
-        for zone in zones:
+        envelope = shape.BBox()
+        envelope.Inflate(gap)
+        for zone_index, (zone, box) in enumerate(zones.zones):
+            if not box.Intersects(envelope):
+                continue
             if zone.GetIsRuleArea():
                 if zone.GetDoNotAllowTracks() and zone.IsOnLayer(layer) and (
                         zone.Outline().Collide(shape)):
@@ -249,7 +287,7 @@ def clear_escape_route(route, layer, width, gap, edge, board_poly, boundary_inde
             elif zone.GetNetname() != net and zone.IsOnLayer(layer):
                 if zone.NeedRefill() or not zone.IsFilled():
                     raise ValueError('Refill copper zones before previewing BGA escape.')
-                if zone.GetFilledPolysList(layer).Collide(shape, gap):
+                if zones.collides(zone_index, layer, envelope, shape, gap):
                     return None
         for _, box, shapes, other_gap, hole in _nearby_obstacles(obstacle_index, bbox):
             clearance = max(gap, other_gap, ds.m_HoleClearance)
@@ -380,7 +418,7 @@ def plan(board, request):
          for rule in data['net_rules'].values()]
     ))
     boundary_index = _boundary_index(board_poly, edge + max(max_via_radius, max_track_half))
-    zones = list(board.Zones())
+    zones = ZoneCollision(board)
     accepted, skipped, rejected, reserved = [], [], [], []
     breakout_only, already_routed, reserved_routes = [], [], []
     grid = data['grid']
@@ -448,9 +486,16 @@ def plan(board, request):
             elif not _clear_of_boundary(
                     boundary_index, pcbnew.SEG(pad_start, end), width * 5e5 + edge):
                 why = 'track edge / cutout'
-            for zone in zones:
+            # Prune distant zone outlines before invoking native polygon collision.
+            # The envelope contains both the via and track, including their clearance.
+            envelope = segment.BBox()
+            envelope.Merge(circle.BBox())
+            envelope.Inflate(gap)
+            for zone_index, (zone, box) in enumerate(zones.zones):
                 if why:
                     break
+                if not box.Intersects(envelope):
+                    continue
                 if zone.GetIsRuleArea():
                     if ((zone.GetDoNotAllowVias() and zone.Outline().Collide(circle)) or
                         (zone.GetDoNotAllowTracks() and zone.IsOnLayer(layer) and
@@ -460,9 +505,9 @@ def plan(board, request):
                     if zone.NeedRefill() or not zone.IsFilled():
                         raise ValueError('Refill copper zones in KiCad before previewing fanout.')
                     for copper in zone.GetLayerSet().CuStack():
-                        poly = zone.GetFilledPolysList(copper)
-                        if (poly.Collide(circle, gap) or
-                                (copper == layer and poly.Collide(segment, gap))):
+                        if (zones.collides(zone_index, copper, envelope, circle, gap) or
+                                (copper == layer and
+                                 zones.collides(zone_index, copper, envelope, segment, gap))):
                             why = 'other-net zone copper'
                             break
             bbox = segment.BBox()
